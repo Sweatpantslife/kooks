@@ -11,6 +11,8 @@ Set these runtime environment variables (never build arguments or committed secr
 - `KOOKS_PUBLIC_ORIGIN`: the exact HTTPS origin, for example `https://kooks.example.com`.
 - `KOOKS_ACCESS_TOKEN`: a randomly generated household key of at least 24 characters. Keep it in the deployment secret store and share it privately with household members.
 
+Alternatively, set `KOOKS_ACCESS_TOKEN_FILE=/data/household.key` and provision that private file in the persistent volume (owned by UID 1000, mode 0600). The file takes precedence over the environment value. This keeps the key out of container environment inspection and build/deployment logs. Back it up privately with the volume and never commit it.
+
 The image sets `KOOKS_HOST=0.0.0.0`, `PORT=4317`, and `KOOKS_DB_PATH=/data/kooks.sqlite`. Mount a dedicated persistent Docker volume at `/data`; it must be writable by the image's `node` user (UID 1000). Never share that volume with another application. Keep one application replica, and stop the old container before a replacement starts.
 
 The Docker health check requests `GET /healthz`. It exposes no cookbook records. API requests require login, and hosted sessions use Secure, HttpOnly, SameSite=Strict cookies. POST requests must originate from the configured HTTPS origin. Forwarded headers cannot change that origin. Sessions are held in memory and users sign in again after a restart.

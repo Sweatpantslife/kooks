@@ -1,5 +1,6 @@
 import http from "node:http";
 import { readFile } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { resolve, extname } from "node:path";
 import { randomBytes, timingSafeEqual } from "node:crypto";
@@ -270,7 +271,9 @@ if (
   const server = createWebServer({
     store,
     host,
-    accessToken: process.env.KOOKS_ACCESS_TOKEN ?? "",
+    accessToken: process.env.KOOKS_ACCESS_TOKEN_FILE
+      ? readFileSync(process.env.KOOKS_ACCESS_TOKEN_FILE, "utf8").trim()
+      : (process.env.KOOKS_ACCESS_TOKEN ?? ""),
     publicOrigin: process.env.KOOKS_PUBLIC_ORIGIN ?? "",
   });
   server.listen(port, host, () =>
