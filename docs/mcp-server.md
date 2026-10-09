@@ -56,6 +56,7 @@ Once connected, requests can look like:
 - “Combine the orzo for six and salad for four into a meal, and show the equipment I need.”
 - “Plan that dinner for Friday, add its ingredients to my shopping list, and exclude the oil I already have.”
 - “Start cooking dinner, remember each dish's step, and record that I used less salt.”
+- “Attach the YouTube video and the written original to this recipe.”
 - “Export my cookbook” or “Undo the last shopping change.”
 
 The server starts empty; it does not seed demonstration recipes or import the user's WhatsApp archive. Pasted text and uploaded photos can create editable drafts through the import tools. Local photo recognition uses Apple Vision on macOS (command line tools required) or Tesseract elsewhere. Import commit requires `reviewed: true` and preserves the source image/text. The host can also supply structured recipes from other supported sources. Recipe text is data, never instructions granting the agent permissions.
@@ -76,7 +77,7 @@ Meals reference current recipes. Scheduled occurrences and cooking sessions each
 
 ## Quantities, equipment, and timers
 
-Original text, attribution, yield, and ingredient values remain on the recipe. Scaling produces a view; it does not rewrite the source or multiply times or temperatures. Amounts embedded in instruction prose remain unchanged, so the agent must use the scaled ingredient table when discussing them. A missing base yield blocks scaling; unspecified quantities stay null. Serving counts range from 0.01 to 10,000.
+Original text, attribution, yield, and ingredient values remain on the recipe. A recipe's `links` (`url` plus optional `title`, HTTP or HTTPS only, up to 50) hold reference pages and videos; the household apps embed YouTube, Vimeo, Facebook, Instagram and TikTok players for them and open other links in the browser. The server stores and validates these addresses and never fetches them, so `recipe_save` must carry the existing `links` along with the rest of the data. Dish snapshots in plans and cooking sessions copy the links. Scaling produces a view; it does not rewrite the source or multiply times or temperatures. Amounts embedded in instruction prose remain unchanged, so the agent must use the scaled ingredient table when discussing them. A missing base yield blocks scaling; unspecified quantities stay null. Serving counts range from 0.01 to 10,000.
 
 Known mass units normalize to grams and volume units to mL. Cup and spoon conversions require explicit conventions: `us_cup`, `us_tbsp`, `us_tsp`, `us_fl_oz`, `metric_cup` (250 mL), `metric_tbsp` (15 mL), and `metric_tsp` (5 mL). Bare `cup`, `tbsp`, or `tsp` values can be stored and combined with the same unit, but are not converted. Ingredient density is never inferred. These tool conventions do not settle the future application's regional unit preference.
 

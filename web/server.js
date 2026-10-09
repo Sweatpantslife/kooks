@@ -10,9 +10,20 @@ import { createTools } from "../mcp/tools.js";
 import { kind } from "../mcp/schemas.js";
 import { batchView } from "../mcp/features.js";
 import { shoppingItems } from "../mcp/shopping.js";
+import { embedOrigins } from "../shared/links.js";
 
 const publicRoot = fileURLToPath(new URL("./public/", import.meta.url));
-const staticFiles = new Set(["/index.html", "/app.js", "/style.css"]);
+// The browser client is these files and the shared link module it imports.
+const staticFiles = new Map([
+  ...["/index.html", "/app.js", "/style.css"].map((path) => [
+    path,
+    resolve(publicRoot, `.${path}`),
+  ]),
+  [
+    "/shared/links.js",
+    fileURLToPath(new URL("../shared/links.js", import.meta.url)),
+  ],
+]);
 const mime = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
@@ -89,7 +100,9 @@ export function createWebServer({
     res.setHeader("Cache-Control", "no-store");
     res.setHeader(
       "Content-Security-Policy",
-      "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
+      // Video players load only from the embed origins the shared module
+      // produces, and only once the person presses play.
+      `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; connect-src 'self'; frame-src ${embedOrigins.join(" ")}; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'`,
     );
     try {
       const url = new URL(req.url, `http://${req.headers.host}`);
@@ -211,7 +224,7 @@ export function createWebServer({
         if (staticFiles.has(path)) {
           let data;
           try {
-            data = await readFile(resolve(publicRoot, `.${path}`));
+            data = await readFile(staticFiles.get(path));
           } catch (error) {
             if (error.code !== "ENOENT") throw error;
             return send(res, 404, { message: "Not found." });

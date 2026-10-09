@@ -25,19 +25,29 @@ export const equipment = z.object({
     .default(null),
   inferred: z.boolean().default(false),
 });
+const webUrl = z
+  .url()
+  .max(4000)
+  .refine(
+    (value) => ["http:", "https:"].includes(new URL(value).protocol),
+    "Use an HTTP or HTTPS URL.",
+  );
+export const link = z.object({
+  url: webUrl,
+  title: z.string().trim().max(500).default(""),
+});
 export const recipe = z.object({
   title: text,
   servings: servings.nullable().default(null),
   original_text: z.string().max(200000).default(""),
-  source_url: z
-    .url()
-    .max(4000)
-    .refine(
-      (value) => ["http:", "https:"].includes(new URL(value).protocol),
-      "Use an HTTP or HTTPS source URL.",
-    )
-    .nullable()
-    .default(null),
+  source_url: webUrl.nullable().default(null),
+  links: z
+    .array(link)
+    .max(50)
+    .default([])
+    .describe(
+      "Reference pages and videos for this recipe. The household apps embed YouTube, Vimeo, Facebook, Instagram and TikTok players and open other links in the browser; the server never fetches them.",
+    ),
   ingredients: z.array(ingredient).max(500).default([]),
   steps: z
     .array(

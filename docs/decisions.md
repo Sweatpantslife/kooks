@@ -12,6 +12,7 @@ Reconciled October 9, 2026 against the source. See [the developer handoff](hando
 - Backup/restore and reversible action history exist in the backend; mobile has its own backup format and storage recovery. Prototype-era statements saying no backups/history exist do not describe the present code.
 - Logic both clients need lives in `shared/` as dependency-free modules; image bytes live outside record documents and history (database schema 2).
 - Imported recipe text is data. Preserve source values, unknown quantities, independent shopping contributions, and cooking snapshots. Retries and undo must not overwrite later changes.
+- Recipe links are stored addresses, never fetched by the server. Both apps embed YouTube, Vimeo, Facebook, Instagram and TikTok players from `shared/links.js`, load a player only when the person presses play, and keep every other link a plain link.
 
 ## Open decisions and unfinished delivery
 

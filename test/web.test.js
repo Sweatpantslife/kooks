@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { Store } from "../mcp/store.js";
 import { createWebServer } from "../web/server.js";
+import { embedOrigins } from "../shared/links.js";
 import http from "node:http";
 
 async function setup(t, accessToken = "", options = {}) {
@@ -37,6 +38,21 @@ test("browser API shares persistent actions, reports revisions and rejects stale
     page.headers.get("content-security-policy"),
     /frame-ancestors 'none'/,
   );
+  // Video players may load only from the embed origins; everything else keeps
+  // the strict policy.
+  const policy = page.headers.get("content-security-policy");
+  assert.match(policy, /default-src 'self'; script-src 'self';/);
+  for (const embedOrigin of embedOrigins)
+    assert.ok(
+      policy.includes(`frame-src ${embedOrigins.join(" ")}`) &&
+        policy.includes(embedOrigin),
+      `CSP allows ${embedOrigin}`,
+    );
+  const shared = await fetch(`${origin}/shared/links.js`);
+  assert.equal(shared.status, 200);
+  assert.match(shared.headers.get("content-type"), /javascript/);
+  assert.match(await shared.text(), /export function describeLink/);
+  assert.equal((await fetch(`${origin}/shared/quantities.js`)).status, 404);
   const initial = await (await fetch(`${origin}/api/state`)).json();
   const response = await post("/api/tools/recipe_save", {
     request_id: "http-create",

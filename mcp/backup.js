@@ -38,6 +38,7 @@ const dish = z.object({
   equipment: recipe.shape.equipment,
   original_text: recipe.shape.original_text,
   source_url: recipe.shape.source_url,
+  links: recipe.shape.links.optional(),
   warnings: z.array(z.string()).max(100),
   label: z.string().optional(),
 });

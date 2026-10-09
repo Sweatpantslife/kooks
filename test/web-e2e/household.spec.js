@@ -352,3 +352,74 @@ test("the cookbook exports as a portable Kooks backup", async ({
     ),
   ).toBe(true);
 });
+
+test("links and videos save with a recipe, play on request and round-trip through the editor", async ({
+  page,
+  request,
+  baseURL,
+}) => {
+  const dish = recipe("Video orzo", {
+    source_url: "https://youtu.be/dQw4w9WgXcQ?t=1m5s",
+    links: [
+      { url: "https://vimeo.com/76979871", title: "Vimeo version" },
+      { url: "https://example.com/orzo", title: "The written recipe" },
+    ],
+  });
+  const { record } = await seed(request, baseURL, "recipe_save", {
+    recipe: dish,
+  });
+  await page.reload();
+  await page.goto(`/#/recipes/${record.id}`);
+  const section = page.locator(".links");
+  await expect(
+    section.getByRole("heading", { name: "Links and videos" }),
+  ).toBeVisible();
+  // A video source plays from the recipe page; nothing loads before play.
+  await expect(section.locator(".embed").first()).toHaveAttribute(
+    "data-src",
+    "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?start=65&autoplay=1",
+  );
+  await expect(
+    section.getByRole("button", { name: "Play Original source on YouTube" }),
+  ).toBeVisible();
+  await expect(
+    section.getByRole("link", { name: "The written recipe" }),
+  ).toHaveAttribute("href", "https://example.com/orzo");
+  await expect(section.locator("iframe")).toHaveCount(0);
+  await section
+    .getByRole("button", { name: "Play Vimeo version on Vimeo" })
+    .click();
+  await expect(section.locator("iframe")).toHaveCount(1);
+  await expect(section.locator("iframe")).toHaveAttribute(
+    "src",
+    "https://player.vimeo.com/video/76979871?autoplay=1",
+  );
+  await page.getByRole("link", { name: "Edit recipe" }).click();
+  const links = page.getByLabel("Links and videos · one per line");
+  await expect(links).toHaveValue(
+    "https://vimeo.com/76979871 Vimeo version\nhttps://example.com/orzo The written recipe",
+  );
+  await links.fill("just words");
+  await page.getByRole("button", { name: "Save recipe" }).click();
+  await expect(
+    page.locator('form[data-form="recipe"] [data-error]'),
+  ).toContainText("just words");
+  await links.fill(
+    "https://example.com/orzo The written recipe\nwww.instagram.com/reel/C1abcdefg/ Folding the dough",
+  );
+  await page.getByRole("button", { name: "Save recipe" }).click();
+  await expect(
+    page.getByRole("heading", { level: 1, name: dish.title }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Play Folding the dough on Instagram" }),
+  ).toBeVisible();
+  await expect(section.getByRole("button", { name: /on Vimeo/ })).toHaveCount(
+    0,
+  );
+  // The cooking snapshot keeps the links as plain links beside the steps.
+  await page.getByRole("button", { name: "Start cooking" }).click();
+  await expect(
+    page.getByRole("link", { name: "Folding the dough" }),
+  ).toHaveAttribute("href", "https://www.instagram.com/reel/C1abcdefg/");
+});

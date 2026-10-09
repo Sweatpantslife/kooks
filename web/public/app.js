@@ -1,3 +1,10 @@
+import {
+  describeLink,
+  displayLinks,
+  formatLinkLines,
+  parseLinkLines,
+} from "/shared/links.js";
+
 const $ = (selector) => document.querySelector(selector);
 const esc = (value) =>
   String(value ?? "").replace(
@@ -76,6 +83,7 @@ const paths = {
   pan: '<path d="M3 10c0 12 13 12 13 0H3Zm13 2h6M7 2v4m5-4v4"/>',
   calendar:
     '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 2v6m10-6v6M3 11h18"/>',
+  play: '<path d="M7 4v16l13-8Z"/>',
 };
 const icon = (name) =>
   `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${paths[name] ?? paths.leaf}</svg>`;
@@ -85,10 +93,11 @@ const button = (label, action, attrs = "", cls = "", ico = "") =>
   `<button type="button" class="button ${cls}" data-action="${action}" ${attrs}>${ico ? icon(ico) : ""}${esc(label)}</button>`;
 const hidden = (name, value) =>
   `<input type="hidden" name="${name}" value="${esc(value)}">`;
-const field = (label, name, value = "", type = "text", extra = "") =>
-  `<label class="field"><span>${esc(label)}</span><input type="${type}" name="${name}" value="${esc(value)}" ${extra}></label>`;
-const area = (label, name, value = "", extra = "") =>
-  `<label class="field"><span>${esc(label)}</span><textarea name="${name}" ${extra}>${esc(value)}</textarea></label>`;
+const help = (text) => (text ? `<span class="help">${esc(text)}</span>` : "");
+const field = (label, name, value = "", type = "text", extra = "", hint = "") =>
+  `<label class="field"><span>${esc(label)}</span><input type="${type}" name="${name}" value="${esc(value)}" ${extra}>${help(hint)}</label>`;
+const area = (label, name, value = "", extra = "", hint = "") =>
+  `<label class="field"><span>${esc(label)}</span><textarea name="${name}" ${extra}>${esc(value)}</textarea>${help(hint)}</label>`;
 const select = (label, name, options, value = "", extra = "") =>
   `<label class="field"><span>${esc(label)}</span><select name="${name}" ${extra}>${options.map(([v, l]) => `<option value="${esc(v)}" ${String(v) === String(value) ? "selected" : ""}>${esc(l)}</option>`).join("")}</select></label>`;
 const check = (label, name, value = "on", checked = false, extra = "") =>
@@ -201,12 +210,17 @@ async function loadState({ polling = false } = {}) {
     );
   const value = await response.json();
   if (value.unchanged) return false;
-  if (polling && document.querySelector('form[data-dirty="true"]')) {
+  // A draft or a playing video survives other cooks' changes until this
+  // page is left; redrawing would discard the one and restart the other.
+  const dirty = document.querySelector('form[data-dirty="true"]'),
+    playing = document.querySelector(".embed iframe");
+  if (polling && (dirty || playing)) {
     const notice = $(".sync-note");
     if (notice) {
       notice.hidden = false;
-      notice.textContent =
-        "Someone updated the kitchen. Your draft is kept here; save checks for conflicting changes.";
+      notice.textContent = dirty
+        ? "Someone updated the kitchen. Your draft is kept here; save checks for conflicting changes."
+        : "Someone updated the kitchen. Your video keeps playing; the page refreshes when you move on.";
     }
     return false;
   }
@@ -343,7 +357,7 @@ async function recipePage(id) {
     api("cost_estimate", { source, currency, as_of: today() }),
   ]);
   const d = scaled.recipe;
-  return `${link("Recipes", "recipes", false, "back")}${heading(r.data.original_recipe_id ? "Your own variation" : "From your cookbook", r.data.title, "", link("Edit recipe", `edit/${id}`, false, "edit"))}${effort(r)}<div class="actions spacer">${button("Start cooking", "cook", `data-kind="recipe" data-id="${id}"`, "primary", "flame")}${link("Review groceries", `review/recipe/${id}`, false, "basket")}${link("Make a variation", `variant/${memory.original_recipe_id}`, false, "edit")}${link("Record a cooked batch", `new-batch/${id}`, false, "box")}</div>${memory.preferred_recipe && memory.preferred_recipe.id !== id ? `<div class="callout spacer row between"><span>Your preferred version: ${esc(memory.preferred_recipe.data.title)}</span>${link("Open variation", `recipes/${memory.preferred_recipe.id}`)}</div>` : ""}${memory.latest ? `<div class="callout spacer"><div class="eyebrow">Remember for next time</div><p class="preline">${esc(memory.latest.data.next_time || memory.latest.data.changes || memory.latest.data.text)}</p><small>${esc(memory.latest.data.cooked_on ?? memory.latest.created_at.slice(0, 10))}</small></div>` : ""}<div class="recipe-columns spacer"><section class="panel"><h3>Ingredients</h3><form data-form="servings" class="row spacer">${hidden("id", id)}${field("Portions", "servings", d.servings ?? "", "number", `min="0.01" max="10000" step="any" ${r.data.servings === null ? 'disabled placeholder="Unknown"' : "required"}`)}${r.data.servings !== null ? '<button class="button" type="submit">Update</button>' : ""}</form>${d.ingredients.map((i) => `<div class="ingredient"><span>${esc(i.name)}${i.preparation ? `<br><small class="muted">${esc(i.preparation)}</small>` : ""}</span><span class="amount">${esc(amount(i))}</span></div>`).join("") || '<p class="small muted spacer">Ingredients have not been recorded.</p>'}${d.equipment.length ? `<hr class="divider"><h3>What you’ll use</h3><div class="chips spacer">${d.equipment.map((e) => `<span class="tag neutral">${e.quantity > 1 ? e.quantity + " × " : ""}${esc(e.name)}${e.capacity ? ` · ${esc(e.capacity)}` : ""}</span>`).join("")}</div>` : ""}<hr class="divider"><h3>Estimated ingredient cost</h3><p class="spacer">${cost.complete ? `<strong>${money(cost.total)}</strong> <span class="small muted">· ${cost.dishes[0].per_portion == null ? "" : `${money(cost.dishes[0].per_portion)} per portion`}</span>` : `<strong>${money(cost.known_cost)}</strong> <span class="small cost-unknown">known subtotal · incomplete</span>`}</p>${cost.missing_prices.length ? `<p class="small muted">Missing amounts or prices: ${esc(cost.missing_prices.map((l) => l.ingredient.name).join(", "))}.</p>` : ""}${link("Manage prices", "spending")}</section><section><h2>The method</h2><ol class="method spacer">${d.steps.map((s) => `<li>${esc(s.text)}${s.duration_seconds ? `<p class="small muted">${num(s.duration_seconds / 60)} minutes</p>` : ""}</li>`).join("")}</ol>${d.warnings.length ? `<div class="callout warning">${d.warnings.map(esc).join("<br>")}</div>` : ""}${r.data.notes ? `<div class="note"><p>${esc(r.data.notes)}</p></div>` : ""}<details><summary>Original recipe and sources</summary>${r.data.source_url ? `<a href="${esc(r.data.source_url)}" target="_blank" rel="noreferrer">Original source</a>` : ""}${(r.data.source_image_ids ?? []).map((id) => `<img class="source-image" src="/api/assets/${encodeURIComponent(id)}" alt="Original recipe photo">`).join("")}<pre class="source-text">${esc(r.data.original_text || "No original text was provided.")}</pre></details></section></div><div class="section-heading"><h2>What worked in your kitchen</h2>${link("Add a cooking memory", `memory/${id}`, false, "plus")}</div>${memory.notes.length ? memory.notes.map((n) => `<article class="panel spacer"><div class="row between"><span class="eyebrow">${esc(n.data.cooked_on ?? n.created_at.slice(0, 10))}</span><span>${n.data.rating ? "★".repeat(n.data.rating) : ""}${n.data.cook_again === true ? " · Cook again" : n.data.cook_again === false ? " · Try something else" : ""}</span></div><p class="preline spacer">${esc(n.data.text)}</p>${n.data.changes ? `<p class="small preline spacer"><strong>Changed:</strong> ${esc(n.data.changes)}</p>` : ""}${n.data.next_time ? `<p class="small preline spacer"><strong>Next time:</strong> ${esc(n.data.next_time)}</p>` : ""}</article>`).join("") : '<p class="muted small">Your notes and successful changes will appear here before the next cook.</p>'}${memory.variants.length ? `<div class="section-heading"><h2>Ways you make it</h2></div><div class="chips">${memory.variants.map((v) => link(`${v.data.title}${v.data.preferred ? " · Preferred" : ""}`, `recipes/${v.id}`)).join("")}</div>` : ""}`;
+  return `${link("Recipes", "recipes", false, "back")}${heading(r.data.original_recipe_id ? "Your own variation" : "From your cookbook", r.data.title, "", link("Edit recipe", `edit/${id}`, false, "edit"))}${effort(r)}<div class="actions spacer">${button("Start cooking", "cook", `data-kind="recipe" data-id="${id}"`, "primary", "flame")}${link("Review groceries", `review/recipe/${id}`, false, "basket")}${link("Make a variation", `variant/${memory.original_recipe_id}`, false, "edit")}${link("Record a cooked batch", `new-batch/${id}`, false, "box")}</div>${memory.preferred_recipe && memory.preferred_recipe.id !== id ? `<div class="callout spacer row between"><span>Your preferred version: ${esc(memory.preferred_recipe.data.title)}</span>${link("Open variation", `recipes/${memory.preferred_recipe.id}`)}</div>` : ""}${memory.latest ? `<div class="callout spacer"><div class="eyebrow">Remember for next time</div><p class="preline">${esc(memory.latest.data.next_time || memory.latest.data.changes || memory.latest.data.text)}</p><small>${esc(memory.latest.data.cooked_on ?? memory.latest.created_at.slice(0, 10))}</small></div>` : ""}<div class="recipe-columns spacer"><section class="panel"><h3>Ingredients</h3><form data-form="servings" class="row spacer">${hidden("id", id)}${field("Portions", "servings", d.servings ?? "", "number", `min="0.01" max="10000" step="any" ${r.data.servings === null ? 'disabled placeholder="Unknown"' : "required"}`)}${r.data.servings !== null ? '<button class="button" type="submit">Update</button>' : ""}</form>${d.ingredients.map((i) => `<div class="ingredient"><span>${esc(i.name)}${i.preparation ? `<br><small class="muted">${esc(i.preparation)}</small>` : ""}</span><span class="amount">${esc(amount(i))}</span></div>`).join("") || '<p class="small muted spacer">Ingredients have not been recorded.</p>'}${d.equipment.length ? `<hr class="divider"><h3>What you’ll use</h3><div class="chips spacer">${d.equipment.map((e) => `<span class="tag neutral">${e.quantity > 1 ? e.quantity + " × " : ""}${esc(e.name)}${e.capacity ? ` · ${esc(e.capacity)}` : ""}</span>`).join("")}</div>` : ""}<hr class="divider"><h3>Estimated ingredient cost</h3><p class="spacer">${cost.complete ? `<strong>${money(cost.total)}</strong> <span class="small muted">· ${cost.dishes[0].per_portion == null ? "" : `${money(cost.dishes[0].per_portion)} per portion`}</span>` : `<strong>${money(cost.known_cost)}</strong> <span class="small cost-unknown">known subtotal · incomplete</span>`}</p>${cost.missing_prices.length ? `<p class="small muted">Missing amounts or prices: ${esc(cost.missing_prices.map((l) => l.ingredient.name).join(", "))}.</p>` : ""}${link("Manage prices", "spending")}</section><section><h2>The method</h2><ol class="method spacer">${d.steps.map((s) => `<li>${esc(s.text)}${s.duration_seconds ? `<p class="small muted">${num(s.duration_seconds / 60)} minutes</p>` : ""}</li>`).join("")}</ol>${d.warnings.length ? `<div class="callout warning">${d.warnings.map(esc).join("<br>")}</div>` : ""}${r.data.notes ? `<div class="note"><p>${esc(r.data.notes)}</p></div>` : ""}${linksSection(r.data)}<details><summary>Original recipe and sources</summary>${r.data.source_url ? `<a href="${esc(r.data.source_url)}" target="_blank" rel="noreferrer">Original source</a>` : ""}${(r.data.source_image_ids ?? []).map((id) => `<img class="source-image" src="/api/assets/${encodeURIComponent(id)}" alt="Original recipe photo">`).join("")}<pre class="source-text">${esc(r.data.original_text || "No original text was provided.")}</pre></details></section></div><div class="section-heading"><h2>What worked in your kitchen</h2>${link("Add a cooking memory", `memory/${id}`, false, "plus")}</div>${memory.notes.length ? memory.notes.map((n) => `<article class="panel spacer"><div class="row between"><span class="eyebrow">${esc(n.data.cooked_on ?? n.created_at.slice(0, 10))}</span><span>${n.data.rating ? "★".repeat(n.data.rating) : ""}${n.data.cook_again === true ? " · Cook again" : n.data.cook_again === false ? " · Try something else" : ""}</span></div><p class="preline spacer">${esc(n.data.text)}</p>${n.data.changes ? `<p class="small preline spacer"><strong>Changed:</strong> ${esc(n.data.changes)}</p>` : ""}${n.data.next_time ? `<p class="small preline spacer"><strong>Next time:</strong> ${esc(n.data.next_time)}</p>` : ""}</article>`).join("") : '<p class="muted small">Your notes and successful changes will appear here before the next cook.</p>'}${memory.variants.length ? `<div class="section-heading"><h2>Ways you make it</h2></div><div class="chips">${memory.variants.map((v) => link(`${v.data.title}${v.data.preferred ? " · Preferred" : ""}`, `recipes/${v.id}`)).join("")}</div>` : ""}`;
 }
 
 function recipeEditor(id, mode = "edit") {
@@ -358,6 +372,7 @@ function recipeEditor(id, mode = "edit") {
       equipment: [],
       tags: [],
       notes: "",
+      links: [],
     };
   if ((id && !r && !draft) || draft?.data.status === "saved")
     return empty(
@@ -370,7 +385,33 @@ function recipeEditor(id, mode = "edit") {
       `${i.quantity == null ? "" : `${i.quantity} ${i.unit ?? ""} `}${i.name}${i.preparation ? `, ${i.preparation}` : ""}`.trim(),
     )
     .join("\n");
-  return `${heading(mode === "import" ? "A quick read-through" : mode === "variant" ? "Keep what you love. Change what you need." : "Your recipe, your way", mode === "import" ? "Check it, then make it yours." : mode === "variant" ? "Make your own variation." : r ? "A little refinement." : "Something worth keeping.", mode === "variant" ? "The original stays in your cookbook. This version gets its own ingredients and method." : "Unknown amounts and timings can stay blank.")}<div class="${draft ? "review-grid" : ""}"><form data-form="recipe" class="stack" data-mode="${mode}" data-id="${esc(id ?? "")}" data-version="${draft?.version ?? r?.version ?? ""}"><div class="panel stack"><div class="form-grid">${field("Recipe name", "title", mode === "variant" ? `${data.title} · My version` : data.title, "text", 'required maxlength="500"')}${field("Original yield / portions", "servings", data.servings ?? "", "number", 'min="0.01" max="10000" step="any" placeholder="Unknown"')}</div><div class="form-grid four">${field("Hands-on minutes", "active_minutes", data.active_minutes ?? "", "number", 'min="0" max="10080" placeholder="Unknown"')}${field("Total minutes", "total_minutes", data.total_minutes ?? "", "number", 'min="0" max="10080" placeholder="Unknown"')}${field("Cooking pans", "pan_count", data.pan_count ?? "", "number", 'min="0" max="100" placeholder="Unknown"')}${select("Cleanup effort", "cleanup", cleanupOptions, data.cleanup ?? "")}</div><div class="form-grid">${select("Spice level", "spice_level", spiceOptions, data.spice_level ?? "")}${field("Tags, separated by commas", "tags", data.tags.join(", "), "text", 'placeholder="Weeknight, vegetarian"')}</div>${area("Ingredients · one per line", "ingredients", ingredientText, 'rows="9" placeholder="250 g orzo\n30 mL olive oil\nSalt to taste"')}${area("Method · separate steps with a blank line", "steps", data.steps.map((s) => s.text).join("\n\n"), 'rows="9"')}${area("Equipment · one per line", "equipment", data.equipment.map((e) => e.name).join("\n"), 'rows="3"')}${area("Recipe notes", "notes", data.notes)}${field("Source link (optional)", "source_url", data.source_url ?? "", "url")}${mode === "variant" ? check("Use this as my preferred version", "preferred", "on", true) : ""}${draft ? check("I checked the ingredients, amounts and method against the original.", "reviewed", "on", false, "required") : ""}<div class="row">${submit(draft ? "Save reviewed recipe" : mode === "variant" ? "Save variation" : "Save recipe")}${link("Cancel", r ? `recipes/${r.id}` : "recipes")}</div></div></form>${draft ? `<aside class="panel source-pane"><h3>Your original</h3>${draft.data.warnings.map((w) => `<p class="small muted">${esc(w)}</p>`).join("")}${draft.data.image_id ? `<img class="source-image spacer" src="/api/assets/${encodeURIComponent(draft.data.image_id)}" alt="Original recipe photo for comparison">` : ""}<details open><summary>Extracted source text</summary><pre class="source-text">${esc(draft.data.original_text)}</pre></details></aside>` : ""}</div>`;
+  return `${heading(mode === "import" ? "A quick read-through" : mode === "variant" ? "Keep what you love. Change what you need." : "Your recipe, your way", mode === "import" ? "Check it, then make it yours." : mode === "variant" ? "Make your own variation." : r ? "A little refinement." : "Something worth keeping.", mode === "variant" ? "The original stays in your cookbook. This version gets its own ingredients and method." : "Unknown amounts and timings can stay blank.")}<div class="${draft ? "review-grid" : ""}"><form data-form="recipe" class="stack" data-mode="${mode}" data-id="${esc(id ?? "")}" data-version="${draft?.version ?? r?.version ?? ""}"><div class="panel stack"><div class="form-grid">${field("Recipe name", "title", mode === "variant" ? `${data.title} · My version` : data.title, "text", 'required maxlength="500"')}${field("Original yield / portions", "servings", data.servings ?? "", "number", 'min="0.01" max="10000" step="any" placeholder="Unknown"')}</div><div class="form-grid four">${field("Hands-on minutes", "active_minutes", data.active_minutes ?? "", "number", 'min="0" max="10080" placeholder="Unknown"')}${field("Total minutes", "total_minutes", data.total_minutes ?? "", "number", 'min="0" max="10080" placeholder="Unknown"')}${field("Cooking pans", "pan_count", data.pan_count ?? "", "number", 'min="0" max="100" placeholder="Unknown"')}${select("Cleanup effort", "cleanup", cleanupOptions, data.cleanup ?? "")}</div><div class="form-grid">${select("Spice level", "spice_level", spiceOptions, data.spice_level ?? "")}${field("Tags, separated by commas", "tags", data.tags.join(", "), "text", 'placeholder="Weeknight, vegetarian"')}</div>${area("Ingredients · one per line", "ingredients", ingredientText, 'rows="9" placeholder="250 g orzo\n30 mL olive oil\nSalt to taste"')}${area("Method · separate steps with a blank line", "steps", data.steps.map((s) => s.text).join("\n\n"), 'rows="9"')}${area("Equipment · one per line", "equipment", data.equipment.map((e) => e.name).join("\n"), 'rows="3"')}${area("Recipe notes", "notes", data.notes)}${field("Source link (optional)", "source_url", data.source_url ?? "", "url", "", "Where the recipe came from. A video source plays on the recipe page.")}${area("Links and videos · one per line", "links", formatLinkLines(data.links ?? []), 'rows="3" placeholder="https://youtu.be/… Folding the dough\nexample.com/the-original The written version"', "A web address, then an optional title. YouTube, Vimeo, Facebook, Instagram and TikTok videos play on the recipe page; other links open in a new tab.")}${mode === "variant" ? check("Use this as my preferred version", "preferred", "on", true) : ""}${draft ? check("I checked the ingredients, amounts and method against the original.", "reviewed", "on", false, "required") : ""}<div class="row">${submit(draft ? "Save reviewed recipe" : mode === "variant" ? "Save variation" : "Save recipe")}${link("Cancel", r ? `recipes/${r.id}` : "recipes")}</div></div></form>${draft ? `<aside class="panel source-pane"><h3>Your original</h3>${draft.data.warnings.map((w) => `<p class="small muted">${esc(w)}</p>`).join("")}${draft.data.image_id ? `<img class="source-image spacer" src="/api/assets/${encodeURIComponent(draft.data.image_id)}" alt="Original recipe photo for comparison">` : ""}<details open><summary>Extracted source text</summary><pre class="source-text">${esc(draft.data.original_text)}</pre></details></aside>` : ""}</div>`;
+}
+
+// Links and videos of a recipe. A recognised video shows a play button that
+// loads the provider's player only when pressed; everything else is a link.
+function linksSection(data, heading = "Links and videos") {
+  const items = displayLinks(data);
+  if (!items.length) return "";
+  return `<section class="links"><h3>${esc(heading)}</h3>${items.map(linkView).join("")}</section>`;
+}
+function linkView(item) {
+  const info = describeLink(item.url);
+  if (!info) return "";
+  const title = item.title || (info.embed ? `${info.label} video` : item.url);
+  const line = `<p class="small"><a href="${esc(item.url)}" target="_blank" rel="noreferrer">${esc(title)}</a> <span class="muted">· ${esc(info.site)}</span></p>`;
+  if (!info.embed) return line;
+  return `<div class="link-item"><div class="embed" data-shape="${info.embed.shape}" data-src="${esc(info.embed.autoplay_src)}" data-title="${esc(title)}">${button(`Play on ${info.label}`, "embed-load", `aria-label="${esc(item.title ? `Play ${item.title} on ${info.label}` : `Play on ${info.label}`)}"`, "embed-load", "play")}<small>Loads the video from ${esc(info.label)} when you press play.</small></div>${line}</div>`;
+}
+function linkLine(links) {
+  if (!links?.length) return "";
+  return `<p class="small">Links and videos: ${links.map((l) => `<a href="${esc(l.url)}" target="_blank" rel="noreferrer">${esc(l.title || describeLink(l.url)?.site || l.url)}</a>`).join(" · ")}</p>`;
+}
+function loadEmbed(button) {
+  const box = button.closest(".embed");
+  if (!box) return;
+  box.dataset.loaded = "true";
+  box.innerHTML = `<iframe src="${esc(box.dataset.src)}" title="${esc(box.dataset.title)}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
 }
 
 function capturePage() {
@@ -580,7 +621,7 @@ function cookingPage(id) {
       const memory = records("note")
         .filter((n) => n.data.recipe_id === dish.recipe_id)
         .sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
-      return `<section class="panel stack"><div class="row between"><h2>${esc(dish.title)}</h2><span class="tag">${dish.servings ?? "Original"} portions</span></div>${memory ? `<div class="note"><p>${esc(memory.data.next_time || memory.data.changes || memory.data.text)}</p><small>Your last cooking note</small></div>` : ""}<div><span class="eyebrow">${p.completed_steps.length} of ${dish.steps.length} steps complete</span><progress max="${Math.max(1, dish.steps.length)}" value="${p.completed_steps.length}"></progress></div>${current ? `<p class="preline">${esc(current.text)}</p><div class="row">${button("Previous step", "step-back", `data-id="${id}" data-dish="${dish.dish_id}" ${p.current_step === 0 ? "disabled" : ""}`, "small-button", "back")}${button(p.current_step === dish.steps.length - 1 ? "Mark step done" : "Done, next step", "step-next", `data-id="${id}" data-dish="${dish.dish_id}"`, "primary small-button", "check")}</div>` : '<p class="small muted">This dish has no recorded instructions.</p>'}<details><summary>Ingredients & full method</summary>${dish.ingredients.map((i) => `<div class="ingredient"><span>${esc(i.name)}</span><span class="amount">${esc(amount(i))}</span></div>`).join("")}<ol class="method spacer">${dish.steps.map((step, index) => `<li>${esc(step.text)}${button(`Go to step ${index + 1}`, "step-jump", `data-id="${id}" data-dish="${dish.dish_id}" data-step="${index}"`, "quiet small-button")}</li>`).join("")}</ol></details></section>`;
+      return `<section class="panel stack"><div class="row between"><h2>${esc(dish.title)}</h2><span class="tag">${dish.servings ?? "Original"} portions</span></div>${memory ? `<div class="note"><p>${esc(memory.data.next_time || memory.data.changes || memory.data.text)}</p><small>Your last cooking note</small></div>` : ""}<div><span class="eyebrow">${p.completed_steps.length} of ${dish.steps.length} steps complete</span><progress max="${Math.max(1, dish.steps.length)}" value="${p.completed_steps.length}"></progress></div>${current ? `<p class="preline">${esc(current.text)}</p><div class="row">${button("Previous step", "step-back", `data-id="${id}" data-dish="${dish.dish_id}" ${p.current_step === 0 ? "disabled" : ""}`, "small-button", "back")}${button(p.current_step === dish.steps.length - 1 ? "Mark step done" : "Done, next step", "step-next", `data-id="${id}" data-dish="${dish.dish_id}"`, "primary small-button", "check")}</div>` : '<p class="small muted">This dish has no recorded instructions.</p>'}${linkLine(dish.links)}<details><summary>Ingredients & full method</summary>${dish.ingredients.map((i) => `<div class="ingredient"><span>${esc(i.name)}</span><span class="amount">${esc(amount(i))}</span></div>`).join("")}<ol class="method spacer">${dish.steps.map((step, index) => `<li>${esc(step.text)}${button(`Go to step ${index + 1}`, "step-jump", `data-id="${id}" data-dish="${dish.dish_id}" data-step="${index}"`, "quiet small-button")}</li>`).join("")}</ol></details></section>`;
     })
     .join(
       "",
@@ -750,6 +791,11 @@ async function saveRecipe(form, values) {
         (old) => old.name === i.name && old.preparation === i.preparation,
       )?.category ?? "Other",
   }));
+  const links = parseLinkLines(values.get("links"));
+  if (links.invalid.length)
+    throw new Error(
+      `Each link needs a web address such as https://example.com: ${links.invalid.join("; ")}`,
+    );
   const recipe = {
     ...(original ?? {}),
     title: String(values.get("title")).trim(),
@@ -760,6 +806,7 @@ async function saveRecipe(form, values) {
     tags: comma(values.get("tags")),
     notes: values.get("notes"),
     source_url: values.get("source_url") || null,
+    links: links.links,
     active_minutes: inputNumber(values.get("active_minutes")),
     total_minutes: inputNumber(values.get("total_minutes")),
     pan_count: inputNumber(values.get("pan_count")),
@@ -1054,6 +1101,10 @@ document.addEventListener("click", async (event) => {
     id = el.dataset.id;
   if (a === "dismiss-toast") {
     $("#toast").hidden = true;
+    return;
+  }
+  if (a === "embed-load") {
+    loadEmbed(el);
     return;
   }
   el.disabled = true;

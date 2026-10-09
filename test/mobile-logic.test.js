@@ -82,6 +82,18 @@ test("mobile edit drafts reproduce pasted lines and format parsed ones", () => {
   assert.equal(draft.ingredientsText, "100 g rice\nSalt\n1½ Oil, light");
   assert.equal(draft.stepsText, "Rinse.\n\nSimmer.");
   assert.equal(draft.equipmentText, "Pan");
+  assert.equal(draft.linksText, "");
+  assert.equal(
+    editDraft({
+      ...recipe,
+      links: [
+        { url: "https://youtu.be/dQw4w9WgXcQ", title: "The method" },
+        { url: "https://example.com/rice", title: "" },
+      ],
+    }).linksText,
+    "https://youtu.be/dQw4w9WgXcQ The method\nhttps://example.com/rice",
+  );
+  assert.equal(pasteDraft("Rice\nServes 2\n100 g rice").linksText, "");
   assert.match(draft.originalText, /Serves 2/);
   assert.match(originalText(recipe), /1\. Rinse\./);
 });

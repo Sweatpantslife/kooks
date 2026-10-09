@@ -6,6 +6,14 @@ import {
   unitInfo,
 } from "../shared/quantities.js";
 import { parseQuantity, splitIngredientLine } from "../shared/ingredients.js";
+import {
+  describeLink,
+  displayLinks,
+  embedOrigins,
+  formatLinkLines,
+  isWebUrl,
+  parseLinkLines,
+} from "../shared/links.js";
 
 test("shared quantity tokens cover decimals, commas, fractions and mixed numbers", () => {
   assert.equal(parseQuantity("1"), 1);
@@ -58,4 +66,144 @@ test("shared conversions stay within a dimension and report ambiguity as null", 
   });
   assert.equal(unitInfo("Litres").unit, "mL");
   assert.equal(unitInfo("cup"), null);
+});
+
+test("shared link lines accept an address with an optional title in either order", () => {
+  const parsed = parseLinkLines(
+    "https://youtu.be/dQw4w9WgXcQ Grandma folds them\nThe written version example.com/orzo\nyoutu.be/dQw4w9WgXcQ\n\nnot a link at all\nmailto:cook@example.com hello\nftp://files.example.com/x",
+  );
+  assert.deepEqual(parsed.links, [
+    { url: "https://youtu.be/dQw4w9WgXcQ", title: "Grandma folds them" },
+    { url: "https://example.com/orzo", title: "The written version" },
+    { url: "https://youtu.be/dQw4w9WgXcQ", title: "" },
+  ]);
+  assert.deepEqual(parsed.invalid, [
+    "not a link at all",
+    "mailto:cook@example.com hello",
+    "ftp://files.example.com/x",
+  ]);
+  assert.equal(
+    formatLinkLines(parsed.links),
+    "https://youtu.be/dQw4w9WgXcQ Grandma folds them\nhttps://example.com/orzo The written version\nhttps://youtu.be/dQw4w9WgXcQ",
+  );
+  assert.equal(
+    formatLinkLines([{ url: "https://a.example", title: " a\nb " }]),
+    "https://a.example a b",
+  );
+  assert.deepEqual(parseLinkLines(""), { links: [], invalid: [] });
+  assert.equal(isWebUrl("javascript:alert(1)"), false);
+  assert.equal(isWebUrl("https://example.com"), true);
+});
+
+test("shared link descriptions recognise video players and leave other sites as plain links", () => {
+  const player = (url) => describeLink(url)?.embed ?? null;
+  assert.deepEqual(
+    player("https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=1m5s"),
+    {
+      src: "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?start=65",
+      autoplay_src:
+        "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?start=65&autoplay=1",
+      shape: "wide",
+    },
+  );
+  assert.equal(
+    player("https://youtu.be/dQw4w9WgXcQ?t=90").src,
+    "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?start=90",
+  );
+  assert.equal(
+    player("https://m.youtube.com/shorts/dQw4w9WgXcQ").shape,
+    "tall",
+  );
+  assert.equal(
+    player("https://www.youtube.com/playlist?list=PL12ab_-").src,
+    "https://www.youtube-nocookie.com/embed/videoseries?list=PL12ab_-",
+  );
+  assert.equal(player("https://www.youtube.com/@somechannel"), null);
+  assert.equal(player("https://youtu.be/tooshort"), null);
+  assert.equal(
+    player("https://vimeo.com/channels/staffpicks/76979871").src,
+    "https://player.vimeo.com/video/76979871",
+  );
+  assert.equal(
+    player("https://vimeo.com/76979871/abcdef1234").src,
+    "https://player.vimeo.com/video/76979871?h=abcdef1234",
+  );
+  assert.equal(player("https://vimeo.com/groups/123"), null);
+  assert.equal(
+    player("https://www.facebook.com/somepage/videos/10153231379946729/").src,
+    "https://www.facebook.com/plugins/video.php?href=https%3A%2F%2Fwww.facebook.com%2Fsomepage%2Fvideos%2F10153231379946729&show_text=false",
+  );
+  assert.equal(
+    player("https://m.facebook.com/watch/?v=10153231379946729").src,
+    "https://www.facebook.com/plugins/video.php?href=https%3A%2F%2Fwww.facebook.com%2Fwatch%3Fv%3D10153231379946729&show_text=false",
+  );
+  assert.equal(
+    player("https://www.facebook.com/reel/1234567890").shape,
+    "tall",
+  );
+  assert.equal(player("https://www.facebook.com/somepage/posts/123"), null);
+  assert.equal(player("https://fb.watch/abc123/"), null);
+  assert.deepEqual(player("https://www.instagram.com/p/C1abcdefg/"), {
+    src: "https://www.instagram.com/p/C1abcdefg/embed/",
+    autoplay_src: "https://www.instagram.com/p/C1abcdefg/embed/",
+    shape: "post",
+  });
+  assert.equal(
+    player("https://www.instagram.com/cook/reel/C1abcdefg/?igsh=x").src,
+    "https://www.instagram.com/reel/C1abcdefg/embed/",
+  );
+  assert.equal(player("https://www.instagram.com/reels/"), null);
+  assert.deepEqual(
+    player("https://www.tiktok.com/@cook/video/7234567890123456789"),
+    {
+      src: "https://www.tiktok.com/embed/v2/7234567890123456789",
+      autoplay_src: "https://www.tiktok.com/embed/v2/7234567890123456789",
+      shape: "portrait",
+    },
+  );
+  assert.equal(player("https://vm.tiktok.com/ZMabc/"), null);
+  assert.deepEqual(describeLink("https://www.example.com/recipe"), {
+    url: "https://www.example.com/recipe",
+    site: "example.com",
+    provider: null,
+    label: "example.com",
+    embed: null,
+  });
+  assert.equal(describeLink("https://youtu.be/dQw4w9WgXcQ").label, "YouTube");
+  assert.equal(describeLink("javascript:alert(1)"), null);
+  for (const url of [
+    "https://youtu.be/dQw4w9WgXcQ",
+    "https://vimeo.com/76979871",
+    "https://www.facebook.com/reel/1234567890",
+    "https://www.instagram.com/p/C1abcdefg/",
+    "https://www.tiktok.com/@cook/video/7234567890123456789",
+  ])
+    assert.ok(
+      embedOrigins.includes(new URL(player(url).autoplay_src).origin),
+      `${url} embeds from an allowed origin`,
+    );
+});
+
+test("shared display links put a video source first and never repeat it", () => {
+  const links = [{ url: "https://example.com/orzo", title: "Written" }];
+  assert.deepEqual(
+    displayLinks({ source_url: "https://youtu.be/dQw4w9WgXcQ", links }),
+    [
+      { url: "https://youtu.be/dQw4w9WgXcQ", title: "Original source" },
+      ...links,
+    ],
+  );
+  assert.deepEqual(
+    displayLinks({ source_url: "https://example.com/page", links }),
+    links,
+  );
+  assert.deepEqual(
+    displayLinks({
+      source_url: "https://youtu.be/dQw4w9WgXcQ",
+      links: [{ url: "https://youtu.be/dQw4w9WgXcQ", title: "Mine" }],
+    }),
+    [{ url: "https://youtu.be/dQw4w9WgXcQ", title: "Mine" }],
+  );
+  assert.deepEqual(displayLinks({}), []);
+  assert.deepEqual(displayLinks({ links: undefined }), []);
 });

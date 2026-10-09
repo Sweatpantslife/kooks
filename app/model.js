@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { clone as structuredClone } from "./compat.js";
 import { initial, recipes } from "./sample-data.js";
+import { MAX_LINKS, isWebUrl } from "../shared/links.js";
 
 const id = z.string().regex(/^[a-zA-Z0-9_-]{1,150}$/);
 const text = z.string().max(200000);
@@ -23,6 +24,10 @@ const ingredientSchema = z.object({
   raw: text.optional(),
   key: text.optional(),
   manual: z.boolean().optional(),
+});
+const link = z.object({
+  url: z.string().max(4000).refine(isWebUrl, "Links must be web addresses."),
+  title: z.string().max(4000).default(""),
 });
 const recipeSchema = z.object({
   id,
@@ -47,6 +52,7 @@ const recipeSchema = z.object({
   note: text,
   originalText: text.optional(),
   equipment: z.array(text).max(100),
+  links: z.array(link).max(MAX_LINKS).default([]),
 });
 const component = z.object({
   id,

@@ -16,7 +16,7 @@ npm run dev
 
 `npm run test:e2e` runs the Playwright suites for both interfaces (run `npx playwright install chromium` once), and `npm run format:check` enforces the shared Prettier style; the GitHub Actions workflow runs all of these on every push.
 
-Open `http://127.0.0.1:4317` for the persistent browser app. It starts with an empty cookbook and shares SQLite storage with the MCP server. Features include recipe capture/editing, meal composition, shopping, cooking sessions, pantry suggestions, leftovers, cooking memories, taste profiles, shared tasks, costs, and reviewed photo imports.
+Open `http://127.0.0.1:4317` for the persistent browser app. It starts with an empty cookbook and shares SQLite storage with the MCP server. Features include recipe capture/editing, meal composition, shopping, cooking sessions, pantry suggestions, leftovers, cooking memories, taste profiles, shared tasks, costs, reviewed photo imports, and recipe links with embedded YouTube, Vimeo, Facebook, Instagram and TikTok players that load only when you press play.
 
 For the separate mobile interface:
 
@@ -49,7 +49,7 @@ The browser server binds to loopback by default. Optional trusted-LAN access use
 
 ## Code layout
 
-`mcp/` holds the SQLite store, domain rules and MCP tools; `web/` the browser server and client; `app/` the Capacitor mobile app; `shared/` the unit table and ingredient tokenizer that both parsers build on. `test/` holds the Node unit and integration tests plus the Playwright projects in `test/mobile-e2e` and `test/web-e2e`.
+`mcp/` holds the SQLite store, domain rules and MCP tools; `web/` the browser server and client; `app/` the Capacitor mobile app; `shared/` the unit table, the ingredient tokenizer that both parsers build on, and the link module that recognises video players for both apps. `test/` holds the Node unit and integration tests plus the Playwright projects in `test/mobile-e2e` and `test/web-e2e`.
 
 ## Documentation
 

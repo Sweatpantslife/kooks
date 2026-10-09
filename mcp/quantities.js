@@ -44,6 +44,7 @@ export function scaleRecipe(record, targetServings) {
     equipment: structuredClone(original.equipment),
     original_text: original.original_text,
     source_url: original.source_url,
+    links: structuredClone(original.links ?? []),
     warnings: [
       ...(original.servings === null
         ? ["Yield is unknown; quantities are unchanged."]

@@ -85,10 +85,11 @@ export function createTools(store) {
         "cost_estimates",
         "weekly_budgets",
         "local_photo_import",
+        "recipe_links",
       ],
       limits: [
         "One household database. Browser clients share this server; no hosted cloud sync or individual accounts.",
-        "No direct WhatsApp, website, video, or model-provider connection. Photo OCR runs locally and requires review.",
+        "No direct WhatsApp, website, video, or model-provider connection. Recipe links are stored and embedded by the apps, never fetched here. Photo OCR runs locally and requires review.",
         "Timers store deadlines but do not deliver background alarms.",
         "Equipment checks are conditional; no automatic serving-time optimizer.",
       ],
@@ -134,7 +135,7 @@ export function createTools(store) {
   );
   tool(
     "recipe_save",
-    "Create a recipe or replace an existing recipe’s full data. Read before editing. Preserve original_text/source_url, keep uncertain quantities or yield null, and flag inferred equipment. Parse user-provided material in the host agent; this tool does not fetch sources.",
+    "Create a recipe or replace an existing recipe’s full data. Read before editing. Preserve original_text/source_url/links, keep uncertain quantities or yield null, and flag inferred equipment. links hold reference pages and YouTube, Vimeo, Facebook, Instagram or TikTok videos that the household apps embed. Parse user-provided material in the host agent; this tool does not fetch sources or links.",
     {
       ...s.save,
       recipe: s.recipe,
