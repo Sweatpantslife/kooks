@@ -65,7 +65,7 @@ export function createWebServer({
     );
   if (signIn && !mailer)
     throw new Error(
-      "Sign-in links need KOOKS_SMTP_URL (with KOOKS_MAIL_FROM), or KOOKS_MAIL_OUTBOX during development.",
+      "Sign-in links need KOOKS_SMTP_HOST (with KOOKS_SMTP_USER, KOOKS_SMTP_PASSWORD and KOOKS_MAIL_FROM), or KOOKS_MAIL_OUTBOX during development.",
     );
   const auth = signIn
     ? createAuth({
@@ -381,11 +381,17 @@ if (
   try {
     if (process.env.KOOKS_ACCESS_TOKEN || process.env.KOOKS_ACCESS_TOKEN_FILE)
       throw new Error(
-        "KOOKS_ACCESS_TOKEN is no longer used. Household members now sign in with passkeys and emailed links: set KOOKS_HOUSEHOLD_EMAILS and KOOKS_SMTP_URL instead (see docs/hosting.md).",
+        "KOOKS_ACCESS_TOKEN is no longer used. Household members now sign in with passkeys and emailed links: set KOOKS_HOUSEHOLD_EMAILS and KOOKS_SMTP_HOST instead (see docs/hosting.md).",
       );
     const members = parseMembers(process.env.KOOKS_HOUSEHOLD_EMAILS);
     const mailer = createMailer({
-      smtpUrl: process.env.KOOKS_SMTP_URL,
+      smtp: {
+        host: process.env.KOOKS_SMTP_HOST,
+        port: process.env.KOOKS_SMTP_PORT,
+        user: process.env.KOOKS_SMTP_USER,
+        password: process.env.KOOKS_SMTP_PASSWORD,
+        security: process.env.KOOKS_SMTP_SECURITY,
+      },
       from: process.env.KOOKS_MAIL_FROM,
       outbox: process.env.KOOKS_MAIL_OUTBOX
         ? resolve(process.env.KOOKS_MAIL_OUTBOX)

@@ -9,7 +9,6 @@ import { join } from "node:path";
 // (implicit TLS or STARTTLS, AUTH PLAIN or LOGIN, one text message) plus a
 // file outbox for development and tests.
 
-const loopback = (host) => ["127.0.0.1", "localhost", "::1"].includes(host);
 export const isEmail = (value) =>
   typeof value === "string" &&
   value.length <= 254 &&
@@ -168,8 +167,16 @@ const clientName = () => {
   return /^[A-Za-z0-9.-]+$/.test(name) ? name : "kooks.local";
 };
 
+const securities = { starttls: 587, tls: 465, none: 25 };
+// Plain SMTP settings, the same any mail client takes. security is starttls
+// (upgrade before anything is sent, and refuse to go on without it), tls
+// (encrypted from the first byte) or none (a relay on a trusted network).
 export async function sendSmtp({
-  url,
+  host,
+  port,
+  user = "",
+  password = "",
+  security = "starttls",
   from,
   to,
   message,
@@ -177,28 +184,21 @@ export async function sendSmtp({
   tls: tlsOptions = {},
 }) {
   if (!isEmail(to)) throw new Error("The recipient is not an email address.");
-  const target = new URL(url);
-  const secure = target.protocol === "smtps:";
-  const host = target.hostname.replace(/^\[|\]$/g, ""),
-    port = Number(target.port || (secure ? 465 : 587));
-  const user = decodeURIComponent(target.username),
-    password = decodeURIComponent(target.password);
   const talk = converse(
-    await openSocket({ host, port, secure, tlsOptions }),
+    await openSocket({ host, port, secure: security === "tls", tlsOptions }),
     timeoutMs,
   );
   try {
     await talk.expect(220, "the connection");
     let extensions = await talk.command(`EHLO ${clientName()}`, 250, "EHLO");
-    if (!secure) {
-      if (extensions.some((line) => /^STARTTLS$/i.test(line.trim()))) {
-        await talk.command("STARTTLS", 220, "STARTTLS");
-        await talk.upgrade({ host, tlsOptions });
-        extensions = await talk.command(`EHLO ${clientName()}`, 250, "EHLO");
-      } else if (!loopback(host))
+    if (security === "starttls") {
+      if (!extensions.some((line) => /^STARTTLS$/i.test(line.trim())))
         throw new Error(
-          `${host} does not offer STARTTLS, so Kooks will not send credentials or mail in the clear. Use smtps:// or a server with STARTTLS.`,
+          `${host} does not offer STARTTLS. Use port 465 with KOOKS_SMTP_SECURITY=tls, or KOOKS_SMTP_SECURITY=none for a relay on a trusted network.`,
         );
+      await talk.command("STARTTLS", 220, "STARTTLS");
+      await talk.upgrade({ host, tlsOptions });
+      extensions = await talk.command(`EHLO ${clientName()}`, 250, "EHLO");
     }
     if (user) {
       const offered = (extensions.find((line) => /^AUTH[ =]/i.test(line)) ?? "")
@@ -237,31 +237,35 @@ export async function sendSmtp({
 
 // null when nothing is configured; the server decides whether that matters.
 export function createMailer({
-  smtpUrl = "",
+  smtp = {},
   from = "",
   outbox = "",
   tls = {},
   timeoutMs,
 } = {}) {
-  if (!smtpUrl && !outbox) return null;
-  if (smtpUrl && outbox)
+  const host = String(smtp.host ?? "").trim();
+  if (!host && !outbox) return null;
+  if (host && outbox)
     throw new Error(
-      "Set either KOOKS_SMTP_URL or KOOKS_MAIL_OUTBOX, not both.",
+      "Set either KOOKS_SMTP_HOST or KOOKS_MAIL_OUTBOX, not both.",
     );
-  let sender = from;
-  if (smtpUrl) {
-    let url;
-    try {
-      url = new URL(smtpUrl);
-    } catch {
-      url = null;
-    }
-    if (!url || !["smtp:", "smtps:"].includes(url.protocol) || !url.hostname)
-      throw new Error(
-        "KOOKS_SMTP_URL must look like smtps://user:password@smtp.example.com:465 or smtp://user:password@smtp.example.com:587 (STARTTLS).",
-      );
-    if (!sender && isEmail(decodeURIComponent(url.username)))
-      sender = decodeURIComponent(url.username);
+  let sender = from,
+    settings = null;
+  if (host) {
+    const security = String(smtp.security || "starttls")
+      .trim()
+      .toLowerCase();
+    if (!(security in securities))
+      throw new Error("KOOKS_SMTP_SECURITY must be starttls, tls or none.");
+    const port = Number(String(smtp.port ?? "").trim() || securities[security]);
+    if (!Number.isInteger(port) || port < 1 || port > 65535)
+      throw new Error("KOOKS_SMTP_PORT must be a port number.");
+    const user = String(smtp.user ?? ""),
+      password = String(smtp.password ?? "");
+    if (password && !user)
+      throw new Error("KOOKS_SMTP_PASSWORD needs KOOKS_SMTP_USER as well.");
+    settings = { host, port, user, password, security };
+    if (!sender && isEmail(user)) sender = user;
     if (!sender)
       throw new Error(
         "KOOKS_MAIL_FROM is required: the address sign-in links are sent from.",
@@ -269,8 +273,8 @@ export function createMailer({
   } else sender ||= "Kooks <kooks@kooks.local>";
   const { address } = parseAddress(sender, "KOOKS_MAIL_FROM");
   return {
-    description: smtpUrl
-      ? `by email through ${new URL(smtpUrl).hostname}`
+    description: settings
+      ? `by email through ${host}:${settings.port} (${settings.security})`
       : `to files in ${outbox}`,
     async send({ to, subject, text }) {
       const message = formatMessage({ from: sender, to, subject, text });
@@ -284,7 +288,7 @@ export function createMailer({
         return;
       }
       await sendSmtp({
-        url: smtpUrl,
+        ...settings,
         from: address,
         to,
         message,

@@ -346,7 +346,7 @@ test("hosted and shared modes refuse insecure origins and missing household conf
     );
     assert.throws(
       () => createWebServer({ store, host: "0.0.0.0", members: [member] }),
-      /KOOKS_SMTP_URL/,
+      /KOOKS_SMTP_HOST/,
     );
   } finally {
     store.close();

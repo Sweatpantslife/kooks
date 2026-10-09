@@ -221,7 +221,10 @@ test("sends through STARTTLS with AUTH PLAIN and dot-stuffs the message", async 
   const { port, received } = await fakeSmtp(t, { starttls: cert });
   const text = "Hello\n.hidden line\n..double\nbye\n";
   await sendSmtp({
-    url: `smtp://cook%40example.test:s%3Acret@localhost:${port}`,
+    host: "localhost",
+    port,
+    user: "cook@example.test",
+    password: "s:cret",
     from: "kooks@example.test",
     to: "cook@example.test",
     message: message(text),
@@ -242,7 +245,7 @@ test("sends through STARTTLS with AUTH PLAIN and dot-stuffs the message", async 
   );
 });
 
-test("uses implicit TLS and AUTH LOGIN when PLAIN is not offered", async (t) => {
+test("uses encrypted-from-the-start servers and AUTH LOGIN when PLAIN is not offered", async (t) => {
   const cert = certificate(t);
   if (!cert) return t.skip("openssl is not available");
   const { port, received } = await fakeSmtp(t, {
@@ -250,10 +253,16 @@ test("uses implicit TLS and AUTH LOGIN when PLAIN is not offered", async (t) => 
     mechanisms: "LOGIN",
   });
   const mailer = createMailer({
-    smtpUrl: `smtps://kooks%40example.test:pw@localhost:${port}`,
+    smtp: {
+      host: "localhost",
+      port: String(port),
+      user: "kooks@example.test",
+      password: "pw",
+      security: "TLS",
+    },
     tls: { ca: cert.cert },
   });
-  assert.equal(mailer.description, "by email through localhost");
+  assert.equal(mailer.description, `by email through localhost:${port} (tls)`);
   await mailer.send({
     to: "cook@example.test",
     subject: "Sign in",
@@ -267,32 +276,27 @@ test("uses implicit TLS and AUTH LOGIN when PLAIN is not offered", async (t) => 
   assert.match(received[0].message, /^From: kooks@example.test\r\n/);
 });
 
-test("talks plainly only to loopback and reports refusals", async (t) => {
+test("sends in the clear only when asked, insists on STARTTLS otherwise, and reports refusals", async (t) => {
   const { port, received } = await fakeSmtp(t);
-  await sendSmtp({
-    url: `smtp://127.0.0.1:${port}`,
+  const settings = {
+    host: "127.0.0.1",
+    port,
     from: "kooks@example.test",
     to: "cook@example.test",
     message: message("Plain\n"),
-  });
+  };
+  await assert.rejects(sendSmtp(settings), /does not offer STARTTLS/);
+  assert.equal(received.length, 0);
+  await sendSmtp({ ...settings, security: "none" });
+  assert.equal(received.length, 1);
   assert.equal(received[0].auth, null);
   const refusing = await fakeSmtp(t, { rejectRecipient: true });
   await assert.rejects(
-    sendSmtp({
-      url: `smtp://127.0.0.1:${refusing.port}`,
-      from: "kooks@example.test",
-      to: "cook@example.test",
-      message: message("Plain\n"),
-    }),
+    sendSmtp({ ...settings, port: refusing.port, security: "none" }),
     /refused RCPT TO: 550 no such mailbox/,
   );
   await assert.rejects(
-    sendSmtp({
-      url: `smtp://127.0.0.1:${port}`,
-      from: "kooks@example.test",
-      to: "bad\r\nRCPT",
-      message: "",
-    }),
+    sendSmtp({ ...settings, security: "none", to: "bad\r\nRCPT", message: "" }),
     /not an email address/,
   );
 });
@@ -300,20 +304,44 @@ test("talks plainly only to loopback and reports refusals", async (t) => {
 test("configuration picks one transport and a sender", async (t) => {
   assert.equal(createMailer({}), null);
   assert.throws(
-    () => createMailer({ smtpUrl: "smtp://x", outbox: "/tmp/x" }),
+    () => createMailer({ smtp: { host: "mail.example" }, outbox: "/tmp/x" }),
     /not both/,
   );
   assert.throws(
-    () => createMailer({ smtpUrl: "https://x" }),
-    /KOOKS_SMTP_URL must look like/,
+    () => createMailer({ smtp: { host: "mail.example", security: "ssl" } }),
+    /KOOKS_SMTP_SECURITY must be/,
   );
   assert.throws(
-    () => createMailer({ smtpUrl: "smtp://robot:pw@mail.example" }),
+    () => createMailer({ smtp: { host: "mail.example", port: "abc" } }),
+    /KOOKS_SMTP_PORT must be/,
+  );
+  assert.throws(
+    () => createMailer({ smtp: { host: "mail.example", password: "pw" } }),
+    /KOOKS_SMTP_PASSWORD needs KOOKS_SMTP_USER/,
+  );
+  assert.throws(
+    () =>
+      createMailer({
+        smtp: { host: "mail.example", user: "robot", password: "pw" },
+      }),
     /KOOKS_MAIL_FROM is required/,
   );
   assert.throws(
-    () => createMailer({ smtpUrl: "smtp://mail.example", from: "nope" }),
+    () => createMailer({ smtp: { host: "mail.example" }, from: "nope" }),
     /KOOKS_MAIL_FROM must be/,
+  );
+  assert.equal(
+    createMailer({
+      smtp: { host: " mail.example ", user: "kooks@example.test" },
+    }).description,
+    "by email through mail.example:587 (starttls)",
+  );
+  assert.equal(
+    createMailer({
+      smtp: { host: "relay", security: "none" },
+      from: "k@x.example",
+    }).description,
+    "by email through relay:25 (none)",
   );
   const outbox = join(mkdtempSync(join(tmpdir(), "kooks-outbox-")), "mail");
   t.after(() => rmSync(outbox, { recursive: true, force: true }));
