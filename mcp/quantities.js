@@ -1,63 +1,21 @@
 import { requireThat } from "./store.js";
+import { convertUnits, round } from "../shared/quantities.js";
 
-const units = new Map();
-function define(names, dimension, factor, unit) {
-  for (const name of names) units.set(name, { dimension, factor, unit });
-}
-define(["g", "gram", "grams"], "mass", 1, "g");
-define(["kg", "kilogram", "kilograms"], "mass", 1000, "g");
-define(["mg", "milligram", "milligrams"], "mass", 0.001, "g");
-define(["oz", "ounce", "ounces"], "mass", 28.349523125, "g");
-define(["lb", "lbs", "pound", "pounds"], "mass", 453.59237, "g");
-define(
-  ["ml", "milliliter", "milliliters", "millilitre", "millilitres"],
-  "volume",
-  1,
-  "mL",
-);
-define(["l", "liter", "liters", "litre", "litres"], "volume", 1000, "mL");
-// Deliberately require explicit conventions for cups/spoons. A bare "cup"
-// remains unconverted; the household's measurement convention is not settled.
-define(["us_cup"], "volume", 236.5882365, "mL");
-define(["us_tbsp"], "volume", 14.78676478125, "mL");
-define(["us_tsp"], "volume", 4.92892159375, "mL");
-define(["us_fl_oz"], "volume", 29.5735295625, "mL");
-define(["metric_cup"], "volume", 250, "mL");
-define(["metric_tbsp"], "volume", 15, "mL");
-define(["metric_tsp"], "volume", 5, "mL");
-define(["count", "each", "piece", "pieces"], "count", 1, "each");
+export {
+  canonicalQuantity,
+  normalize,
+  round,
+  unitInfo,
+} from "../shared/quantities.js";
 
-export const normalize = (value) =>
-  value.normalize("NFKC").trim().toLowerCase().replace(/\s+/g, " ");
-export const round = (number) => Number(number.toPrecision(12));
-export function canonicalQuantity(quantity, unit) {
-  const known = units.get(normalize(unit));
-  if (!known || quantity === null)
-    return { quantity, unit: known?.unit ?? normalize(unit) };
-  return { quantity: round(quantity * known.factor), unit: known.unit };
-}
 export function convert(quantity, from, to) {
-  const a = normalize(from),
-    b = normalize(to);
-  if (a === b) return { quantity, unit: to };
-  if (
-    ["c", "°c", "celsius"].includes(a) &&
-    ["f", "°f", "fahrenheit"].includes(b)
-  )
-    return { quantity: round((quantity * 9) / 5 + 32), unit: to };
-  if (
-    ["f", "°f", "fahrenheit"].includes(a) &&
-    ["c", "°c", "celsius"].includes(b)
-  )
-    return { quantity: round(((quantity - 32) * 5) / 9), unit: to };
-  const left = units.get(a),
-    right = units.get(b);
+  const result = convertUnits(quantity, from, to);
   requireThat(
-    left && right && left.dimension === right.dimension,
+    result,
     "AMBIGUOUS_CONVERSION",
     "Cannot convert these units without more information. Use explicit us_cup/metric_cup, us_tbsp/metric_tbsp, or us_tsp/metric_tsp. Mass/volume conversion requires ingredient density and is not inferred.",
   );
-  return { quantity: round((quantity * left.factor) / right.factor), unit: to };
+  return result;
 }
 export function scaleRecipe(record, targetServings) {
   const original = record.data;

@@ -3,49 +3,23 @@
 // the household's stated convention (cup 240 mL, tbsp 15 mL, tsp 5 mL).
 import { ingredient } from "./sample-data.js";
 import { formatNumber, originalText } from "./units.js";
+import { splitIngredientLine } from "../shared/ingredients.js";
 
-const fractions = {
-  "½": "1/2",
-  "¼": "1/4",
-  "¾": "3/4",
-  "⅓": "1/3",
-  "⅔": "2/3",
-  "⅛": "1/8",
-  "⅜": "3/8",
-  "⅝": "5/8",
-  "⅞": "7/8",
-};
 const asWritten = (raw) =>
   ingredient("text-" + raw.toLowerCase(), raw, null, "", "Other", "As written");
 
+// Mobile policy: store metric amounts, converting cups and spoons with the
+// stated convention, and remember the pasted unit for the "original" display.
 // `known` lists ingredients whose key and shopping group should be reused
 // when a pasted line names them, such as the bundled example recipes.
 export function parseIngredient(line, known = []) {
-  const raw = line.trim().replace(/^[-•]\s*/, "");
-  const expanded = raw
-    .replace(/[½¼¾⅓⅔⅛⅜⅝⅞]/g, (c) => " " + fractions[c])
-    .trim();
-  const m = expanded.match(
-    /^(\d+\s+\d+\/\d+|\d+\/\d+|\d+(?:[.,]\d+)?)\s+(.+)$/,
-  );
-  if (!m) return asWritten(raw);
-  let q = m[1].split(/\s+/).reduce((n, p) => {
-    if (p.includes("/")) {
-      const [a, b] = p.split("/").map(Number);
-      return n + (b ? a / b : NaN);
-    }
-    return n + Number(p.replace(",", "."));
-  }, 0);
-  if (!Number.isFinite(q) || q <= 0) return asWritten(raw);
-  const originalQuantity = q;
-  let rest = m[2],
+  const parts = splitIngredientLine(line);
+  const raw = parts.original;
+  if (parts.quantity === null || parts.quantity <= 0) return asWritten(raw);
+  let q = parts.quantity,
     u = "";
-  const unit = rest.match(
-    /^(grams?|g|kilograms?|kg|millilit(?:er|re)s?|ml|lit(?:er|re)s?|l|tbsp|tablespoons?|tsp|teaspoons?|cups?|oz|ounces?|cloves?|cans?)\s+(.+)$/i,
-  );
-  if (unit) {
-    const token = unit[1].toLowerCase();
-    rest = unit[2];
+  const token = parts.unitToken.toLowerCase();
+  if (token) {
     if (/^(g|grams?)$/.test(token)) u = "g";
     else if (/^(kg|kilograms?)$/.test(token)) {
       u = "g";
@@ -68,9 +42,7 @@ export function parseIngredient(line, known = []) {
       q *= 28.349523125;
     } else u = token.replace(/s$/, "");
   }
-  const parts = rest.split(/,\s*/);
-  const name = parts.shift().trim();
-  const note = parts.join(", ");
+  const name = parts.name;
   const match = known.find((i) => i.n.toLowerCase() === name.toLowerCase());
   const result = ingredient(
     match?.k || name.toLowerCase().replace(/\s+/g, "-"),
@@ -78,9 +50,9 @@ export function parseIngredient(line, known = []) {
     q,
     u,
     match?.group || "Other",
-    note,
+    parts.preparation,
   );
-  result.original = { q: originalQuantity, u: unit ? unit[1] : "" };
+  result.original = { q: parts.quantity, u: parts.unitToken };
   result.raw = raw;
   return result;
 }

@@ -15,60 +15,30 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { KooksError, requireThat } from "./store.js";
 import { recipe } from "./schemas.js";
+import { splitIngredientLine } from "../shared/ingredients.js";
 
-const fractions = {
-  "½": "1/2",
-  "¼": "1/4",
-  "¾": "3/4",
-  "⅓": "1/3",
-  "⅔": "2/3",
-  "⅛": "1/8",
-  "⅜": "3/8",
-  "⅝": "5/8",
-  "⅞": "7/8",
-};
+// Backend policy: keep the writer's unit (lowercased, singular) and never
+// convert a bare cup or spoon; the household convention is not settled.
 export function parseIngredient(line) {
-  const original = line.trim().replace(/^[-•]\s*/, "");
-  const expanded = original
-    .replace(/[½¼¾⅓⅔⅛⅜⅝⅞]/g, (c) => ` ${fractions[c]}`)
-    .trim();
-  const match = expanded.match(
-    /^(\d+\s+\d+\/\d+|\d+\/\d+|\d+(?:[.,]\d+)?)(?:\s+|(?=[a-zA-Z]))(.+)$/,
-  );
+  const parts = splitIngredientLine(line);
   const base = {
-    name: original || "Unclear ingredient",
+    name: parts.original || "Unclear ingredient",
     quantity: null,
     unit: "",
     original_text: line,
     preparation: "",
   };
-  if (!match) return base;
-  let quantity = match[1].split(/\s+/).reduce((sum, part) => {
-    if (!part.includes("/")) return sum + Number(part.replace(",", "."));
-    const [a, b] = part.split("/").map(Number);
-    return sum + a / b;
-  }, 0);
-  if (!Number.isFinite(quantity) || quantity > 1e9) return base;
-  let rest = match[2],
-    unit = "";
-  const unitMatch = rest.match(
-    /^(g|grams?|kg|kilograms?|mg|mL|ml|milliliters?|millilitres?|l|liters?|litres?|oz|ounces?|lb|lbs|pounds?|cups?|tbsp|tablespoons?|tsp|teaspoons?|us_cup|metric_cup|us_tbsp|metric_tbsp|us_tsp|metric_tsp|cloves?|cans?|each|pieces?|count)\s+(.+)$/i,
-  );
-  if (unitMatch) {
-    unit = unitMatch[1]
+  if (parts.quantity === null || parts.quantity > 1e9) return base;
+  return {
+    ...base,
+    name: parts.name,
+    quantity: parts.quantity,
+    unit: parts.unitToken
       .toLowerCase()
       .replace(/^cups$/, "cup")
       .replace(/^tablespoons?$/, "tbsp")
-      .replace(/^teaspoons?$/, "tsp");
-    rest = unitMatch[2];
-  }
-  const [name, ...preparation] = rest.split(/,\s*/);
-  return {
-    ...base,
-    name: name.trim(),
-    quantity,
-    unit,
-    preparation: preparation.join(", "),
+      .replace(/^teaspoons?$/, "tsp"),
+    preparation: parts.preparation,
   };
 }
 
