@@ -14,6 +14,16 @@ import {
   isWebUrl,
   parseLinkLines,
 } from "../shared/links.js";
+import {
+  courseKeys,
+  dietKeys,
+  facetText,
+  formatLabels,
+  hasFacetFilters,
+  matchesFacets,
+  parseLabels,
+  taxonomy,
+} from "../shared/taxonomy.js";
 
 test("shared quantity tokens cover decimals, commas, fractions and mixed numbers", () => {
   assert.equal(parseQuantity("1"), 1);
@@ -206,4 +216,64 @@ test("shared display links put a video source first and never repeat it", () => 
   );
   assert.deepEqual(displayLinks({}), []);
   assert.deepEqual(displayLinks({ links: undefined }), []);
+});
+
+test("shared taxonomy dedupes labels, matches facets case-insensitively and counts the vocabulary", () => {
+  assert.deepEqual(parseLabels(" Weeknight, weeknight ,, Shabbat "), [
+    "Weeknight",
+    "Shabbat",
+  ]);
+  assert.deepEqual(parseLabels(""), []);
+  assert.equal(formatLabels(["Weeknight", "Shabbat"]), "Weeknight, Shabbat");
+  assert.equal(courseKeys.includes("main") && dietKeys.includes("vegan"), true);
+  const orzo = {
+    course: "main",
+    cuisine: "Italian",
+    diets: ["vegan", "gluten_free"],
+    tags: ["Weeknight", "One pot"],
+  };
+  assert.equal(
+    matchesFacets(orzo, {
+      course: "main",
+      cuisine: "italian",
+      diets: ["vegan"],
+      tags: ["one POT"],
+    }),
+    true,
+  );
+  assert.equal(matchesFacets(orzo, { diets: ["vegan", "nut_free"] }), false);
+  assert.equal(matchesFacets(orzo, { tags: ["Weeknight", "Soup"] }), false);
+  assert.equal(matchesFacets(orzo, { cuisine: "Thai" }), false);
+  // Unknown stays unknown: a missing course or cuisine never matches.
+  assert.equal(matchesFacets({ tags: [] }, { course: "main" }), false);
+  assert.equal(matchesFacets({ cuisine: "" }, { cuisine: "Thai" }), false);
+  assert.equal(matchesFacets({}, { diets: [], tags: [] }), true);
+  assert.equal(hasFacetFilters({ diets: [], tags: [] }), false);
+  assert.equal(hasFacetFilters({ cuisine: "Thai" }), true);
+  assert.equal(
+    facetText(orzo),
+    "Main Italian Vegan Gluten-free Weeknight One pot",
+  );
+  const counts = taxonomy([
+    orzo,
+    { course: "main", cuisine: "italian", tags: ["weeknight"] },
+    { cuisine: "ITALIAN", diets: ["vegan"], tags: ["Weeknight", "Soup"] },
+    { course: null, cuisine: "", diets: [], tags: [] },
+  ]);
+  assert.deepEqual(counts.courses, [{ key: "main", label: "Main", count: 2 }]);
+  assert.deepEqual(counts.cuisines, [{ name: "Italian", count: 3 }]);
+  assert.deepEqual(counts.diets, [
+    { key: "vegan", label: "Vegan", count: 2 },
+    { key: "gluten_free", label: "Gluten-free", count: 1 },
+  ]);
+  assert.deepEqual(counts.tags, [
+    { name: "Weeknight", count: 3 },
+    { name: "One pot", count: 1 },
+    { name: "Soup", count: 1 },
+  ]);
+  assert.deepEqual(
+    taxonomy([{ tags: ["shabbat"] }, { tags: ["Shabbat"] }]).tags,
+    [{ name: "Shabbat", count: 2 }],
+  );
+  assert.deepEqual(taxonomy([]).courses, []);
 });

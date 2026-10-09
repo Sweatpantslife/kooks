@@ -13,16 +13,17 @@ import { AuthError, createAuth, normalizeEmail, parseMembers } from "./auth.js";
 import { createMailer, isEmail } from "./mail.js";
 
 const publicRoot = fileURLToPath(new URL("./public/", import.meta.url));
-// The browser client is these files and the shared link module it imports.
+// The browser client is these files and the shared modules it imports: the
+// link module, the facet taxonomy and the unit module the taxonomy builds on.
 const staticFiles = new Map([
   ...["/index.html", "/app.js", "/style.css"].map((path) => [
     path,
     resolve(publicRoot, `.${path}`),
   ]),
-  [
-    "/shared/links.js",
-    fileURLToPath(new URL("../shared/links.js", import.meta.url)),
-  ],
+  ...["links", "taxonomy", "quantities"].map((name) => [
+    `/shared/${name}.js`,
+    fileURLToPath(new URL(`../shared/${name}.js`, import.meta.url)),
+  ]),
 ]);
 const mime = {
   ".html": "text/html; charset=utf-8",

@@ -18,6 +18,19 @@ import {
 } from "./shopping.js";
 import { equipmentSummary } from "./equipment.js";
 import { MAX_LINKS, describeLink, parseLinkLines } from "../shared/links.js";
+import {
+  courseLabel,
+  courses,
+  dietLabel,
+  diets,
+  facetText,
+  hasFacetFilters,
+  labelKey,
+  matchesFacets,
+  parseLabels,
+  suggestedCuisines,
+  taxonomy,
+} from "../shared/taxonomy.js";
 import { clone as structuredClone, randomId } from "./compat.js";
 import {
   createIcons,
@@ -82,6 +95,9 @@ async function boot() {
   let isRestoring = false;
   let storageStatus = "saved";
   let draft = null;
+  // Library facet filters: one course or cuisine, every chosen diet and tag.
+  const noFacets = () => ({ course: "", cuisine: "", diets: [], tags: [] });
+  let facets = noFacets();
   let review = null;
   let noteMessage = "";
   let timerHandle = null;
@@ -374,6 +390,7 @@ async function boot() {
       (r) =>
         (state.filter !== "favorites" || state.favorites.includes(r.id)) &&
         (state.filter !== "quick" || (r.time && r.time <= 30)) &&
+        matchesFacets(r, facets) &&
         (!term ||
           [
             r.title,
@@ -381,14 +398,104 @@ async function boot() {
             r.note,
             state.notes[r.id],
             ...r.ingredients.map((i) => i.n),
+            facetText(r),
           ]
             .join(" ")
             .toLowerCase()
             .includes(term)),
     );
     return found.length
-      ? `<div class="k-grid">${found.map((r) => `<article class="k-recipe-card"><button type="button" class="k-card-open cursor-interaction" data-action="open" data-id="${esc(r.id)}"><span class="k-tag">${esc(r.tag)}</span><span class="k-card-title">${esc(r.title)}</span><span class="k-card-description">${esc(r.description)}</span></button><div class="k-card-footer"><span class="k-card-meta">${icon("clock-3")}${r.time ? `${r.time} min` : "Time not set"} <span>·</span> ${r.servings ? r.servings + " servings" : "Yield not set"}</span><button type="button" class="k-button k-quiet k-icon k-favorite cursor-interaction" aria-label="${state.favorites.includes(r.id) ? "Unfavorite" : "Favorite"} ${esc(r.title)}" aria-pressed="${state.favorites.includes(r.id)}" data-action="favorite" data-id="${esc(r.id)}">${icon("heart")}</button></div></article>`).join("")}</div><p class="k-library-footer">${found.length} recipe${found.length !== 1 ? "s" : ""} in your collection</p>`
-      : `<div class="k-empty">${icon("search")}<h2>No recipes found</h2><p>Try an ingredient, a different name, or another collection.</p>${button("Clear filters", "clear-search")}</div>`;
+      ? `<div class="k-grid">${found.map((r) => `<article class="k-recipe-card"><button type="button" class="k-card-open cursor-interaction" data-action="open" data-id="${esc(r.id)}"><span class="k-tag">${esc(courseLabel(r.course) ?? "Your collection")}</span><span class="k-card-title">${esc(r.title)}</span><span class="k-card-description">${esc(r.description)}</span></button>${facetBadges(r)}<div class="k-card-footer"><span class="k-card-meta">${icon("clock-3")}${r.time ? `${r.time} min` : "Time not set"} <span>·</span> ${r.servings ? r.servings + " servings" : "Yield not set"}</span><button type="button" class="k-button k-quiet k-icon k-favorite cursor-interaction" aria-label="${state.favorites.includes(r.id) ? "Unfavorite" : "Favorite"} ${esc(r.title)}" aria-pressed="${state.favorites.includes(r.id)}" data-action="favorite" data-id="${esc(r.id)}">${icon("heart")}</button></div></article>`).join("")}</div><p class="k-library-footer">${found.length} recipe${found.length !== 1 ? "s" : ""} in your collection</p>`
+      : `<div class="k-empty">${icon("search")}<h2>No recipes found</h2><p>Try an ingredient, a different name, or another filter.</p>${button("Clear filters", "clear-search")}</div>`;
+  }
+  // Cuisine, diet labels and tags of a recipe, as small badges.
+  function facetBadges(r, cls = "k-card-facets") {
+    const labels = [
+      ...(r.cuisine ? [r.cuisine] : []),
+      ...(r.diets || []).map(dietLabel),
+      ...(r.tags || []),
+    ];
+    return labels.length
+      ? `<div class="${cls}">${labels.map((label) => `<span class="k-chip">${esc(label)}</span>`).join("")}</div>`
+      : "";
+  }
+  // Facet filter rows for the library, from what the cookbook contains.
+  function facetFilters() {
+    const vocabulary = taxonomy(allRecipes());
+    const chip = (label, attrs, pressed) =>
+      `<button type="button" class="k-filter cursor-interaction" data-action="facet" ${attrs} aria-pressed="${pressed}">${esc(label)}</button>`;
+    const row = (label, chips) =>
+      chips.length
+        ? `<div class="k-facet-row"><span class="k-facet-label">${label}</span><div class="k-filters" aria-label="${label} filters">${chips.join("")}</div></div>`
+        : "";
+    const chosen = (facet, value) =>
+      Array.isArray(facets[facet])
+        ? facets[facet].some((v) => labelKey(v) === labelKey(value))
+        : labelKey(facets[facet]) === labelKey(value);
+    const options = (facet, entries, nameOf, labelOf) =>
+      entries.map((entry) =>
+        chip(
+          labelOf(entry),
+          `data-facet="${facet}" data-value="${esc(nameOf(entry))}"`,
+          chosen(facet, nameOf(entry)),
+        ),
+      );
+    const single = (facet, entries, nameOf, labelOf) =>
+      entries.length
+        ? [
+            chip("All", `data-facet="${facet}" data-value=""`, !facets[facet]),
+            ...options(facet, entries, nameOf, labelOf),
+          ]
+        : [];
+    return (
+      row(
+        "Course",
+        single(
+          "course",
+          vocabulary.courses,
+          (c) => c.key,
+          (c) => c.label,
+        ),
+      ) +
+      row(
+        "Cuisine",
+        single(
+          "cuisine",
+          vocabulary.cuisines,
+          (c) => c.name,
+          (c) => c.name,
+        ),
+      ) +
+      row(
+        "Diet",
+        options(
+          "diets",
+          vocabulary.diets,
+          (d) => d.key,
+          (d) => d.label,
+        ),
+      ) +
+      row(
+        "Tags",
+        options(
+          "tags",
+          vocabulary.tags,
+          (t) => t.name,
+          (t) => t.name,
+        ),
+      ) +
+      (hasFacetFilters(facets)
+        ? `<div class="k-facet-row">${button("Clear filters", "clear-search", "", "k-quiet")}</div>`
+        : "")
+    );
+  }
+  function cuisineOptions() {
+    const inUse = taxonomy(allRecipes()).cuisines;
+    const seen = new Set(inUse.map((c) => labelKey(c.name)));
+    return [
+      ...inUse.map((c) => c.name),
+      ...suggestedCuisines.filter((name) => !seen.has(labelKey(name))),
+    ];
   }
   function libraryView() {
     return `${resumeBanner()}<div class="k-heading"><div><div class="k-kicker">Your everyday cookbook</div><h1>Your kitchen, collected.</h1><p class="k-muted k-small">The recipes you love. Ready when you are.</p></div>${button(icon("plus") + "Add recipe", "capture", "", "k-primary")}</div><label class="k-search">${icon("search")}<span class="k-sr">Search recipes and ingredients</span><input id="k-search" type="search" placeholder="Find a recipe or ingredient…" value="${esc(state.query)}" autocomplete="off"></label><div class="k-filters" aria-label="Recipe filters">${[
@@ -402,7 +509,7 @@ async function boot() {
       )
       .join(
         "",
-      )}</div><div id="k-results">${libraryCards()}</div><p class="k-note">Six example recipes are included to help you get started. Everything you add is saved on this device.</p>`;
+      )}</div>${facetFilters()}<div id="k-results">${libraryCards()}</div><p class="k-note">Six example recipes are included to help you get started. Everything you add is saved on this device.</p>`;
   }
   function unitSelect() {
     return `<label class="k-field"><span class="k-sr">Measurement display</span><select class="k-select" id="k-units" aria-label="Measurement display">${[
@@ -466,7 +573,7 @@ async function boot() {
   }
   function detailView() {
     const r = recipe();
-    return `${button(icon("arrow-left") + "Recipes", "nav", 'data-view="library"', "k-quiet k-back")}<div class="k-row k-between"><span class="k-tag">${esc(r.tag)}</span>${button(icon("pencil") + "Edit recipe", "edit", 'data-id="' + esc(r.id) + '"', "k-quiet")}</div><h1 class="k-detail-title">${esc(r.title)}</h1><p class="k-muted">${esc(r.description)}</p><div class="k-detail-meta"><span>${r.time ? r.time + " minutes" : "Time not set"}</span><span>·</span><span>${esc(r.source)}</span></div><div class="k-actions">${button(icon("play") + "Start cooking", "start-cook", "", "k-primary")}${button(icon("shopping-basket") + "Add to list", "review")}${button(icon("calendar-plus") + "Plan a meal", "schedule")}${button(icon("share-2") + "Share", "share-recipe")}</div><div class="k-recipe-columns"><section class="k-ingredients"><div class="k-row k-between"><h3>Ingredients</h3>${unitSelect()}</div><div class="k-serving-control"><span class="k-small">${r.servings ? "Servings" : "Original quantities"}</span>${r.servings ? `<div class="k-stepper">${button(icon("minus"), "servings", 'data-delta="-1" aria-label="Fewer servings" ' + (servings(r) <= 1 ? "disabled" : ""), "k-quiet k-icon")}<strong>${servings(r)}</strong>${button(icon("plus"), "servings", 'data-delta="1" aria-label="More servings" ' + (servings(r) >= 24 ? "disabled" : ""), "k-quiet k-icon")}</div>` : `${button("Set yield", "edit", "", "k-quiet")}`}</div>${ingredientRows(r)}${state.units === "us" ? '<p class="k-note">Cups use 240 mL. Weight stays in ounces; cup-to-gram estimates need an ingredient reference.</p>' : ""}${r.servings && servings(r) !== r.servings ? '<p class="k-note">Ingredient amounts adjusted. Cooking times stay the same.</p>' : ""}</section><section><h2>The method</h2><ol class="k-method">${r.steps.map((s) => `<li><h3>${esc(s.title)}</h3><p>${esc(scaledText(s.text))}</p></li>`).join("")}</ol>${r.note ? `<div class="k-notice">${esc(r.note)}</div>` : ""}${linksView(r.links)}<details class="k-source"><summary class="cursor-interaction">Original recipe</summary><pre>${esc(originalText(r))}</pre></details><label class="k-field" style="margin-top:20px"><span>Your cooking notes</span><textarea class="k-input" id="k-recipe-note" placeholder="What worked? What would you change?">${esc(state.notes[r.id] || "")}</textarea></label>${button("Save note", "save-note", 'style="margin-top:9px"', "k-quiet")}</section></div>`;
+    return `${button(icon("arrow-left") + "Recipes", "nav", 'data-view="library"', "k-quiet k-back")}<div class="k-row k-between"><span class="k-tag">${esc(courseLabel(r.course) ?? "Your collection")}</span>${button(icon("pencil") + "Edit recipe", "edit", 'data-id="' + esc(r.id) + '"', "k-quiet")}</div><h1 class="k-detail-title">${esc(r.title)}</h1><p class="k-muted">${esc(r.description)}</p>${facetBadges(r, "k-detail-facets")}<div class="k-detail-meta"><span>${r.time ? r.time + " minutes" : "Time not set"}</span><span>·</span><span>${esc(r.source)}</span></div><div class="k-actions">${button(icon("play") + "Start cooking", "start-cook", "", "k-primary")}${button(icon("shopping-basket") + "Add to list", "review")}${button(icon("calendar-plus") + "Plan a meal", "schedule")}${button(icon("share-2") + "Share", "share-recipe")}</div><div class="k-recipe-columns"><section class="k-ingredients"><div class="k-row k-between"><h3>Ingredients</h3>${unitSelect()}</div><div class="k-serving-control"><span class="k-small">${r.servings ? "Servings" : "Original quantities"}</span>${r.servings ? `<div class="k-stepper">${button(icon("minus"), "servings", 'data-delta="-1" aria-label="Fewer servings" ' + (servings(r) <= 1 ? "disabled" : ""), "k-quiet k-icon")}<strong>${servings(r)}</strong>${button(icon("plus"), "servings", 'data-delta="1" aria-label="More servings" ' + (servings(r) >= 24 ? "disabled" : ""), "k-quiet k-icon")}</div>` : `${button("Set yield", "edit", "", "k-quiet")}`}</div>${ingredientRows(r)}${state.units === "us" ? '<p class="k-note">Cups use 240 mL. Weight stays in ounces; cup-to-gram estimates need an ingredient reference.</p>' : ""}${r.servings && servings(r) !== r.servings ? '<p class="k-note">Ingredient amounts adjusted. Cooking times stay the same.</p>' : ""}</section><section><h2>The method</h2><ol class="k-method">${r.steps.map((s) => `<li><h3>${esc(s.title)}</h3><p>${esc(scaledText(s.text))}</p></li>`).join("")}</ol>${r.note ? `<div class="k-notice">${esc(r.note)}</div>` : ""}${linksView(r.links)}<details class="k-source"><summary class="cursor-interaction">Original recipe</summary><pre>${esc(originalText(r))}</pre></details><label class="k-field" style="margin-top:20px"><span>Your cooking notes</span><textarea class="k-input" id="k-recipe-note" placeholder="What worked? What would you change?">${esc(state.notes[r.id] || "")}</textarea></label>${button("Save note", "save-note", 'style="margin-top:9px"', "k-quiet")}</section></div>`;
   }
   function makeReview(entries, options = {}) {
     review = {
@@ -608,7 +715,11 @@ async function boot() {
         originalText: "",
       };
     }
-    return `${button(icon("arrow-left") + "Back", "editor-back", "", "k-quiet k-back")}<div class="k-heading"><div><div class="k-kicker">Your recipe, your way</div><h1>${draft.id ? "Make it your own." : "A quick read-through."}</h1><p class="k-muted k-small">Check the ingredients, servings, and method.</p></div></div><form id="k-editor-form" class="k-stack"><div class="k-editor-meta"><label class="k-field"><span>Recipe name</span><input class="k-input" name="title" value="${esc(draft.title)}" required maxlength="120"></label><label class="k-field"><span>Servings</span><input class="k-input" name="servings" type="number" min="1" max="24" step="1" value="${draft.servings || ""}" placeholder="Unknown"></label></div><div class="k-editor-grid"><label class="k-field"><span>Ingredients · one per line</span><textarea class="k-input" name="ingredients" style="min-height:240px" placeholder="250 g orzo&#10;2 tbsp olive oil" required maxlength="4000">${esc(draft.ingredientsText)}</textarea></label><label class="k-field"><span>Method · one step per paragraph</span><textarea class="k-input" name="steps" style="min-height:240px" placeholder="Warm the olive oil.&#10;&#10;Add the orzo and stir." required maxlength="5000">${esc(draft.stepsText)}</textarea></label></div><label class="k-field"><span>Links and videos · one per line</span><textarea class="k-input" name="links" maxlength="4000" placeholder="https://youtu.be/… Folding the dough&#10;example.com/the-original The written version">${esc(draft.linksText || "")}</textarea><span class="k-note">A web address, then an optional title. YouTube, Vimeo, Facebook, Instagram and TikTok videos play on the recipe page; other links open in your browser.</span></label><p class="k-note">For pasted recipes, cups use 240 mL, tablespoons 15 mL, and teaspoons 5 mL. Check these against your source. Unclear ingredient amounts stay as written. Add a serving count when you know it to enable scaling.</p><div class="k-row"><button type="button" data-local-submit class="k-button k-primary cursor-interaction">${icon("check")} Save recipe</button>${button("Cancel", "editor-back", "", "k-quiet")}</div><p class="k-form-error" id="k-editor-error" role="alert"></p></form>`;
+    return `${button(icon("arrow-left") + "Back", "editor-back", "", "k-quiet k-back")}<div class="k-heading"><div><div class="k-kicker">Your recipe, your way</div><h1>${draft.id ? "Make it your own." : "A quick read-through."}</h1><p class="k-muted k-small">Check the ingredients, servings, and method.</p></div></div><form id="k-editor-form" class="k-stack"><div class="k-editor-meta"><label class="k-field"><span>Recipe name</span><input class="k-input" name="title" value="${esc(draft.title)}" required maxlength="120"></label><label class="k-field"><span>Servings</span><input class="k-input" name="servings" type="number" min="1" max="24" step="1" value="${draft.servings || ""}" placeholder="Unknown"></label></div><div class="k-editor-facets"><label class="k-field"><span>Course</span><select class="k-select" name="course">${[["", "Not recorded"], ...courses.map((c) => [c.key, c.label])].map(([value, label]) => `<option value="${value}" ${(draft.course ?? "") === value ? "selected" : ""}>${label}</option>`).join("")}</select></label><label class="k-field"><span>Cuisine</span><input class="k-input" name="cuisine" list="k-cuisines" maxlength="100" value="${esc(draft.cuisine || "")}" placeholder="Italian, Israeli…"><datalist id="k-cuisines">${cuisineOptions()
+      .map((name) => `<option value="${esc(name)}"></option>`)
+      .join(
+        "",
+      )}</datalist></label></div><label class="k-field"><span>Tags · separated by commas</span><input class="k-input" name="tags" maxlength="4000" value="${esc(draft.tagsText || "")}" placeholder="Weeknight, Shabbat, kid-friendly"></label><fieldset class="k-field k-diets"><legend>Diet labels</legend><div class="k-filters">${diets.map((d) => `<label class="k-filter k-check-chip"><input type="checkbox" name="diets" value="${d.key}" ${(draft.diets || []).includes(d.key) ? "checked" : ""}>${d.label}</label>`).join("")}</div><span class="k-note">What you know about this recipe, not an allergen check.</span></fieldset><div class="k-editor-grid"><label class="k-field"><span>Ingredients · one per line</span><textarea class="k-input" name="ingredients" style="min-height:240px" placeholder="250 g orzo&#10;2 tbsp olive oil" required maxlength="4000">${esc(draft.ingredientsText)}</textarea></label><label class="k-field"><span>Method · one step per paragraph</span><textarea class="k-input" name="steps" style="min-height:240px" placeholder="Warm the olive oil.&#10;&#10;Add the orzo and stir." required maxlength="5000">${esc(draft.stepsText)}</textarea></label></div><label class="k-field"><span>Links and videos · one per line</span><textarea class="k-input" name="links" maxlength="4000" placeholder="https://youtu.be/… Folding the dough&#10;example.com/the-original The written version">${esc(draft.linksText || "")}</textarea><span class="k-note">A web address, then an optional title. YouTube, Vimeo, Facebook, Instagram and TikTok videos play on the recipe page; other links open in your browser.</span></label><p class="k-note">For pasted recipes, cups use 240 mL, tablespoons 15 mL, and teaspoons 5 mL. Check these against your source. Unclear ingredient amounts stay as written. Add a serving count when you know it to enable scaling.</p><div class="k-row"><button type="button" data-local-submit class="k-button k-primary cursor-interaction">${icon("check")} Save recipe</button>${button("Cancel", "editor-back", "", "k-quiet")}</div><p class="k-form-error" id="k-editor-error" role="alert"></p></form>`;
   }
   const knownIngredients = recipes.flatMap((r) => r.ingredients);
   const parseIngredient = (line) => parseIngredientLine(line, knownIngredients);
@@ -822,9 +933,18 @@ async function boot() {
         ? state.favorites.filter((x) => x !== id)
         : [...state.favorites, id];
     } else if (a === "filter") state.filter = target.dataset.value;
-    else if (a === "clear-search") {
+    else if (a === "facet") {
+      const { facet, value } = target.dataset,
+        same = (v) => labelKey(v) === labelKey(value);
+      if (Array.isArray(facets[facet]))
+        facets[facet] = facets[facet].some(same)
+          ? facets[facet].filter((v) => !same(v))
+          : [...facets[facet], value];
+      else facets[facet] = same(facets[facet]) ? "" : value;
+    } else if (a === "clear-search") {
       state.query = "";
       state.filter = "all";
+      facets = noFacets();
     } else if (a === "servings") {
       const r = recipe();
       state.servings[r.id] = Math.min(
@@ -1082,6 +1202,10 @@ async function boot() {
       draft.stepsText = String(form.get("steps"));
       draft.equipmentText = String(form.get("equipment") || "");
       draft.linksText = String(form.get("links") || "");
+      draft.course = String(form.get("course") || "") || null;
+      draft.cuisine = String(form.get("cuisine") || "");
+      draft.diets = form.getAll("diets").map(String);
+      draft.tagsText = String(form.get("tags") || "");
     }
   });
   root.addEventListener("change", async (event) => {
@@ -1221,7 +1345,10 @@ async function boot() {
         title,
         description:
           old?.description || "A good recipe, saved for another day.",
-        tag: old?.tag || "Your collection",
+        course: String(values.get("course") || "") || null,
+        cuisine: String(values.get("cuisine") || "").trim(),
+        diets: values.getAll("diets").map(String),
+        tags: parseLabels(values.get("tags")),
         time: old?.time || null,
         servings: selectedYield,
         source: draft.originalText ? "Copied recipe" : "Your recipe",

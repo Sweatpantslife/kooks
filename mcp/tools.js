@@ -14,6 +14,12 @@ import { addFeatureTools } from "./feature-tools.js";
 import { addLibraryTools } from "./library-tools.js";
 import { noteExtras } from "./feature-schemas.js";
 import { batchView } from "./features.js";
+import {
+  courses,
+  diets,
+  suggestedCuisines,
+  taxonomy,
+} from "../shared/taxonomy.js";
 
 export function createTools(store) {
   const kooks = new Kooks(store);
@@ -87,6 +93,7 @@ export function createTools(store) {
         "weekly_budgets",
         "local_photo_import",
         "recipe_links",
+        "recipe_facets",
         "techniques",
         "inspiration_board",
         "ebook_library",
@@ -102,15 +109,33 @@ export function createTools(store) {
   );
   tool(
     "kooks_list",
-    "List/search records by kind. Search includes recipe ingredients, tags and notes. Returns summaries; use kooks_get for full records.",
+    "List/search records by kind. Search includes recipe ingredients, facets, tags and notes. Recipes can also be filtered by course, cuisine, diet labels, tags (all must match) and favorite; a course or cuisine filter excludes recipes where it is not recorded. Returns summaries; use kooks_get for full records.",
     {
       kind: s.kind,
       query: z.string().max(500).default(""),
       include_archived: z.boolean().default(false),
+      ...s.facetFilters,
+      favorite: z.boolean().optional(),
       ...s.pagination,
     },
     true,
     (args) => kooks.list(args.kind, args),
+  );
+  tool(
+    "recipe_taxonomy",
+    "Read the courses, cuisines, diet labels and tags in use across the cookbook with counts, plus the fixed course and diet lists. Reuse these names when saving or filtering instead of inventing new spellings.",
+    { include_archived: z.boolean().default(false) },
+    true,
+    (args) => ({
+      ...taxonomy(
+        store.list("recipe", args.include_archived).map((r) => r.data),
+      ),
+      available_courses: courses,
+      available_diets: diets,
+      suggested_cuisines: suggestedCuisines,
+      matching:
+        "Courses and diet labels are fixed keys. Cuisines and tags match case-insensitively and keep the spelling they were first saved with. Diet labels are household declarations, not allergen checks.",
+    }),
   );
   tool(
     "kooks_get",
@@ -140,7 +165,7 @@ export function createTools(store) {
   );
   tool(
     "recipe_save",
-    "Create a recipe or replace an existing recipe’s full data. Read before editing. Preserve original_text/source_url/links, keep uncertain quantities or yield null, and flag inferred equipment. links hold reference pages and YouTube, Vimeo, Facebook, Instagram or TikTok videos that the household apps embed. Parse user-provided material in the host agent; this tool does not fetch sources or links.",
+    "Create a recipe or replace an existing recipe’s full data. Read before editing. Preserve original_text/source_url/links and the course, cuisine, diets and tags, keep uncertain quantities or yield null, and flag inferred equipment. links hold reference pages and YouTube, Vimeo, Facebook, Instagram or TikTok videos that the household apps embed. Check recipe_taxonomy before adding a cuisine or tag. Parse user-provided material in the host agent; this tool does not fetch sources or links.",
     {
       ...s.save,
       recipe: s.recipe,

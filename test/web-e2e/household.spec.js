@@ -424,6 +424,103 @@ test("links and videos save with a recipe, play on request and round-trip throug
   ).toHaveAttribute("href", "https://www.instagram.com/reel/C1abcdefg/");
 });
 
+test("courses, cuisines, diet labels and tags filter the cookbook and round-trip through the editor", async ({
+  page,
+  request,
+  baseURL,
+}) => {
+  const orzo = recipe("Weeknight orzo", {
+    course: "main",
+    cuisine: "Italian",
+    diets: ["vegan"],
+    tags: ["Weeknight", "One pot"],
+    total_minutes: 25,
+  });
+  const salad = recipe("Chopped salad", {
+    course: "salad",
+    cuisine: "Israeli",
+    diets: ["vegan", "gluten_free"],
+    tags: ["No cook"],
+  });
+  const stew = recipe("Slow stew", { tags: ["Weekend"] });
+  for (const item of [orzo, salad, stew])
+    await seed(request, baseURL, "recipe_save", { recipe: item });
+  await page.reload();
+  await page.goto("/#/recipes");
+  const card = (name) => page.locator(".card", { hasText: name });
+  const filters = page.getByLabel("Recipe filters");
+  const row = (label) => filters.locator(".facet-row", { hasText: label });
+  await expect(card(orzo.title)).toContainText("Main");
+  await expect(card(stew.title)).toContainText("Your collection");
+  await row("Course")
+    .getByRole("button", { name: "Main", exact: true })
+    .click();
+  await expect(card(orzo.title)).toHaveCount(1);
+  await expect(card(salad.title)).toHaveCount(0);
+  await expect(card(stew.title)).toHaveCount(0);
+  await expect(page.getByText(/without a course recorded/)).toBeVisible();
+  await filters.getByRole("button", { name: "Clear filters" }).click();
+  await expect(card(salad.title)).toHaveCount(1);
+  // Every chosen diet label must be present.
+  await row("Diet").getByRole("button", { name: "Vegan", exact: true }).click();
+  await expect(card(orzo.title)).toHaveCount(1);
+  await expect(card(salad.title)).toHaveCount(1);
+  await expect(card(stew.title)).toHaveCount(0);
+  await row("Diet")
+    .getByRole("button", { name: "Gluten-free", exact: true })
+    .click();
+  await expect(card(orzo.title)).toHaveCount(0);
+  await expect(card(salad.title)).toHaveCount(1);
+  await filters.getByRole("button", { name: "Clear filters" }).click();
+  // A chip on a card narrows the cookbook to that tag.
+  await card(stew.title)
+    .getByRole("button", { name: "Show Weekend recipes" })
+    .click();
+  await expect(card(stew.title)).toHaveCount(1);
+  await expect(card(orzo.title)).toHaveCount(0);
+  await expect(
+    row("Tags").getByRole("button", { name: "Weekend", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await filters.getByRole("button", { name: "Clear filters" }).click();
+  await row("Show")
+    .getByRole("button", { name: "30 minutes or less", exact: true })
+    .click();
+  await expect(card(orzo.title)).toHaveCount(1);
+  await expect(card(salad.title)).toHaveCount(0);
+  await expect(page.getByText(/without a total time recorded/)).toBeVisible();
+  await filters.getByRole("button", { name: "Clear filters" }).click();
+  // The editor shows the facets and offers the household's existing tags.
+  await page.getByRole("link", { name: orzo.title, exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Show Italian recipes" }),
+  ).toBeVisible();
+  await page.getByRole("link", { name: "Edit recipe" }).click();
+  await expect(page.getByLabel("Course")).toHaveValue("main");
+  await expect(page.getByLabel("Cuisine")).toHaveValue("Italian");
+  await expect(page.getByLabel("Vegan", { exact: true })).toBeChecked();
+  await page.getByLabel("Gluten-free", { exact: true }).check();
+  await page.getByRole("button", { name: "No cook", exact: true }).click();
+  await expect(page.getByLabel("Tags, separated by commas")).toHaveValue(
+    "Weeknight, One pot, No cook",
+  );
+  await page.getByRole("button", { name: "Save recipe" }).click();
+  await expect(
+    page.getByRole("heading", { level: 1, name: orzo.title }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Show Gluten-free recipes" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Show No cook recipes" }),
+  ).toBeVisible();
+  // The dinner finder narrows by course as well.
+  await page.goto("/#/today");
+  await page.getByLabel("Course").selectOption("salad");
+  await page.getByRole("button", { name: "Find dinner" }).click();
+  await expect(card(salad.title)).toHaveCount(1);
+  await expect(card(orzo.title)).toHaveCount(0);
+});
+
 test("techniques, ideas and the shelf: a video technique, an idea written up as a recipe, and an uploaded cookbook", async ({
   page,
   request,

@@ -1,4 +1,11 @@
 import { z } from "zod";
+import {
+  MAX_LABEL_LENGTH,
+  MAX_TAGS,
+  courseKeys,
+  dedupeLabels,
+  dietKeys,
+} from "../shared/taxonomy.js";
 
 export const text = z.string().trim().min(1).max(500);
 export const id = z.string().min(1).max(128);
@@ -36,6 +43,43 @@ export const link = z.object({
   url: webUrl,
   title: z.string().trim().max(500).default(""),
 });
+// Recipe facets. Courses and diet labels come from the fixed lists in
+// shared/taxonomy.js; cuisines and tags are the household's own words, kept
+// in their first spelling and matched case-insensitively.
+export const course = z.enum(courseKeys);
+export const diet = z.enum(dietKeys);
+export const label = z.string().trim().max(MAX_LABEL_LENGTH);
+export const facets = {
+  course: course
+    .nullable()
+    .default(null)
+    .describe(
+      "Where the recipe sits in a meal, from the fixed list. null when not recorded.",
+    ),
+  cuisine: label
+    .nullable()
+    .default(null)
+    .transform((value) => value || null)
+    .describe(
+      "Free text such as Italian or Israeli. Reuse a name from recipe_taxonomy when one fits.",
+    ),
+  diets: z
+    .array(diet)
+    .max(dietKeys.length)
+    .default([])
+    .transform((values) => [...new Set(values)])
+    .describe(
+      "Diet labels the household declares for this recipe, from the fixed list. Not an allergen check.",
+    ),
+  tags: z
+    .array(text)
+    .max(MAX_TAGS)
+    .default([])
+    .transform(dedupeLabels)
+    .describe(
+      "Free-form keywords such as Weeknight or Shabbat. Reuse names from recipe_taxonomy; duplicates are dropped case-insensitively.",
+    ),
+};
 export const recipe = z.object({
   title: text,
   servings: servings.nullable().default(null),
@@ -66,7 +110,7 @@ export const recipe = z.object({
     .max(500)
     .default([]),
   equipment: z.array(equipment).max(100).default([]),
-  tags: z.array(text).max(100).default([]),
+  ...facets,
   notes: note.default(""),
   favorite: z.boolean().default(false),
   active_minutes: z
@@ -158,4 +202,12 @@ export const save = {
 export const pagination = {
   limit: z.number().int().min(1).max(100).default(30),
   offset: z.number().int().nonnegative().default(0),
+};
+// Facet filters for listing and suggesting recipes; every given value must
+// match. Omit a filter rather than passing an empty value.
+export const facetFilters = {
+  course: course.optional(),
+  cuisine: label.min(1).optional(),
+  diets: z.array(diet).max(dietKeys.length).default([]),
+  tags: z.array(text).max(20).default([]),
 };

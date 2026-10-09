@@ -1078,6 +1078,84 @@ th {
   color: white;
   border-color: var(--ink);
 }
+.facets {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 22px;
+}
+.facet-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.facet-label {
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--muted);
+  min-width: 58px;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 13px;
+  min-height: 38px;
+  border-radius: 20px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  font-size: 12px;
+}
+.chip[aria-pressed="true"] {
+  background: var(--ink);
+  color: white;
+  border-color: var(--ink);
+}
+.chip .count {
+  opacity: 0.6;
+  font-size: 11px;
+}
+.facet-chip {
+  border: 0;
+  border-radius: 5px;
+  padding: 4px 8px;
+  background: #f0f1e9;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.4px;
+}
+.facet-chip:hover {
+  background: var(--soft);
+  color: var(--green);
+}
+.facet-chip.course,
+.facet-chip.cuisine {
+  background: var(--soft);
+  color: var(--green);
+}
+.facet-chip.diets {
+  background: var(--gold);
+  color: #785d24;
+}
+.small-chips {
+  gap: 6px;
+  margin-top: 10px;
+}
+.spacer-small {
+  margin-top: 10px;
+}
+.link-button {
+  border: 0;
+  padding: 0 2px;
+  background: none;
+  color: var(--green);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  font-size: inherit;
+}
 .lead {
   font-size: 16px;
   max-width: 70ch;

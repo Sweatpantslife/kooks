@@ -30,6 +30,14 @@ A recipe can carry any number of links (up to 50) beside its source link: the wr
 
 Players are not loaded with the page. Each one shows a play button, and only pressing it loads the provider's player, so viewing a recipe sends nothing to a video site. The server stores the addresses and never fetches them; its Content-Security-Policy allows frames only from the five player origins. While a video is playing, other cooks' changes are held back until you leave the page so the video is not restarted. Cooking sessions snapshot the links and show them as plain links beside the steps.
 
+## Courses, cuisines, diet labels and tags
+
+Every recipe can carry a course (one of Breakfast, Starter, Main, Side, Soup, Salad, Dessert, Baking, Snack, Drink or Basics), a cuisine in your own words, diet labels (Vegetarian, Vegan, Pescatarian, Gluten-free, Dairy-free, Nut-free, Egg-free, Kosher, Halal, Low-carb) and any number of tags. The editor offers the cuisines and tags already in your cookbook, so one spelling is enough; tags are compared without regard to case and duplicates are dropped when you save.
+
+The Recipes page filters by course, cuisine, diet label and tag with chips built from what the cookbook actually contains, plus favorites and recipes that take 30 minutes or less. Several diet labels or tags narrow the list to recipes that carry all of them. Pressing a chip on a recipe card or a recipe page narrows the cookbook to that value, and the search box also matches facet names. A filter on a course, cuisine or total time cannot show recipes where that detail was never recorded; the page says how many are left out instead of guessing. The dinner finder on Today accepts the same facets beside its effort and household filters.
+
+Diet labels record what you know about a recipe. They are not allergen checks, and nothing is inferred from the ingredients.
+
 ## Techniques, inspiration and the shelf
 
 **Inspiration** in the sidebar opens two boards. **Techniques** keeps the methods behind your recipes: a short summary, numbered steps, tips, tags, photos, the same click-to-play videos recipes have, and the recipes that use the technique, which show it under _Techniques_ on their own pages. **Inspiration** keeps ideas worth trying: a reel, a dish at a friend’s table, a line in a newsletter, with notes, where it came from, links, photos and tags. An idea starts as _Want to try_ and can be marked _Tried it_; **Write it up as a recipe** opens the recipe editor with the idea’s title, notes, tags and links, and once the recipe is saved the idea shows _In the cookbook_ while the recipe lists the idea under _Inspired by_.
@@ -56,7 +64,7 @@ Members are known by email address; person profiles remain taste preferences and
 
 ## Data, compatibility and checks
 
-All mutations use the same validated tools, SQLite transactions, optimistic versions, request keys and reversible history as the original MCP implementation. `backup_export` now emits schema version 2 and includes the new records, photos, recipe links, techniques, ideas and books together with their PDF and EPUB files, so a large shelf makes exports large. Restore accepts both versions 1 and 2 and still requires an empty database. It rejects invalid references and over-allocated batches atomically. Browser Export cookbook downloads this portable JSON.
+All mutations use the same validated tools, SQLite transactions, optimistic versions, request keys and reversible history as the original MCP implementation. `backup_export` now emits schema version 2 and includes the new records, photos, recipe links, recipe facets, techniques, ideas and books together with their PDF and EPUB files, so a large shelf makes exports large; exports made before the facets restore with them unset. Restore accepts both versions 1 and 2 and still requires an empty database. It rejects invalid references and over-allocated batches atomically. Browser Export cookbook downloads this portable JSON.
 
 ```sh
 npm test
