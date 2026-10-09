@@ -98,6 +98,8 @@ const paths = {
   calendar:
     '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 2v6m10-6v6M3 11h18"/>',
   play: '<path d="M7 4v16l13-8Z"/>',
+  key: '<circle cx="8" cy="16" r="4"/><path d="m11 13 10-10M16 8l2 2m1-5 2 2"/>',
+  mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
   bulb: '<path d="M9 18h6m-5 3h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1V17h6v-.2c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2Z"/>',
   shelf:
     '<path d="M3 21h18M4 21V7h4v14M10 21V4h4v17M15.5 21 17 8l3.6.8L19 21"/>',
@@ -170,6 +172,20 @@ let db = {},
   week = monday(today()),
   toastTimeout;
 let currency = localStorage.getItem("kooks.currency") ?? "USD";
+let account = null,
+  signin = { step: "start", email: "", error: "" },
+  conditional = null;
+const passkeysSupported = () =>
+  Boolean(window.PublicKeyCredential && navigator.credentials?.create);
+const bytes = (text) =>
+  Uint8Array.from(atob(text.replace(/-/g, "+").replace(/_/g, "/")), (c) =>
+    c.charCodeAt(0),
+  );
+const base64url = (buffer) =>
+  btoa(String.fromCharCode(...new Uint8Array(buffer)))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
 const pendingWrites = new Map(),
   portions = new Map();
 const records = (kind) => db[kind] ?? [];
@@ -291,6 +307,7 @@ async function loadState({ polling = false } = {}) {
   db = value.records;
   revision = value.revision;
   sharing = value.sharing;
+  account = value.account ?? null;
   return true;
 }
 function navigate(target) {
@@ -317,11 +334,19 @@ function shell(content, active) {
     ["spending", "coin", "Spending"],
     ["shop", "basket", "Shopping"],
     ["cooking", "flame", "Cooking"],
+    ...(account ? [["account", "key", "Sign-in"]] : []),
   ];
   const activeCount = records("session").filter(
     (s) => s.data.status === "active",
   ).length;
-  return `<div class="topbar"><a class="brand" href="#/today">${icon("leaf")}kooks</a><div class="topright"><span class="household">${icon("people")}${records("member").length ? `${records("member").length} at your table` : "Your household kitchen"}</span>${link("Add recipe", "capture", true, "plus")}</div></div><div class="sync-note" hidden></div><div class="shell"><nav class="sidebar" aria-label="Main navigation">${nav.map(([key, ico, label]) => `<a class="nav" href="#/${key}" ${key === active ? 'aria-current="page"' : ""}>${icon(ico)}${label}${key === "cooking" && activeCount ? `<span class="badge">${activeCount}</span>` : ""}</a>`).join("")}<div class="sidebar-foot"><p>Good food.<br>In good company.</p><div class="small muted">${records("recipe").length} recipes, all yours.</div>${button("Export cookbook", "export", "", "quiet small-button")}</div></nav><main id="main" class="content" tabindex="-1">${content}</main></div>`;
+  // After an email link, offer the one-tap way in, once per browser.
+  const prompt =
+    account?.method === "email" &&
+    passkeysSupported() &&
+    !localStorage.getItem("kooks.passkey")
+      ? `<div class="callout passkey-prompt"><span>${icon("key")}Make next time one tap: add a passkey to this device and sign in with your fingerprint, face or screen lock.</span><span class="row">${button("Add a passkey", "passkey-add", "", "primary small-button")}${button("Not now", "passkey-later", "", "quiet small-button")}</span></div>`
+      : "";
+  return `<div class="topbar"><a class="brand" href="#/today">${icon("leaf")}kooks</a><div class="topright"><span class="household">${icon("people")}${records("member").length ? `${records("member").length} at your table` : "Your household kitchen"}</span>${link("Add recipe", "capture", true, "plus")}</div></div><div class="sync-note" hidden></div><div class="shell"><nav class="sidebar" aria-label="Main navigation">${nav.map(([key, ico, label]) => `<a class="nav" href="#/${key}" ${key === active ? 'aria-current="page"' : ""}>${icon(ico)}${label}${key === "cooking" && activeCount ? `<span class="badge">${activeCount}</span>` : ""}</a>`).join("")}<div class="sidebar-foot"><p>Good food.<br>In good company.</p><div class="small muted">${records("recipe").length} recipes, all yours.</div>${button("Export cookbook", "export", "", "quiet small-button")}</div></nav><main id="main" class="content" tabindex="-1">${prompt}${content}</main></div>`;
 }
 function effort(r) {
   const d = r.data ?? r;
@@ -1152,13 +1177,201 @@ function shopPage(id) {
     )}</div>${list ? `<section class="panel"><h2>${esc(list.data.title)}</h2>${list.items.map((i) => `<div class="list-row ${i.checked ? "done" : ""}"><input type="checkbox" data-change="shopping-check" data-id="${list.id}" data-item="${i.id}" ${i.checked ? "checked" : ""} aria-label="Bought ${esc(i.name)}"><div class="grow item-title"><strong>${esc(i.name)}</strong><p>${esc([...new Set(i.contributions.map((c) => c.recipe_title).filter(Boolean))].join(", ") || "Everyday item")}</p></div><span class="shopping-quantity">${esc(amount(i))}</span></div>`).join("") || '<p class="small muted spacer">Open a recipe or planned meal to review its groceries.</p>'}<form data-form="shopping-item" class="row spacer" data-id="${list.id}" data-version="${list.version}">${field("Add an everyday item", "name", "", "text", 'required placeholder="Coffee"')}<div>${submit("Add item")}</div></form>${list.data.sources.length ? `<details class="spacer"><summary>Recipes contributing to this list</summary>${list.data.sources.map((s) => `<div class="list-row"><span class="grow">${esc(s.title)}</span>${button("Remove contribution", "shopping-remove", `data-id="${list.id}" data-source="${esc(s.source_key)}"`, "quiet small-button")}</div>`).join("")}</details>` : ""}</section>` : `<form data-form="shopping-create" class="panel stack">${field("List name", "title", "Groceries", "text", "required")}${submit("Create shopping list")}</form>`}`;
 }
 
+async function authApi(path, input) {
+  const response = await fetch(
+    `/api/auth/${path}`,
+    input === undefined
+      ? {}
+      : {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(input),
+        },
+  );
+  const value = await response.json();
+  if (!response.ok) {
+    const error = new Error(value.message ?? "Could not complete this action.");
+    error.code = value.error;
+    throw error;
+  }
+  return value;
+}
+// Browser credential objects hold ArrayBuffers; the server reads base64url.
+function serializeCredential(credential) {
+  const r = credential.response;
+  return {
+    id: credential.id,
+    rawId: base64url(credential.rawId),
+    type: credential.type,
+    authenticatorAttachment: credential.authenticatorAttachment ?? null,
+    response: {
+      clientDataJSON: base64url(r.clientDataJSON),
+      ...(r.attestationObject
+        ? {
+            attestationObject: base64url(r.attestationObject),
+            transports: r.getTransports?.() ?? [],
+          }
+        : {
+            authenticatorData: base64url(r.authenticatorData),
+            signature: base64url(r.signature),
+            userHandle: r.userHandle ? base64url(r.userHandle) : null,
+          }),
+    },
+  };
+}
+const passkeyMessage = (error) =>
+  error.name === "NotAllowedError"
+    ? "The passkey request was cancelled or timed out. Try again."
+    : error.name === "InvalidStateError"
+      ? "This device already holds a passkey for your account."
+      : error.name === "SecurityError"
+        ? "Passkeys need a secure (HTTPS) address. Use an email link instead."
+        : error.message;
+const deviceName = () => {
+  const ua = navigator.userAgent;
+  const device = /iPhone/.test(ua)
+    ? "iPhone"
+    : /iPad/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)
+      ? "iPad"
+      : /Android/.test(ua)
+        ? "Android"
+        : /Macintosh/.test(ua)
+          ? "Mac"
+          : /Windows/.test(ua)
+            ? "Windows"
+            : /Linux/.test(ua)
+              ? "Linux"
+              : "This device";
+  return `${device} · ${dateLabel(today())}`;
+};
+async function passkeySignIn(quiet = false) {
+  // A quiet (suggestion) request can be abandoned while its options load.
+  const controller = quiet ? new AbortController() : null;
+  if (quiet) conditional = controller;
+  const { options } = await authApi("passkey/options", {});
+  if (controller?.signal.aborted) return;
+  const request = {
+    publicKey: {
+      ...options,
+      challenge: bytes(options.challenge),
+      allowCredentials: (options.allowCredentials ?? []).map((c) => ({
+        ...c,
+        id: bytes(c.id),
+      })),
+    },
+  };
+  if (quiet) {
+    request.mediation = "conditional";
+    request.signal = controller.signal;
+  }
+  const credential = await navigator.credentials.get(request);
+  await authApi("passkey/signin", {
+    credential: serializeCredential(credential),
+  });
+  await signedIn("Welcome back.");
+}
+// Browsers that can list passkeys among the email field's suggestions do so
+// without a tap; the button stays for everyone else.
+async function offerConditionalPasskey() {
+  if (
+    !passkeysSupported() ||
+    !PublicKeyCredential.isConditionalMediationAvailable
+  )
+    return;
+  try {
+    if (!(await PublicKeyCredential.isConditionalMediationAvailable())) return;
+  } catch {
+    return;
+  }
+  if (!$('input[autocomplete~="webauthn"]')) return;
+  try {
+    await passkeySignIn(true);
+  } catch (error) {
+    if (error.name !== "AbortError") loginError(passkeyMessage(error));
+  }
+}
+async function addPasskey() {
+  const { options } = await authApi("passkey/register/options", {});
+  const credential = await navigator.credentials.create({
+    publicKey: {
+      ...options,
+      challenge: bytes(options.challenge),
+      user: { ...options.user, id: bytes(options.user.id) },
+      excludeCredentials: (options.excludeCredentials ?? []).map((c) => ({
+        ...c,
+        id: bytes(c.id),
+      })),
+    },
+  });
+  await authApi("passkey/register", {
+    credential: serializeCredential(credential),
+    name: deviceName(),
+  });
+  localStorage.setItem("kooks.passkey", "added");
+}
+async function signedIn(message) {
+  signin = { step: "start", email: "", error: "" };
+  await loadState();
+  await render();
+  toast(message);
+}
+// The emailed link lands on #/signin/<token>; the token never reaches a server log.
+async function confirmLink(token) {
+  history.replaceState(null, "", "#/today");
+  try {
+    await authApi("link/confirm", { token });
+    await signedIn("You’re signed in.");
+  } catch (error) {
+    signin = {
+      step: "start",
+      email: "",
+      error: error.code === "SIGN_IN_DISABLED" ? "" : error.message,
+    };
+    // Already signed in, or no sign-in on this computer: carry on inside.
+    if (await loadState()) {
+      await render();
+      if (signin.error) toast(signin.error, true);
+      signin.error = "";
+    }
+  }
+}
+function loginError(message) {
+  const el = $("[data-login-error]");
+  if (el) el.textContent = message;
+}
 function renderLogin() {
+  conditional?.abort();
+  conditional = null;
+  const sent = signin.step === "sent";
   $("#app").innerHTML =
-    `<main class="login panel stack"><a class="brand" href="#/today">${icon("leaf")}kooks</a><h2>Welcome to your kitchen.</h2><p class="small muted">Enter the access key for this household.</p><form data-form="login" class="stack">${field("Household access key", "token", "", "password", 'required autocomplete="current-password"')}${submit("Open kitchen")}</form></main>`;
+    `<main class="login panel stack"><a class="brand" href="#/today">${icon("leaf")}kooks</a>${
+      sent
+        ? `<h2>Check your inbox.</h2><p class="small muted">We sent a sign-in link to <strong>${esc(signin.email)}</strong>. Open it on this device within 15 minutes; it works once.</p><p class="small muted">Nothing there? Look in spam, or ask whoever runs this kitchen to add your address.</p><div>${button("Use a different address", "signin-restart", "", "quiet")}</div>`
+        : `<h2>Welcome to your kitchen.</h2><p class="small muted">${passkeysSupported() ? "Sign in with the passkey on this device, or get a link by email." : "Get a sign-in link by email."}</p><div class="error-message" role="alert" data-login-error>${esc(signin.error)}</div>${passkeysSupported() ? `${button("Sign in with a passkey", "passkey-signin", "", "primary wide", "key")}<div class="or">or</div>` : ""}<form data-form="email-link" class="stack">${field("Email address", "email", signin.email, "email", 'required autocomplete="username webauthn" placeholder="you@example.com"')}${submit("Email me a sign-in link")}</form>`
+    }</main>`;
+  if (!sent) void offerConditionalPasskey();
+}
+async function accountPage() {
+  const { passkeys } = await authApi("passkeys");
+  return `${heading("Your sign-in", `Signed in as ${account.email}`, "Passkeys let you sign in with your fingerprint, face or screen lock instead of waiting for an email.")}<div class="grid"><section class="panel stack"><h2>Passkeys</h2>${
+    passkeys.length
+      ? passkeys
+          .map(
+            (p) =>
+              `<div class="list-row"><div class="grow"><strong>${esc(p.name)}</strong><p class="small muted">Added ${dateLabel(p.created_at.slice(0, 10))}${p.used_at ? ` · Last used ${dateLabel(p.used_at.slice(0, 10))}` : ""}${p.backed_up ? " · Synced by your password manager" : ""}</p></div>${button("Remove", "passkey-remove", `data-id="${esc(p.id)}" aria-label="Remove passkey ${esc(p.name)}"`, "quiet small-button danger")}</div>`,
+          )
+          .join("")
+      : '<p class="small muted">No passkeys yet. Add one on each phone or computer you cook from.</p>'
+  }<div>${passkeysSupported() ? button("Add a passkey on this device", "passkey-add", "", "primary", "key") : '<p class="small muted">This browser cannot create passkeys. Email links keep working here.</p>'}</div></section><section class="panel stack"><h2>Email links</h2><p class="small muted">On a device without a passkey, ask for a one-time link at ${esc(account.email)}. Links work for 15 minutes.</p><h2>Sign out</h2><p class="small muted">Signing out ends this session on this device; your passkeys stay.</p><div>${button("Sign out", "sign-out", "", "", "close")}</div></section></div>`;
 }
 async function render() {
   const token = ++draw;
   const [page = "today", id, extra, last] = route();
+  if (page === "signin") {
+    if (id) await confirmLink(id);
+    else navigate("today");
+    return;
+  }
   let content,
     active = page;
   try {
@@ -1225,6 +1438,14 @@ async function render() {
       content = await reviewPage(id, extra);
       active = "shop";
     } else if (page === "shop") content = shopPage(id);
+    else if (page === "account")
+      content = account
+        ? await accountPage()
+        : empty(
+            "No sign-in on this computer.",
+            "Kooks is running for this computer only; nobody needs to sign in.",
+            link("Today", "today"),
+          );
     else
       content = empty(
         "Let’s get back to the kitchen.",
@@ -1380,16 +1601,11 @@ document.addEventListener("submit", async (event) => {
   const err = form.querySelector("[data-error]");
   if (err) err.textContent = "";
   try {
-    if (type === "login") {
-      const response = await fetch("/api/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: v.get("token") }),
-      });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.message);
-      await loadState();
-      await render();
+    if (type === "email-link") {
+      const email = String(v.get("email")).trim();
+      await authApi("link", { email });
+      signin = { step: "sent", email, error: "" };
+      renderLogin();
     } else if (type === "suggest") {
       filters = {
         available_ingredients: comma(v.get("available")),
@@ -1905,6 +2121,42 @@ document.addEventListener("click", async (event) => {
       await loadState();
       await render();
       toast("Change undone.");
+    } else if (a === "passkey-signin") {
+      conditional?.abort();
+      conditional = null;
+      try {
+        await passkeySignIn();
+      } catch (error) {
+        loginError(passkeyMessage(error));
+      }
+    } else if (a === "passkey-add") {
+      try {
+        await addPasskey();
+      } catch (error) {
+        throw new Error(passkeyMessage(error));
+      }
+      await render();
+      toast("Passkey added. Next time, sign in with one tap.");
+    } else if (a === "passkey-later") {
+      localStorage.setItem("kooks.passkey", "later");
+      await render();
+    } else if (a === "passkey-remove") {
+      await authApi("passkey/remove", { id });
+      await render();
+      toast("Passkey removed.");
+    } else if (a === "sign-out") {
+      await authApi("signout", {});
+      account = null;
+      db = {};
+      revision = "";
+      signin = { step: "start", email: "", error: "" };
+      // The next person to sign in starts at Today, not on this page.
+      history.replaceState(null, "", "#/today");
+      renderLogin();
+      toast("Signed out. See you at the next meal.");
+    } else if (a === "signin-restart") {
+      signin = { step: "start", email: signin.email, error: "" };
+      renderLogin();
     } else if (a === "export") {
       const result = await api("backup_export");
       const blob = new Blob([JSON.stringify(result.backup, null, 2)], {
@@ -1996,7 +2248,9 @@ setInterval(async () => {
   }
 }, 3000);
 try {
-  if (await loadState()) await render();
+  const [page, token] = route();
+  if (page === "signin" && token) await confirmLink(token);
+  else if (await loadState()) await render();
 } catch (error) {
   $("#app").innerHTML =
     `<main class="content">${empty("Your kitchen is taking a moment.", error.message, button("Try again", "reload"))}</main>`;

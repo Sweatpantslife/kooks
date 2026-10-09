@@ -955,6 +955,42 @@ progress {
   margin: 10vh auto;
   padding: 30px;
 }
+.login .wide {
+  width: 100%;
+}
+.login .error-message:empty {
+  display: none;
+}
+.or {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+.or::before,
+.or::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+.passkey-prompt {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.passkey-prompt > span:first-child {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 240px;
+}
 .nowrap {
   white-space: nowrap;
 }

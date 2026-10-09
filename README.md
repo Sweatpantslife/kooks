@@ -2,7 +2,7 @@
 
 A household cooking companion for recipes, composed meals, shopping, equipment, and guided cooking. This repository contains the local browser application, MCP backend, and Capacitor iOS/Android application.
 
-**Start here: [Developer handoff and unfinished work](docs/handoff.md).** The project is implemented for local use but is not release-ready. Native device validation, live AI/login, household accounts, cloud sync, and mobile/backend integration remain outstanding.
+**Start here: [Developer handoff and unfinished work](docs/handoff.md).** The project is implemented for local use but is not release-ready. Native device validation, live AI/provider login, cloud sync, and mobile/backend integration remain outstanding.
 
 ## Quick start
 
@@ -45,11 +45,11 @@ Connect an MCP client to `node /absolute/path/to/kooks/mcp/index.js`; adapt [the
 
 The local server stores its cookbook in `.data/kooks.sqlite`; `KOOKS_DB_PATH` selects another location. The native app stores its own cookbook in its private app directory. Keep personal recipes, photos, exports, credentials, and logs outside version control. `.gitignore` excludes local data, configuration, backups, signing material, dependencies, and generated build outputs.
 
-The browser server binds to loopback by default. Optional trusted-LAN access uses a shared access key; it does not provide individual accounts or public-internet hosting. See [household setup](docs/household-features.md). Publishing this source repository does not deploy a running service.
+The browser server binds to loopback by default and asks nobody to sign in. Sharing it beyond this computer turns sign-in on: the people listed in `KOOKS_HOUSEHOLD_EMAILS` prove their address with a one-time emailed link and then add passkeys for one-tap sign-in. See [household setup](docs/household-features.md) and [hosting](docs/hosting.md). Publishing this source repository does not deploy a running service.
 
 ## Code layout
 
-`mcp/` holds the SQLite store, domain rules and MCP tools (`mcp/library*.js` for techniques, inspiration and the book shelf); `web/` the browser server and client; `app/` the Capacitor mobile app; `shared/` the unit table, the ingredient tokenizer that both parsers build on, the link module that recognises video players for both apps, and the recipe facet taxonomy (courses, diet labels, cuisine and tag matching) both apps filter with. `test/` holds the Node unit and integration tests plus the Playwright projects in `test/mobile-e2e` and `test/web-e2e`.
+`mcp/` holds the SQLite store, domain rules and MCP tools (`mcp/library*.js` for techniques, inspiration and the book shelf); `web/` the browser server and client, with sign-in in `web/auth.js`, passkey verification in `web/webauthn.js` and mail in `web/mail.js`; `app/` the Capacitor mobile app; `shared/` the unit table, the ingredient tokenizer that both parsers build on, the link module that recognises video players for both apps, and the recipe facet taxonomy (courses, diet labels, cuisine and tag matching) both apps filter with. `test/` holds the Node unit and integration tests plus the Playwright projects in `test/mobile-e2e`, `test/web-e2e` and `test/web-auth-e2e`.
 
 ## Documentation
 
