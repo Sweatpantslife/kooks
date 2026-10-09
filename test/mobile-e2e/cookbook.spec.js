@@ -240,3 +240,23 @@ test("links and videos save with a recipe, play on request and survive a reload"
     page.getByRole("link", { name: "Watch the method" }),
   ).toHaveAttribute("href", "https://youtu.be/dQw4w9WgXcQ");
 });
+
+test("the finished view leads back to the recipe", async ({ page }) => {
+  await page
+    .getByRole("button", { name: /Weeknight Lemon & chickpea orzo/ })
+    .click();
+  await page.getByRole("button", { name: "Start cooking" }).click();
+  for (let step = 1; step < 4; step++)
+    await page.getByRole("button", { name: "Next step" }).click();
+  await page.getByRole("button", { name: "Finish cooking" }).click();
+  await expect(
+    page.getByRole("heading", { name: "That’s a keeper." }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Recipe", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { level: 1, name: /Lemon & chickpea orzo/ }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Start cooking" }),
+  ).toBeVisible();
+});
