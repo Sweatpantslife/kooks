@@ -348,14 +348,12 @@ test("multi-dish cooking preserves snapshots, independent progress and timer dea
   const tools = new Map(createTools(first).map((tool) => [tool.name, tool]));
   let sequence = 0;
   const call = (name, input = {}) =>
-    tools
-      .get(name)
-      .execute({
-        ...(tools.get(name).readOnly
-          ? {}
-          : { request_id: `restart-${++sequence}` }),
-        ...input,
-      });
+    tools.get(name).execute({
+      ...(tools.get(name).readOnly
+        ? {}
+        : { request_id: `restart-${++sequence}` }),
+      ...input,
+    });
   const { a, source } = setupMeal(call);
   let session = call("cooking_start", { source }).record;
   session = call("cooking_progress", {

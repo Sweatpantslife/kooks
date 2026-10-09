@@ -112,13 +112,11 @@ export class Kooks {
               (record) => normalize(record.data.name) === key,
             ),
           });
-        needs
-          .get(key)
-          .uses.push({
-            dish_id: dish.dish_id,
-            recipe_title: dish.title,
-            ...required,
-          });
+        needs.get(key).uses.push({
+          dish_id: dish.dish_id,
+          recipe_title: dish.title,
+          ...required,
+        });
       }
     const requirements = [...needs.values()].map((need) => {
       const available = need.inventory.length

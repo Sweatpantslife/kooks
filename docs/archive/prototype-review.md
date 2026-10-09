@@ -1,6 +1,6 @@
 # Phase 1 prototype review
 
-> Historical design/research record (September 2026), with personal discovery context removed. [Current implementation and handoff](handoff.md) takes precedence: Capacitor iOS/Android, persistent browser/MCP storage, backups, history, and eight household features now exist. Earlier phase labels and deferrals are not current completion status. Provider/platform research should be rechecked before implementation.
+> Historical design/research record (September 2026), with personal discovery context removed. [Current implementation and handoff](../handoff.md) takes precedence: Capacitor iOS/Android, persistent browser/MCP storage, backups, history, and eight household features now exist. Earlier phase labels and deferrals are not current completion status. Provider/platform research should be rechecked before implementation.
 
 This document records an earlier interactive concept. This is an experience prototype with illustrative recipes, not the production household application.
 

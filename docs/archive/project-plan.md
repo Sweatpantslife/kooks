@@ -1,6 +1,6 @@
 # Kooks: product and phased delivery plan
 
-> Historical design/research record (September 2026), with personal discovery context removed. [Current implementation and handoff](handoff.md) takes precedence: Capacitor iOS/Android, persistent browser/MCP storage, backups, history, and eight household features now exist. Earlier phase labels and deferrals are not current completion status. Provider/platform research should be rechecked before implementation.
+> Historical design/research record (September 2026), with personal discovery context removed. [Current implementation and handoff](../handoff.md) takes precedence: Capacitor iOS/Android, persistent browser/MCP storage, backups, history, and eight household features now exist. Earlier phase labels and deferrals are not current completion status. Provider/platform research should be rechecked before implementation.
 
 Prepared September 19, 2026. This historical proposal is informed by [research](research.md). See the current handoff for implemented scope and outstanding work.
 
@@ -10,7 +10,7 @@ Prepared September 19, 2026. This historical proposal is informed by [research](
 
 Kooks supports a recipe-capture workflow based on pasted messages. The main problems are search, editing, following instructions, changing quantities, and converting measurements. The product should replace that friction while remaining easy enough to use every time a recipe is worth saving.
 
-The end-to-end journey is **capture → organize → compose a meal → adapt → shop → prepare → cook → record what worked**. A meal combines recipes and their portions. Calendar placement is optional, and a single recipe can go directly to shopping or cooking. The user's scope addition is detailed in [Meals, equipment, and AI assistant](meals-equipment-byk.md).
+The end-to-end journey is **capture → organize → compose a meal → adapt → shop → prepare → cook → record what worked**. A meal combines recipes and their portions. Calendar placement is optional, and a single recipe can go directly to shopping or cooking. The user's scope addition is detailed in [Meals, equipment, and AI assistant](../meals-equipment-byk.md).
 
 The initial audience is individual households. Exact devices, languages, measurement conventions, collaboration rules, visual style, and hosting are still to be decided. Kooks is a working name only.
 
@@ -85,7 +85,7 @@ Export should use a documented format for recipes and related records, with a cl
 
 ## Phases and checkpoints
 
-At the beginning of each phase, ask a small batch of questions that affect that phase. Record the answers in [decisions](decisions.md). Continue independent work when an answer is optional; wait on a required choice before doing work that depends on it. Reopen a decision only when new evidence changes the tradeoff.
+At the beginning of each phase, ask a small batch of questions that affect that phase. Record the answers in [decisions](../decisions.md). Continue independent work when an answer is optional; wait on a required choice before doing work that depends on it. Reopen a decision only when new evidence changes the tradeoff.
 
 Each phase ends with a concrete artifact or working demonstration, a short account of verification, and the decisions needed for the next phase. The questions below are a future question bank, not a request for the user to answer everything now. Deployment details and recurring costs will be made reviewable before any hosting commitment.
 

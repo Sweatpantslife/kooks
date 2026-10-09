@@ -38,7 +38,7 @@ Scaling ingredients does not multiply oven temperature or cooking time. A larger
 
 ## AI assistant across the workflow
 
-BYK means bring your own key, and the desired experience is logging in with the user's OpenAI and Claude accounts inside Kooks. Use “Assistant” in the interface. Design one set of cooking actions behind separate provider connections; preserve each provider's actual authentication, billing, and availability rules. Account sign-in and API-key access are distinct. See [AI account connections](ai-connections.md) for findings and the unresolved fallback choice. The preview has no connected provider and collects no credentials.
+BYK means bring your own key, and the desired experience is logging in with the user's OpenAI and Claude accounts inside Kooks. Use “Assistant” in the interface. Design one set of cooking actions behind separate provider connections; preserve each provider's actual authentication, billing, and availability rules. Account sign-in and API-key access are distinct. See [AI account connections](archive/ai-connections.md) for findings and the unresolved fallback choice. The preview has no connected provider and collects no credentials.
 
 | User intent                     | The assistant should be able to prepare or perform, within agreed authority                                                                   |
 | ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |

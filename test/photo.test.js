@@ -35,15 +35,13 @@ test(
     assert.equal(result.record.data.recipe.servings, 4);
     assert.equal(result.record.data.recipe.ingredients[0].quantity, 250);
     assert.equal(store.list("recipe").length, 0);
-    const saved = tools
-      .get("recipe_import_commit")
-      .execute({
-        request_id: "commit-photo",
-        id: result.record.id,
-        expected_version: 1,
-        reviewed: true,
-        recipe: result.record.data.recipe,
-      });
+    const saved = tools.get("recipe_import_commit").execute({
+      request_id: "commit-photo",
+      id: result.record.id,
+      expected_version: 1,
+      reviewed: true,
+      recipe: result.record.data.recipe,
+    });
     assert.deepEqual(saved.record.data.source_image_ids, [result.image_id]);
     assert.equal(store.get("asset", result.image_id).data.base64, image.base64);
     const backup = tools.get("backup_export").execute({}).backup;

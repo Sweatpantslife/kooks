@@ -2,7 +2,7 @@
 
 The local Kooks server gives an MCP-compatible agent 43 tools for recipes, composed meals, plan occurrences, shopping, equipment, cooking, pantry suggestions, household preferences, leftovers, recipe memories/variants, cost estimates, photo imports, and reversible history. The host agent interprets requests; this server validates and performs the actions. It does not require an API key or choose an AI provider.
 
-This integration and the [browser interface](household-features.md) use the same Node.js domain tools and SQLite data. The separately packaged native application currently has its own device storage. AI provider sign-in requirements remain documented in [AI account connections](ai-connections.md).
+This integration and the [browser interface](household-features.md) use the same Node.js domain tools and SQLite data. The separately packaged native application currently has its own device storage. AI provider sign-in requirements remain documented in [AI account connections](archive/ai-connections.md).
 
 ## Install and connect
 

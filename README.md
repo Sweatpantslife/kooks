@@ -54,11 +54,15 @@ The browser server binds to loopback by default. Optional trusted-LAN access use
 | [Household features](docs/household-features.md)               | All eight additions, local sharing, OCR, and backups                               |
 | [Native app](docs/native-app.md)                               | Capacitor setup, storage, testing, and device limitations                          |
 | [MCP server](docs/mcp-server.md)                               | Tools, action contracts, and agent configuration                                   |
-| [Research](docs/research.md)                                   | Historical comparisons and technical research                                      |
-| [Project plan](docs/project-plan.md)                           | Historical phased proposal and acceptance examples                                 |
-| [Product brief](docs/product-brief.md)                         | Original experience and prototype design                                           |
-| [Prototype review](docs/prototype-review.md)                   | Historical interaction checks                                                      |
+| [Research](docs/archive/research.md)                           | Historical comparisons and technical research                                      |
+| [Project plan](docs/archive/project-plan.md)                   | Historical phased proposal and acceptance examples                                 |
+| [Product brief](docs/archive/product-brief.md)                 | Original experience and prototype design                                           |
+| [Prototype review](docs/archive/prototype-review.md)           | Historical interaction checks                                                      |
 | [Meals, equipment, and assistant](docs/meals-equipment-byk.md) | Detailed design rationale                                                          |
-| [AI connections](docs/ai-connections.md)                       | Historical integration research; recheck before implementation                     |
+| [AI connections](docs/archive/ai-connections.md)               | Historical integration research; recheck before implementation                     |
 
 The handoff and current implementation guides take precedence over older phase labels. No production hosting, store distribution, or live AI service is configured by this repository.
+
+## License
+
+Kooks is free software under the GNU Affero General Public License, version 3 only. Copyright (C) 2026 Sweatpantslife. See [LICENSE](LICENSE) for the full text. If you modify Kooks and let other people use it over a network, the AGPL requires you to offer them the corresponding source code.

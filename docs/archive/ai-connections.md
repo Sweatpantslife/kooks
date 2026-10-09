@@ -1,6 +1,6 @@
 # Connecting the user's AI accounts
 
-> Historical design/research record (September 2026), with personal discovery context removed. [Current implementation and handoff](handoff.md) takes precedence: Capacitor iOS/Android, persistent browser/MCP storage, backups, history, and eight household features now exist. Earlier phase labels and deferrals are not current completion status. Provider/platform research should be rechecked before implementation.
+> Historical design/research record (September 2026), with personal discovery context removed. [Current implementation and handoff](../handoff.md) takes precedence: Capacitor iOS/Android, persistent browser/MCP storage, backups, history, and eight household features now exist. Earlier phase labels and deferrals are not current completion status. Provider/platform research should be rechecked before implementation.
 
 Researched September 19, 2026. BYK means bring your own key; the proposed providers are OpenAI and Claude. The desired experience is account sign-in, so API-key entry is an alternative requiring a decision, not an equivalent silently substituted for it.
 

@@ -1,6 +1,6 @@
 # Cooking companion: initial research
 
-> Historical design/research record (September 2026), with personal discovery context removed. [Current implementation and handoff](handoff.md) takes precedence: Capacitor iOS/Android, persistent browser/MCP storage, backups, history, and eight household features now exist. Earlier phase labels and deferrals are not current completion status. Provider/platform research should be rechecked before implementation.
+> Historical design/research record (September 2026), with personal discovery context removed. [Current implementation and handoff](../handoff.md) takes precedence: Capacitor iOS/Android, persistent browser/MCP storage, backups, history, and eight household features now exist. Earlier phase labels and deferrals are not current completion status. Provider/platform research should be rechecked before implementation.
 
 Research date: September 19, 2026. Working name: **Kooks**, taken from the workspace directory; the name is not a branding decision.
 
@@ -165,6 +165,6 @@ The most important remaining unknowns are phone platforms, recipe formats/langua
 
 ### Scope addition: meals, tools, and AI assistant
 
-The [expanded requirements](meals-equipment-byk.md) distinguish reusable meal composition, calendar occurrence, and coordinated cooking. This is a design inference to prevent duplicated shopping and ambiguous portions. Recipe equipment can be imported when supplied: Schema.org's Recipe inherits `tool`, and HowToTool supports required quantity. Missing metadata must remain unknown. [Recipe schema](https://schema.org/Recipe), [HowToTool schema](https://schema.org/HowToTool).
+The [expanded requirements](../meals-equipment-byk.md) distinguish reusable meal composition, calendar occurrence, and coordinated cooking. This is a design inference to prevent duplicated shopping and ambiguous portions. Recipe equipment can be imported when supplied: Schema.org's Recipe inherits `tool`, and HowToTool supports required quantity. Missing metadata must remain unknown. [Recipe schema](https://schema.org/Recipe), [HowToTool schema](https://schema.org/HowToTool).
 
 The assistant should span the confirmed workflows through validated app actions. The product proposal includes OpenAI and Claude account sign-in, subject to supported integration paths. [AI account connection research](ai-connections.md) distinguishes supported API access from subscription login and records the provider-specific feasibility gap. The Phase 1 preview demonstrates the interaction without a connected model.
