@@ -40,16 +40,16 @@ Scaling ingredients does not multiply oven temperature or cooking time. A larger
 
 BYK means bring your own key, and the desired experience is logging in with the user's OpenAI and Claude accounts inside Kooks. Use “Assistant” in the interface. Design one set of cooking actions behind separate provider connections; preserve each provider's actual authentication, billing, and availability rules. Account sign-in and API-key access are distinct. See [AI account connections](ai-connections.md) for findings and the unresolved fallback choice. The preview has no connected provider and collects no credentials.
 
-| User intent | The assistant should be able to prepare or perform, within agreed authority |
-| --- | --- |
-| “Save this recipe” | Extract a draft from supported input, retain the source, flag missing yield or unclear amounts, and save through the recipe editor's actions. |
-| “Find something with chickpeas” | Search the actual household collection, link results, and state when no match is found. |
-| “Make this for six in metric” | Select servings and display units using deterministic conversion functions, preserving the source. |
-| “Combine these into dinner” | Create a named meal, set dish portions, and optionally place an occurrence in the plan. |
-| “What do I need?” | Prepare a grocery contribution review and a separate equipment checklist; ask about unknown availability. |
-| “Get everything ready for 7” | Propose a sequence from known steps, durations, and kitchen constraints; show assumptions and conflicts. |
-| “Help me cook this meal” | Navigate dish/step views, use supported timer actions, answer from the recipe, and adapt the remaining plan after a delay. |
-| “Remember what I changed” | Save a cooking note or propose a recipe revision/variant with a visible diff. |
+| User intent                     | The assistant should be able to prepare or perform, within agreed authority                                                                   |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| “Save this recipe”              | Extract a draft from supported input, retain the source, flag missing yield or unclear amounts, and save through the recipe editor's actions. |
+| “Find something with chickpeas” | Search the actual household collection, link results, and state when no match is found.                                                       |
+| “Make this for six in metric”   | Select servings and display units using deterministic conversion functions, preserving the source.                                            |
+| “Combine these into dinner”     | Create a named meal, set dish portions, and optionally place an occurrence in the plan.                                                       |
+| “What do I need?”               | Prepare a grocery contribution review and a separate equipment checklist; ask about unknown availability.                                     |
+| “Get everything ready for 7”    | Propose a sequence from known steps, durations, and kitchen constraints; show assumptions and conflicts.                                      |
+| “Help me cook this meal”        | Navigate dish/step views, use supported timer actions, answer from the recipe, and adapt the remaining plan after a delay.                    |
+| “Remember what I changed”       | Save a cooking note or propose a recipe revision/variant with a visible diff.                                                                 |
 
 The assistant should use the same validated application actions as the manual controls. The model interprets intent and proposes choices; recipe arithmetic, unit conversion, list totals, permissions, and timer scheduling remain application responsibilities. The cookbook and active cooking view remain usable when AI is unavailable.
 
@@ -65,13 +65,13 @@ Imported recipe text is content to extract from, not instructions granting the a
 
 ## Delivery changes
 
-| Phase | Addition |
-| --- | --- |
-| 1 — Experience | Prototype composing a meal, per-dish portions, combined shopping, equipment overview, and an assistant proposal. Resolve account-connection feasibility, autonomy, and whether batching is included. |
-| 2 — Foundation | Recipe/step equipment data, extensible meal records, shared action layer, provider/integration choice, first AI assistant capture/search/adaptation actions, and action history. |
-| 3 — Meals and shopping | Reusable meals, separate occurrences, contribution-based shopping, equipment overview, AI assistant composition/planning/list actions, and agreed batching support. |
-| 4 — Coordinated cooking | Multi-dish sessions, per-dish progress/timers, equipment-aware prep sequence, and AI assistance during cooking. |
-| 5 — Pilot | Cook a real composed meal, verify a tool conflict, test assistant failures/undo, and confirm manual continuity when AI is unavailable. |
+| Phase                   | Addition                                                                                                                                                                                             |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1 — Experience          | Prototype composing a meal, per-dish portions, combined shopping, equipment overview, and an assistant proposal. Resolve account-connection feasibility, autonomy, and whether batching is included. |
+| 2 — Foundation          | Recipe/step equipment data, extensible meal records, shared action layer, provider/integration choice, first AI assistant capture/search/adaptation actions, and action history.                     |
+| 3 — Meals and shopping  | Reusable meals, separate occurrences, contribution-based shopping, equipment overview, AI assistant composition/planning/list actions, and agreed batching support.                                  |
+| 4 — Coordinated cooking | Multi-dish sessions, per-dish progress/timers, equipment-aware prep sequence, and AI assistance during cooking.                                                                                      |
+| 5 — Pilot               | Cook a real composed meal, verify a tool conflict, test assistant failures/undo, and confirm manual continuity when AI is unavailable.                                                               |
 
 ## Acceptance examples
 

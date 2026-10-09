@@ -25,7 +25,9 @@
     "test:mobile": "node --test test/mobile.test.js",
     "test:mobile:e2e": "playwright test",
     "native:doctor": "node scripts/native-build.mjs doctor",
-    "native:assets": "node scripts/native-assets.mjs"
+    "native:assets": "node scripts/native-assets.mjs",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "dependencies": {
     "@capacitor/android": "^8.5.2",

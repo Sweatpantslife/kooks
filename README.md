@@ -47,18 +47,18 @@ The browser server binds to loopback by default. Optional trusted-LAN access use
 
 ## Documentation
 
-| Guide | Purpose |
-| --- | --- |
-| [Developer handoff](docs/handoff.md) | Verified status, remaining work, entry points, next steps, and acceptance criteria |
-| [Current decisions](docs/decisions.md) | Selected architecture and unresolved product decisions |
-| [Household features](docs/household-features.md) | All eight additions, local sharing, OCR, and backups |
-| [Native app](docs/native-app.md) | Capacitor setup, storage, testing, and device limitations |
-| [MCP server](docs/mcp-server.md) | Tools, action contracts, and agent configuration |
-| [Research](docs/research.md) | Historical comparisons and technical research |
-| [Project plan](docs/project-plan.md) | Historical phased proposal and acceptance examples |
-| [Product brief](docs/product-brief.md) | Original experience and prototype design |
-| [Prototype review](docs/prototype-review.md) | Historical interaction checks |
-| [Meals, equipment, and assistant](docs/meals-equipment-byk.md) | Detailed design rationale |
-| [AI connections](docs/ai-connections.md) | Historical integration research; recheck before implementation |
+| Guide                                                          | Purpose                                                                            |
+| -------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| [Developer handoff](docs/handoff.md)                           | Verified status, remaining work, entry points, next steps, and acceptance criteria |
+| [Current decisions](docs/decisions.md)                         | Selected architecture and unresolved product decisions                             |
+| [Household features](docs/household-features.md)               | All eight additions, local sharing, OCR, and backups                               |
+| [Native app](docs/native-app.md)                               | Capacitor setup, storage, testing, and device limitations                          |
+| [MCP server](docs/mcp-server.md)                               | Tools, action contracts, and agent configuration                                   |
+| [Research](docs/research.md)                                   | Historical comparisons and technical research                                      |
+| [Project plan](docs/project-plan.md)                           | Historical phased proposal and acceptance examples                                 |
+| [Product brief](docs/product-brief.md)                         | Original experience and prototype design                                           |
+| [Prototype review](docs/prototype-review.md)                   | Historical interaction checks                                                      |
+| [Meals, equipment, and assistant](docs/meals-equipment-byk.md) | Detailed design rationale                                                          |
+| [AI connections](docs/ai-connections.md)                       | Historical integration research; recheck before implementation                     |
 
 The handoff and current implementation guides take precedence over older phase labels. No production hosting, store distribution, or live AI service is configured by this repository.

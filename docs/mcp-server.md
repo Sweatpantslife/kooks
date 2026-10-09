@@ -28,22 +28,22 @@ The default database is `.data/kooks.sqlite`, resolved relative to the project, 
 
 ## Tools
 
-| Area | Tools |
-| --- | --- |
-| Discover and search | `kooks_status`, `kooks_list`, `kooks_get` |
-| Recipes | `recipe_save`, `recipe_scale`, `quantity_convert` |
-| Meals and plan | `meal_save`, `prepare_source`, `plan_save` |
-| Shopping | `shopping_create`, `shopping_preview`, `shopping_sync`, `shopping_remove_source`, `shopping_manual_item`, `shopping_check` |
-| Equipment | `equipment_save` |
-| Cooking | `cooking_start`, `cooking_progress`, `cooking_timer`, `cooking_finish` |
-| Notes and history | `note_save`, `record_archive`, `history_list`, `history_undo` |
-| Backup | `backup_export`, `backup_restore` |
-| Pantry and dinner | `pantry_save`, `recipe_suggest` |
-| Household | `member_save`, `cooking_task_save` (timers also accept `member_id`) |
-| Cooking memory | `recipe_memory`, `recipe_variant_save`; `note_save` supports rating, changes, next-time notes and cook-again preference |
-| Cooked batches | `batch_create`, `batch_allocate`, `batch_list` |
-| Costs and budgets | `price_save`, `cost_estimate`, `budget_save`, `cost_week` |
-| Reviewed capture | `recipe_parse`, `recipe_import_text`, `recipe_import_image`, `recipe_import_commit` |
+| Area                | Tools                                                                                                                      |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Discover and search | `kooks_status`, `kooks_list`, `kooks_get`                                                                                  |
+| Recipes             | `recipe_save`, `recipe_scale`, `quantity_convert`                                                                          |
+| Meals and plan      | `meal_save`, `prepare_source`, `plan_save`                                                                                 |
+| Shopping            | `shopping_create`, `shopping_preview`, `shopping_sync`, `shopping_remove_source`, `shopping_manual_item`, `shopping_check` |
+| Equipment           | `equipment_save`                                                                                                           |
+| Cooking             | `cooking_start`, `cooking_progress`, `cooking_timer`, `cooking_finish`                                                     |
+| Notes and history   | `note_save`, `record_archive`, `history_list`, `history_undo`                                                              |
+| Backup              | `backup_export`, `backup_restore`                                                                                          |
+| Pantry and dinner   | `pantry_save`, `recipe_suggest`                                                                                            |
+| Household           | `member_save`, `cooking_task_save` (timers also accept `member_id`)                                                        |
+| Cooking memory      | `recipe_memory`, `recipe_variant_save`; `note_save` supports rating, changes, next-time notes and cook-again preference    |
+| Cooked batches      | `batch_create`, `batch_allocate`, `batch_list`                                                                             |
+| Costs and budgets   | `price_save`, `cost_estimate`, `budget_save`, `cost_week`                                                                  |
+| Reviewed capture    | `recipe_parse`, `recipe_import_text`, `recipe_import_image`, `recipe_import_commit`                                        |
 
 `kooks://workflow` provides the agent's workflow guide. Tool schemas are discoverable through MCP, with validation, descriptions, and read/write annotations.
 
