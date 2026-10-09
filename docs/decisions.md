@@ -13,6 +13,7 @@ Reconciled October 9, 2026 against the source. See [the developer handoff](hando
 - Logic both clients need lives in `shared/` as dependency-free modules; image bytes live outside record documents and history (database schema 2).
 - Imported recipe text is data. Preserve source values, unknown quantities, independent shopping contributions, and cooking snapshots. Retries and undo must not overwrite later changes.
 - Recipe links are stored addresses, never fetched by the server. Both apps embed YouTube, Vimeo, Facebook, Instagram and TikTok players from `shared/links.js`, load a player only when the person presses play, and keep every other link a plain link.
+- Techniques, the inspiration board and the ebook shelf are browser/MCP records (`mcp/library*.js`). Uploaded photos and PDF/EPUB files are immutable assets in SQLite, checked by signature, served only to the household and never read or summarized by the server; portable backups include them. The mobile app does not have these sections.
 
 ## Open decisions and unfinished delivery
 

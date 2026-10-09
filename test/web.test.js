@@ -44,7 +44,7 @@ test("browser API shares persistent actions, reports revisions and rejects stale
   assert.match(policy, /default-src 'self'; script-src 'self';/);
   for (const embedOrigin of embedOrigins)
     assert.ok(
-      policy.includes(`frame-src ${embedOrigins.join(" ")}`) &&
+      policy.includes(`frame-src 'self' ${embedOrigins.join(" ")}`) &&
         policy.includes(embedOrigin),
       `CSP allows ${embedOrigin}`,
     );
@@ -241,4 +241,66 @@ test("optional household access key protects records and issues a scoped browser
   } finally {
     isolated.close();
   }
+});
+
+test("ebooks are served with their names for the in-app reader and for download", async (t) => {
+  const { origin, post } = await setup(t);
+  const upload = async (name, mime_type, bytes) =>
+    (
+      await (
+        await post("/api/tools/asset_save", {
+          request_id: `upload-${name}`,
+          file: { name, mime_type, base64: bytes.toString("base64") },
+        })
+      ).json()
+    ).record;
+  const pdf = Buffer.from("%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n");
+  const book = await upload("Family cookbook (2019) é", "application/pdf", pdf);
+  assert.equal(book.data.base64, undefined);
+  const inline = await fetch(`${origin}/api/assets/${book.id}`);
+  assert.equal(inline.status, 200);
+  assert.equal(inline.headers.get("content-type"), "application/pdf");
+  assert.equal(
+    inline.headers.get("content-disposition"),
+    `inline; filename="Family cookbook (2019) _.pdf"; filename*=UTF-8''Family%20cookbook%20%282019%29%20%C3%A9.pdf`,
+  );
+  // The page may frame its own PDFs; nothing else changes in the policy.
+  assert.match(
+    inline.headers.get("content-security-policy"),
+    /frame-ancestors 'self'/,
+  );
+  assert.match(
+    inline.headers.get("content-security-policy"),
+    /^default-src 'self'; script-src 'self';/,
+  );
+  assert.ok(Buffer.from(await inline.arrayBuffer()).equals(pdf));
+  const download = await fetch(`${origin}/api/assets/${book.id}?download=1`);
+  assert.match(download.headers.get("content-disposition"), /^attachment; /);
+  const epub = Buffer.concat([
+    Buffer.from([0x50, 0x4b, 3, 4, 10, 0, 0, 0, 0, 0]),
+    Buffer.alloc(16),
+    Buffer.from([20, 0, 0, 0, 20, 0, 0, 0, 8, 0, 0, 0]),
+    Buffer.from("mimetypeapplication/epub+zip"),
+  ]);
+  const novel = await upload("novel", "application/epub+zip", epub);
+  const served = await fetch(`${origin}/api/assets/${novel.id}`);
+  assert.equal(served.headers.get("content-type"), "application/epub+zip");
+  assert.equal(
+    served.headers.get("content-disposition"),
+    `attachment; filename="novel.epub"; filename*=UTF-8''novel.epub`,
+  );
+  const rejected = await post("/api/tools/asset_save", {
+    request_id: "upload-bad",
+    file: {
+      name: "x.pdf",
+      mime_type: "application/pdf",
+      base64: epub.toString("base64"),
+    },
+  });
+  assert.equal(rejected.status, 400);
+  assert.equal((await rejected.json()).error, "INVALID_FILE");
+  const state = await (await fetch(`${origin}/api/state`)).json();
+  assert.equal(state.records.asset.length, 2);
+  for (const kind of ["technique", "inspiration", "book"])
+    assert.deepEqual(state.records[kind], []);
 });

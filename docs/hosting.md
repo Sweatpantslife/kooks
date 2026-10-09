@@ -15,6 +15,8 @@ Alternatively, set `KOOKS_ACCESS_TOKEN_FILE=/data/household.key` and provision t
 
 The image sets `KOOKS_HOST=0.0.0.0`, `PORT=4317`, and `KOOKS_DB_PATH=/data/kooks.sqlite`. Mount a dedicated persistent Docker volume at `/data`; it must be writable by the image's `node` user (UID 1000). Never share that volume with another application. Keep one application replica, and stop the old container before a replacement starts.
 
+Ebook uploads for the library reach the server as JSON bodies of up to 96 MB (a 64 MB file in base64) and may take a few minutes on a slow connection; the server allows five minutes per request. Make sure the HTTPS proxy's request body size and timeout limits allow that, or uploads fail before Kooks sees them. Books and photos live in the same SQLite file, so size the volume and its backups accordingly.
+
 The Docker health check requests `GET /healthz`. It exposes no cookbook records. API requests require login, and hosted sessions use Secure, HttpOnly, SameSite=Strict cookies. POST requests must originate from the configured HTTPS origin. Forwarded headers cannot change that origin. Sessions are held in memory and users sign in again after a restart.
 
 ## Verification and recovery
