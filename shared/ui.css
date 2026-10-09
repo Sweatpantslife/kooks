@@ -1735,3 +1735,79 @@ progress.progress::-moz-progress-bar {
   background: var(--brand);
   border-radius: var(--r-pill);
 }
+
+/* ---------- Facets: filter rows and the small chips on cards ---------- */
+.facets {
+  display: grid;
+  gap: var(--s-2);
+  margin-bottom: var(--s-5);
+}
+.facet-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  align-items: center;
+}
+.facet-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  min-width: 60px;
+}
+.chip .count {
+  opacity: 0.6;
+  font-size: var(--fs-xs);
+  margin-left: 2px;
+}
+.chips-sm {
+  gap: var(--s-1);
+}
+.facet-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 2px 8px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+}
+button.facet-chip:hover {
+  background: var(--soft);
+  color: var(--brand);
+}
+.facet-chip.course,
+.facet-chip.cuisine {
+  background: var(--soft);
+  color: var(--soft-ink);
+}
+.facet-chip.diets {
+  background: var(--warm);
+  color: var(--warm-ink);
+}
+.link-button {
+  border: 0;
+  padding: 0 2px;
+  background: none;
+  color: var(--brand);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  font-size: inherit;
+  cursor: pointer;
+}
+.lead {
+  font-size: var(--fs-md);
+  max-width: 70ch;
+}
+.clamp {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}

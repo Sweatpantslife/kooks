@@ -30,6 +30,22 @@ A recipe can carry any number of links (up to 50) beside its source link: the wr
 
 Players are not loaded with the page. Each one shows a play button, and only pressing it loads the provider's player, so viewing a recipe sends nothing to a video site. The server stores the addresses and never fetches them; its Content-Security-Policy allows frames only from the five player origins. While a video is playing, other cooks' changes are held back until you leave the page so the video is not restarted. Cooking sessions snapshot the links and show them as plain links beside the steps.
 
+## Courses, cuisines, diet labels and tags
+
+Every recipe can carry a course (one of Breakfast, Starter, Main, Side, Soup, Salad, Dessert, Baking, Snack, Drink or Basics), a cuisine in your own words, diet labels (Vegetarian, Vegan, Pescatarian, Gluten-free, Dairy-free, Nut-free, Egg-free, Kosher, Halal, Low-carb) and any number of tags. The editor offers the cuisines and tags already in your cookbook, so one spelling is enough; tags are compared without regard to case and duplicates are dropped when you save.
+
+The Recipes page filters by course, cuisine, diet label and tag with chips built from what the cookbook actually contains, plus favorites and recipes that take 30 minutes or less. Several diet labels or tags narrow the list to recipes that carry all of them. Pressing a chip on a recipe card or a recipe page narrows the cookbook to that value, and the search box also matches facet names. A filter on a course, cuisine or total time cannot show recipes where that detail was never recorded; the page says how many are left out instead of guessing. The dinner finder on Today accepts the same facets beside its effort and household filters.
+
+Diet labels record what you know about a recipe. They are not allergen checks, and nothing is inferred from the ingredients.
+
+## Techniques, inspiration and the shelf
+
+**Inspiration** in the sidebar opens two boards. **Techniques** keeps the methods behind your recipes: a short summary, numbered steps, tips, tags, photos, the same click-to-play videos recipes have, and the recipes that use the technique, which show it under _Techniques_ on their own pages. **Inspiration** keeps ideas worth trying: a reel, a dish at a friend’s table, a line in a newsletter, with notes, where it came from, links, photos and tags. An idea starts as _Want to try_ and can be marked _Tried it_; **Write it up as a recipe** opens the recipe editor with the idea’s title, notes, tags and links, and once the recipe is saved the idea shows _In the cookbook_ while the recipe lists the idea under _Inspired by_.
+
+**Library** is the household’s shelf of cookbooks it owns as files. Add a PDF or EPUB of up to 64 MB with a title, author, tags, notes and an optional cover photo; the file is stored once in the household database and served only to signed-in browsers. A book page offers the file for download, opens a PDF in a new tab, and can show it in an in-page reader frame that is created only when you press **Read here**; bookmarks with page numbers open the reader at that page. EPUBs are downloaded to your reading app rather than shown in the browser. Link the recipes you write up from a book in its edit form and they appear under _From your shelf_ on the recipe page. Removing a book from the shelf archives the entry, which undo reverses; the file stays in the database.
+
+Photos for techniques and ideas use the same PNG, JPEG and WebP limit as recipe photos (8 MB each). While a book is open in the reader, other cooks’ changes are held back until you leave the page, as they are for a playing video. The server never reads, summarizes or sends any of this anywhere: techniques, ideas and books are plain records searched by their words, and files are only ever served back to the household.
+
 ## Photos
 
 On macOS install Apple's command line tools if needed (`xcode-select --install`). Full Xcode is not required for the OCR helper. The helper is compiled once per source revision into `~/Library/Caches/kooks` (override the location with `KOOKS_CACHE_DIR`) and reused by later imports. On other platforms install Tesseract through your usual package manager. Photo content is processed locally and is not uploaded to a model provider. OCR runs outside database transactions; errors leave the cookbook unchanged. An unreadable image can be retried or entered as text.
@@ -38,13 +54,17 @@ Original images are retained in SQLite and included in portable backups. Header/
 
 ## Sharing a household server
 
-By default the server accepts only loopback connections. Multiple tabs can use the same cookbook, and a connected MCP client can use the same database. To use other devices on a trusted private network, explicitly configure `KOOKS_HOST=0.0.0.0` and a `KOOKS_ACCESS_TOKEN` of at least 24 characters, then open this computer's LAN address on each device. The browser asks for the household key and receives a one-day HttpOnly session cookie. Keep the service on a trusted network; plain HTTP is not suitable for public access. No LAN listener is enabled automatically.
+By default the server accepts only loopback connections and asks nobody to sign in. Multiple tabs can use the same cookbook, and a connected MCP client can use the same database.
 
-This is one shared household with one shared access key, not per-person accounts. Person profiles identify preferences and task assignments. The server must remain running; the browser interface does not have offline storage or cloud synchronization. The separate native app can still operate using its own local storage.
+To use other devices, list the household's addresses in `KOOKS_HOUSEHOLD_EMAILS` and give the server a way to send mail: `KOOKS_SMTP_HOST` with its port, user, password and `KOOKS_MAIL_FROM` for real email, or `KOOKS_MAIL_OUTBOX=/some/private/directory` to write each sign-in email to a file while developing. Then either host it behind HTTPS as [hosting](hosting.md) describes, or explicitly set `KOOKS_HOST=0.0.0.0` on a trusted private network and open this computer's LAN address on each device. No LAN listener is enabled automatically, and plain HTTP is not suitable for public access.
+
+Each member signs in with a one-time link sent to their address, then adds a passkey so the next sign-in is a fingerprint, face or screen lock. Passkeys need HTTPS or localhost, so a plain-HTTP LAN address offers email links only. Sessions last through 30 days of use, survive restarts, and end on sign-out or when an address leaves the list. Setting `KOOKS_HOUSEHOLD_EMAILS` on the loopback server also turns sign-in on, which is how to try the flow locally with an outbox. Sign-in state lives in `auth_` tables beside the cookbook and is left out of portable backups.
+
+Members are known by email address; person profiles remain taste preferences and task assignments, not accounts. The server must remain running; the browser interface does not have offline storage or cloud synchronization. The separate native app can still operate using its own local storage.
 
 ## Data, compatibility and checks
 
-All mutations use the same validated tools, SQLite transactions, optimistic versions, request keys and reversible history as the original MCP implementation. `backup_export` now emits schema version 2 and includes the new records, photos and recipe links. Restore accepts both versions 1 and 2 and still requires an empty database. It rejects invalid references and over-allocated batches atomically. Settings › Backup › Export cookbook downloads this portable JSON.
+All mutations use the same validated tools, SQLite transactions, optimistic versions, request keys and reversible history as the original MCP implementation. `backup_export` now emits schema version 2 and includes the new records, photos, recipe links, recipe facets, techniques, ideas and books together with their PDF and EPUB files, so a large shelf makes exports large; exports made before the facets restore with them unset. Restore accepts both versions 1 and 2 and still requires an empty database. It rejects invalid references and over-allocated batches atomically. Settings › Backup › Export cookbook downloads this portable JSON.
 
 ```sh
 npm test

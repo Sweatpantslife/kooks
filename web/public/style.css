@@ -92,3 +92,138 @@
 .list-switcher {
   margin-bottom: var(--s-4);
 }
+
+/* Techniques and ideas: the text beside its photos and links. */
+.learn-columns {
+  display: grid;
+  gap: var(--s-6);
+  grid-template-columns: 1fr;
+  align-items: start;
+}
+@media (min-width: 840px) {
+  .learn-columns {
+    grid-template-columns: minmax(0, 1.6fr) minmax(240px, 0.8fr);
+  }
+}
+.photos {
+  display: flex;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+}
+.photo {
+  display: block;
+  width: 168px;
+  height: 126px;
+  object-fit: cover;
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+}
+.photo-keep {
+  display: grid;
+  gap: var(--s-1);
+  justify-items: start;
+}
+.photo-keep .check {
+  font-size: var(--fs-xs);
+}
+.card-photo {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: var(--r-md);
+}
+.field input[type="file"] {
+  padding: var(--s-2);
+  font-size: var(--fs-sm);
+}
+.connections {
+  display: grid;
+  gap: var(--s-3);
+  padding: var(--s-4);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+}
+
+/* The shelf: a cover image, or a spine drawn from the title. */
+.book-columns {
+  display: grid;
+  gap: var(--s-6);
+  grid-template-columns: 1fr;
+  align-items: start;
+}
+@media (min-width: 840px) {
+  .book-columns {
+    grid-template-columns: minmax(220px, 0.8fr) minmax(0, 1.6fr);
+  }
+}
+.cover {
+  display: block;
+  width: 100%;
+  max-width: 320px;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  border-radius: var(--r-sm);
+  box-shadow: var(--shadow-1);
+}
+.spine {
+  background: linear-gradient(135deg, var(--brand), var(--embed-bg));
+  color: var(--on-brand);
+  display: grid;
+  align-content: end;
+  gap: var(--s-1);
+  padding: var(--s-4);
+  font-family: var(--font-serif);
+  overflow: hidden;
+}
+.spine span {
+  font-size: var(--fs-xl);
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+.spine small {
+  opacity: 0.8;
+}
+.cover-link {
+  display: block;
+  text-decoration: none;
+}
+.card.book .cover {
+  max-height: 260px;
+  max-width: none;
+}
+/* The book reader: a small panel until opened, then most of the screen. */
+.embed[data-shape="page"] {
+  aspect-ratio: auto;
+  height: 240px;
+}
+.embed[data-loaded][data-shape="page"] {
+  height: min(85vh, 1100px);
+  background: #fff;
+}
+
+/* Sign-in. */
+.login .btn-block {
+  width: 100%;
+}
+.login .error:empty {
+  display: none;
+}
+.or {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.or::before,
+.or::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+.passkey-prompt {
+  margin-bottom: var(--s-5);
+}

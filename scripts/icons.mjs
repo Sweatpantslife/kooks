@@ -45,6 +45,10 @@ const names = [
   "copy",
   "sliders-horizontal",
   "list-checks",
+  "key-round",
+  "lightbulb",
+  "library",
+  "bookmark",
   // Kitchen
   "clock",
   "timer",

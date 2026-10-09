@@ -23,9 +23,10 @@ export function addFeatureTools(tool, store, kooks) {
   );
   tool(
     "recipe_suggest",
-    "Rank saved recipes by shopping gaps, use-soon ingredients, selected eaters and effort. Unknown effort is excluded when that filter is active; unknown pantry quantities are shown for checking.",
+    "Rank saved recipes by shopping gaps, use-soon ingredients, selected eaters and effort, optionally within a course, cuisine, diet labels or tags. Unknown effort, course or cuisine is excluded when that filter is active; unknown pantry quantities are shown for checking.",
     {
       query: z.string().max(500).default(""),
+      ...s.facetFilters,
       use_pantry: z.boolean().default(true),
       available_ingredients: z.array(s.text).max(500).default([]),
       member_ids: z.array(s.id).max(100).default([]),

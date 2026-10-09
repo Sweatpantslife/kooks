@@ -247,3 +247,70 @@ test("links and videos save with a recipe, play on request and survive a reload"
     page.getByRole("link", { name: "Watch the method" }),
   ).toHaveAttribute("href", "https://youtu.be/dQw4w9WgXcQ");
 });
+
+test("course, diet and tag filters narrow the library and the editor keeps the facets", async ({
+  page,
+}) => {
+  const card = (name) => page.locator(".recipe-card", { hasText: name });
+  const row = (label) => page.locator(".facet-row", { hasText: label });
+  await nav(page, "Recipes").click();
+  await expect(card("Lemon & chickpea orzo")).toContainText("Mediterranean");
+  await row("Course")
+    .getByRole("button", { name: "Main", exact: true })
+    .click();
+  await expect(card("Lemon & chickpea orzo")).toHaveCount(1);
+  await expect(card("Roasted tomato pasta")).toHaveCount(1);
+  await expect(card("Red lentil soup")).toHaveCount(0);
+  await row("Tags")
+    .getByRole("button", { name: "One pot", exact: true })
+    .click();
+  await expect(card("Lemon & chickpea orzo")).toHaveCount(1);
+  await expect(card("Roasted tomato pasta")).toHaveCount(0);
+  await page.getByRole("button", { name: "Clear filters" }).click();
+  await expect(card("Red lentil soup")).toHaveCount(1);
+  await row("Diet")
+    .getByRole("button", { name: "Gluten-free", exact: true })
+    .click();
+  await expect(card("Crispy potatoes & tahini")).toHaveCount(1);
+  await expect(card("The everyday chopped salad")).toHaveCount(1);
+  await expect(card("Lemon & chickpea orzo")).toHaveCount(0);
+  await page.getByRole("button", { name: "Clear filters" }).click();
+  await openRecipe(page, "Lemon & chickpea orzo");
+  await expect(page.locator(".detail-facets")).toContainText("Mediterranean");
+  await page.getByRole("button", { name: "Edit recipe" }).click();
+  await expect(page.getByLabel("Course")).toHaveValue("main");
+  await expect(page.getByLabel("Cuisine")).toHaveValue("Mediterranean");
+  await expect(page.getByLabel("Vegan", { exact: true })).toBeChecked();
+  await page.getByLabel("Course").selectOption("soup");
+  await page
+    .getByLabel("Tags · separated by commas")
+    .fill("Weeknight, Shabbat");
+  await page.getByLabel("Gluten-free", { exact: true }).check();
+  await page.getByRole("button", { name: "Save recipe" }).click();
+  await expect(h1(page, "Lemon & chickpea orzo")).toBeVisible();
+  await expect(page.locator(".detail-facets")).toContainText("Shabbat");
+  await expect(page.locator(".detail-facets")).toContainText("Gluten-free");
+  await saved(page);
+  await page.reload();
+  await nav(page, "Recipes").click();
+  await expect(card("Lemon & chickpea orzo")).toContainText("Soup");
+  await row("Tags")
+    .getByRole("button", { name: "Shabbat", exact: true })
+    .click();
+  await expect(card("Lemon & chickpea orzo")).toHaveCount(1);
+  await expect(card("Red lentil soup")).toHaveCount(0);
+});
+
+test("the finished view leads back to the recipe", async ({ page }) => {
+  await nav(page, "Recipes").click();
+  await openRecipe(page, "Lemon & chickpea orzo");
+  await action(page, "Cook").click();
+  for (let step = 1; step < 4; step++)
+    await page.getByRole("button", { name: "Next step" }).click();
+  await page.getByRole("button", { name: "Finish cooking" }).click();
+  await expect(page.getByText("Finished", { exact: true })).toBeVisible();
+  await expect(h1(page, "Lemon & chickpea orzo")).toBeVisible();
+  await page.getByRole("button", { name: "Recipe", exact: true }).click();
+  await expect(h1(page, "Lemon & chickpea orzo")).toBeVisible();
+  await expect(action(page, "Cook")).toBeVisible();
+});

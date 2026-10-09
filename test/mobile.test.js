@@ -205,3 +205,66 @@ test("mobile notification identifiers are unique even for timers started in the 
   assert.notEqual(first, second);
   assert.ok(first > 0 && second <= 2147483647);
 });
+
+test("mobile facets validate against the shared lists and older single labels become tags", () => {
+  const book = newCookbook();
+  const legacy = {
+    id: "legacy",
+    title: "Legacy rice",
+    description: "",
+    tag: "Comfort food",
+    time: null,
+    servings: 2,
+    source: "Your recipe",
+    ingredients: [],
+    steps: [{ title: "Step 1", text: "Cook.", ids: [] }],
+    note: "",
+    equipment: [],
+  };
+  const { tag, ...bare } = legacy;
+  book.state.custom = [
+    legacy,
+    { ...legacy, id: "placeholder", tag: "Your collection" },
+    { ...legacy, id: "tagged", tags: ["Weeknight"] },
+  ];
+  const restored = validateBackup(book).state.custom;
+  assert.deepEqual(restored[0].tags, ["Comfort food"]);
+  assert.equal("tag" in restored[0], false);
+  assert.equal(restored[0].course, null);
+  assert.equal(restored[0].cuisine, "");
+  assert.deepEqual(restored[0].diets, []);
+  assert.deepEqual(restored[1].tags, []);
+  assert.deepEqual(restored[2].tags, ["Weeknight"]);
+  book.state.custom = [
+    {
+      ...bare,
+      course: "main",
+      cuisine: "Israeli",
+      diets: ["vegan"],
+      tags: ["Weeknight", "Shabbat"],
+    },
+  ];
+  const faceted = validateBackup(book).state.custom[0];
+  assert.equal(faceted.course, "main");
+  assert.equal(faceted.cuisine, "Israeli");
+  assert.deepEqual(faceted.diets, ["vegan"]);
+  assert.equal(tag, "Comfort food");
+  book.state.custom = [{ ...bare, course: "lunch" }];
+  assert.throws(() => validateBackup(book));
+  book.state.custom = [{ ...bare, diets: ["paleo"] }];
+  assert.throws(() => validateBackup(book));
+  // A cooking session snapshot of an older recipe is upgraded the same way.
+  book.state.custom = [legacy];
+  book.state.session = {
+    recipeId: "legacy",
+    snapshot: legacy,
+    servings: 2,
+    units: "metric",
+    step: 0,
+    timers: [],
+  };
+  const session = validateBackup(book).state.session;
+  assert.deepEqual(session.snapshot.tags, ["Comfort food"]);
+  assert.equal("tag" in session.snapshot, false);
+  assert.deepEqual(parseBackup(JSON.stringify(newCookbook())), newCookbook());
+});

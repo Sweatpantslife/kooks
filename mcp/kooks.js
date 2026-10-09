@@ -8,6 +8,12 @@ import {
   preserveChecked,
 } from "./shopping.js";
 import { validateFeatureRelations, Features } from "./features.js";
+import {
+  facetText,
+  hasFacetFilters,
+  matchesFacets,
+} from "../shared/taxonomy.js";
+import { validateLibraryRelations } from "./library.js";
 
 // Searchable text of a record: its string and number values, never its keys.
 function searchText(value) {
@@ -33,11 +39,34 @@ export class Kooks {
     return this.store.put(kind, data, args.id, args.expected_version);
   }
 
-  list(kind, { query = "", include_archived = false, limit = 30, offset = 0 }) {
+  list(
+    kind,
+    {
+      query = "",
+      include_archived = false,
+      limit = 30,
+      offset = 0,
+      favorite,
+      ...facets
+    },
+  ) {
+    requireThat(
+      kind === "recipe" || (favorite === undefined && !hasFacetFilters(facets)),
+      "INVALID_INPUT",
+      "course, cuisine, diets, tags and favorite filter recipes only.",
+    );
     const q = normalize(query);
     const records = this.store
       .list(kind, include_archived)
-      .filter((record) => !q || normalize(searchText(record.data)).includes(q));
+      .filter(
+        (record) =>
+          (!q ||
+            normalize(
+              `${searchText(record.data)} ${kind === "recipe" ? facetText(record.data) : ""}`,
+            ).includes(q)) &&
+          (favorite === undefined || record.data.favorite === favorite) &&
+          matchesFacets(record.data, facets),
+      );
     return {
       total: records.length,
       records: records.slice(offset, offset + limit).map((record) => ({
@@ -53,6 +82,17 @@ export class Kooks {
           ? { date: record.data.date, slot: record.data.slot }
           : {}),
         ...(record.data.status ? { status: record.data.status } : {}),
+        ...(kind === "recipe"
+          ? {
+              course: record.data.course ?? null,
+              cuisine: record.data.cuisine ?? null,
+              diets: record.data.diets ?? [],
+              tags: record.data.tags,
+              favorite: record.data.favorite,
+              servings: record.data.servings,
+              total_minutes: record.data.total_minutes ?? null,
+            }
+          : {}),
       })),
       next_offset: offset + limit < records.length ? offset + limit : null,
     };
@@ -62,6 +102,7 @@ export class Kooks {
     // This also protects against an undo archiving a recipe that a later meal uses.
     for (const meal of this.store.list("meal")) this.validateMeal(meal.data);
     validateFeatureRelations(this.store);
+    validateLibraryRelations(this.store);
   }
 
   resolve(source) {

@@ -245,3 +245,7 @@
 label.list-item {
   cursor: pointer;
 }
+
+.detail-facets {
+  margin-top: var(--s-2);
+}

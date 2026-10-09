@@ -6,6 +6,7 @@ import {
   scaleRecipe,
 } from "./quantities.js";
 import { requireThat } from "./store.js";
+import { facetText, matchesFacets } from "../shared/taxonomy.js";
 
 const sameIngredient = (a, b) =>
   normalize(a.name) === normalize(b.name) &&
@@ -232,6 +233,7 @@ export class Features {
       preferences: 0,
       missing_yield: 0,
       incomplete: 0,
+      facets: 0,
     };
     const results = [];
     for (const record of this.store.list("recipe")) {
@@ -243,10 +245,16 @@ export class Features {
       if (
         args.query &&
         !normalize(
-          [r.title, ...r.ingredients.map((i) => i.name), ...r.tags].join(" "),
+          [r.title, ...r.ingredients.map((i) => i.name), facetText(r)].join(
+            " ",
+          ),
         ).includes(normalize(args.query))
       )
         continue;
+      if (!matchesFacets(r, args)) {
+        skipped.facets++;
+        continue;
+      }
       const filters = [
         ["active_minutes", args.max_active_minutes],
         ["total_minutes", args.max_total_minutes],
@@ -321,7 +329,7 @@ export class Features {
       results: results.slice(0, args.limit),
       skipped,
       matching:
-        "Ingredient names and preparation must match. Checklist entries confirm presence; check their quantities. Unknown effort is excluded when a corresponding filter is active.",
+        "Ingredient names and preparation must match. Checklist entries confirm presence; check their quantities. Unknown effort is excluded when a corresponding filter is active, as is an unrecorded course or cuisine.",
     };
   }
 

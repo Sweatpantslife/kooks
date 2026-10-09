@@ -18,6 +18,19 @@ import {
 } from "./shopping.js";
 import { equipmentSummary } from "./equipment.js";
 import { MAX_LINKS, describeLink, parseLinkLines } from "../shared/links.js";
+import {
+  courseLabel,
+  courses,
+  dietLabel,
+  diets,
+  facetText,
+  hasFacetFilters,
+  labelKey,
+  matchesFacets,
+  parseLabels,
+  suggestedCuisines,
+  taxonomy,
+} from "../shared/taxonomy.js";
 import { icon } from "../shared/icons.js";
 import { clone as structuredClone, randomId } from "./compat.js";
 import { defaultDesign, snapshot, parseBackup } from "./model.js";
@@ -86,6 +99,9 @@ async function boot() {
   let isRestoring = false;
   let storageStatus = "saved";
   let draft = null;
+  // Library facet filters: one course or cuisine, every chosen diet and tag.
+  const noFacets = () => ({ course: "", cuisine: "", diets: [], tags: [] });
+  let facets = noFacets();
   let review = null;
   let noteMessage = "";
   let timerHandle = null;
@@ -284,7 +300,98 @@ async function boot() {
   // ---------- Recipe pieces ----------
   function recipeCard(r) {
     const fav = state.favorites.includes(r.id);
-    return `<article class="card recipe-card"><div class="row between">${tag(r.tag)}${button("", "favorite", `data-id="${esc(r.id)}" aria-label="${fav ? "Remove from favorites" : "Add to favorites"}: ${esc(r.title)}" aria-pressed="${fav}"`, `btn-quiet btn-icon btn-sm favorite ${fav ? "is-favorite" : ""}`, "heart")}</div><h2 class="card-title"><button type="button" class="card-open" data-action="open" data-id="${esc(r.id)}">${esc(r.title)}</button></h2><p>${esc(r.description)}</p><div class="card-end"><div class="meta"><span>${icon("clock")}${r.time ? `${r.time} min` : "Time not set"}</span><span>${r.servings ? r.servings + " servings" : "Yield not set"}</span></div>${button("Open", "open", `data-id="${esc(r.id)}" aria-label="Open ${esc(r.title)}"`, "btn-sm btn-quiet", "chevron-right")}</div></article>`;
+    return `<article class="card recipe-card"><div class="row between">${tag(courseLabel(r.course) ?? "Your collection")}${button("", "favorite", `data-id="${esc(r.id)}" aria-label="${fav ? "Remove from favorites" : "Add to favorites"}: ${esc(r.title)}" aria-pressed="${fav}"`, `btn-quiet btn-icon btn-sm favorite ${fav ? "is-favorite" : ""}`, "heart")}</div><h2 class="card-title"><button type="button" class="card-open" data-action="open" data-id="${esc(r.id)}">${esc(r.title)}</button></h2><p>${esc(r.description)}</p>${facetBadges(r)}<div class="card-end"><div class="meta"><span>${icon("clock")}${r.time ? `${r.time} min` : "Time not set"}</span><span>${r.servings ? r.servings + " servings" : "Yield not set"}</span></div>${button("Open", "open", `data-id="${esc(r.id)}" aria-label="Open ${esc(r.title)}"`, "btn-sm btn-quiet", "chevron-right")}</div></article>`;
+  }
+  // Cuisine, diet labels and tags of a recipe, as small badges.
+  function facetBadges(r, cls = "chips chips-sm") {
+    const labels = [
+      ...(r.cuisine ? [["cuisine", r.cuisine]] : []),
+      ...(r.diets || []).map((d) => ["diets", dietLabel(d)]),
+      ...(r.tags || []).map((t) => ["tags", t]),
+    ];
+    return labels.length
+      ? `<div class="${cls}">${labels.map(([facet, label]) => `<span class="facet-chip ${facet}">${esc(label)}</span>`).join("")}</div>`
+      : "";
+  }
+  // Facet filter rows for the library, from what the cookbook contains.
+  function facetFilters() {
+    const vocabulary = taxonomy(allRecipes());
+    const chip = (label, attrs, pressed) =>
+      `<button type="button" class="chip" data-action="facet" ${attrs} aria-pressed="${pressed}">${esc(label)}</button>`;
+    const row = (label, chips) =>
+      chips.length
+        ? `<div class="facet-row"><span class="facet-label">${label}</span>${chips.join("")}</div>`
+        : "";
+    const chosen = (facet, value) =>
+      Array.isArray(facets[facet])
+        ? facets[facet].some((v) => labelKey(v) === labelKey(value))
+        : labelKey(facets[facet]) === labelKey(value);
+    const options = (facet, entries, nameOf, labelOf) =>
+      entries.map((entry) =>
+        chip(
+          labelOf(entry),
+          `data-facet="${facet}" data-value="${esc(nameOf(entry))}"`,
+          chosen(facet, nameOf(entry)),
+        ),
+      );
+    const single = (facet, entries, nameOf, labelOf) =>
+      entries.length
+        ? [
+            chip("All", `data-facet="${facet}" data-value=""`, !facets[facet]),
+            ...options(facet, entries, nameOf, labelOf),
+          ]
+        : [];
+    const rows =
+      row(
+        "Course",
+        single(
+          "course",
+          vocabulary.courses,
+          (c) => c.key,
+          (c) => c.label,
+        ),
+      ) +
+      row(
+        "Cuisine",
+        single(
+          "cuisine",
+          vocabulary.cuisines,
+          (c) => c.name,
+          (c) => c.name,
+        ),
+      ) +
+      row(
+        "Diet",
+        options(
+          "diets",
+          vocabulary.diets,
+          (d) => d.key,
+          (d) => d.label,
+        ),
+      ) +
+      row(
+        "Tags",
+        options(
+          "tags",
+          vocabulary.tags,
+          (t) => t.name,
+          (t) => t.name,
+        ),
+      ) +
+      (hasFacetFilters(facets)
+        ? `<div class="facet-row">${button("Clear filters", "clear-search", "", "btn-quiet btn-sm", "x")}</div>`
+        : "");
+    return rows
+      ? `<div class="facets" aria-label="Recipe filters">${rows}</div>`
+      : "";
+  }
+  function cuisineOptions() {
+    const inUse = taxonomy(allRecipes()).cuisines;
+    const seen = new Set(inUse.map((c) => labelKey(c.name)));
+    return [
+      ...inUse.map((c) => c.name),
+      ...suggestedCuisines.filter((name) => !seen.has(labelKey(name))),
+    ];
   }
   function equipmentView(components, heading = "Required tools") {
     const { rows, unknown, ovens, conflict } = equipmentSummary(
@@ -382,6 +489,7 @@ async function boot() {
       (r) =>
         (state.filter !== "favorites" || state.favorites.includes(r.id)) &&
         (state.filter !== "quick" || (r.time && r.time <= 30)) &&
+        matchesFacets(r, facets) &&
         (!term ||
           [
             r.title,
@@ -389,6 +497,7 @@ async function boot() {
             r.note,
             state.notes[r.id],
             ...r.ingredients.map((i) => i.n),
+            facetText(r),
           ]
             .join(" ")
             .toLowerCase()
@@ -399,7 +508,7 @@ async function boot() {
       : emptyState(
           "No recipes found",
           "Try an ingredient, a different name, or another filter.",
-          button("Clear filters", "clear-search"),
+          button("Clear everything", "clear-search"),
           "search",
         );
   }
@@ -416,12 +525,12 @@ async function boot() {
       )
       .join(
         "",
-      )}</div></div><div id="results">${libraryCards()}</div><p class="small muted spacer">Six example recipes are included to help you get started. Everything you add is saved on this device.</p>`;
+      )}</div></div>${facetFilters()}<div id="results">${libraryCards()}</div><p class="small muted spacer">Six example recipes are included to help you get started. Everything you add is saved on this device.</p>`;
   }
   function detailView() {
     const r = recipe();
     const fav = state.favorites.includes(r.id);
-    return `${pageHeader({ title: r.title, eyebrow: r.tag, subtitle: r.description, back: { label: "Recipes", action: "nav", extra: 'data-view="library"' }, actions: `${button("", "favorite", `data-id="${esc(r.id)}" aria-label="${fav ? "Remove from favorites" : "Add to favorites"}" aria-pressed="${fav}"`, `btn-quiet btn-icon favorite ${fav ? "is-favorite" : ""}`, "heart")}${button("Edit recipe", "edit", `data-id="${esc(r.id)}"`, "", "pencil")}` })}<div class="meta"><span>${icon("clock")}${r.time ? r.time + " minutes" : "Time not set"}</span><span>${esc(r.source)}</span></div><div class="actions spacer">${button("Cook", "start-cook", "", "btn-primary", "flame")}${button("Shop", "review", "", "", "shopping-basket")}${button("Plan", "schedule", "", "", "calendar-days")}${button("Share", "share-recipe", "", "btn-quiet", "share-2")}</div><div class="recipe-columns spacer"><section class="panel stack-sm"><div class="row between"><h2>Ingredients</h2>${unitSelect()}</div><div class="serving-control"><span class="label">${r.servings ? "Servings" : "Original quantities"}</span>${r.servings ? `<div class="stepper">${button("", "servings", 'data-delta="-1" aria-label="Fewer servings" ' + (servings(r) <= 1 ? "disabled" : ""), "btn-quiet btn-icon btn-sm", "minus")}<strong>${servings(r)}</strong>${button("", "servings", 'data-delta="1" aria-label="More servings" ' + (servings(r) >= 24 ? "disabled" : ""), "btn-quiet btn-icon btn-sm", "plus")}</div>` : button("Set yield", "edit", "", "btn-sm")}</div><div>${ingredientRows(r)}</div>${state.units === "us" ? '<p class="small muted">Cups use 240 mL. Weight stays in ounces; cup-to-gram estimates need an ingredient reference.</p>' : ""}${r.servings && servings(r) !== r.servings ? '<p class="small muted">Ingredient amounts adjusted. Cooking times stay the same.</p>' : ""}${equipmentView([{ recipeId: r.id }])}</section><section class="stack"><h2>Method</h2><ol class="method">${r.steps.map((s) => `<li><h3>${esc(s.title)}</h3><p>${esc(scaledText(s.text))}</p></li>`).join("")}</ol>${r.note ? callout(esc(r.note), { ico: "notebook-pen" }) : ""}${linksView(r.links)}${disclosure("Original recipe", `<pre class="source-text">${esc(originalText(r))}</pre>`, { quiet: true })}<div class="stack-sm">${area("Your cooking notes", "note", state.notes[r.id] || "", 'id="recipe-note" rows="3" placeholder="What worked? What would you change?"')}<div>${button("Save note", "save-note", "", "btn-sm", "check")}</div></div></section></div>`;
+    return `${pageHeader({ title: r.title, eyebrow: r.tag, subtitle: r.description, back: { label: "Recipes", action: "nav", extra: 'data-view="library"' }, actions: `${button("", "favorite", `data-id="${esc(r.id)}" aria-label="${fav ? "Remove from favorites" : "Add to favorites"}" aria-pressed="${fav}"`, `btn-quiet btn-icon favorite ${fav ? "is-favorite" : ""}`, "heart")}${button("Edit recipe", "edit", `data-id="${esc(r.id)}"`, "", "pencil")}` })}<div class="meta"><span>${icon("clock")}${r.time ? r.time + " minutes" : "Time not set"}</span><span>${esc(r.source)}</span></div>${facetBadges(r, "chips chips-sm detail-facets")}<div class="actions spacer">${button("Cook", "start-cook", "", "btn-primary", "flame")}${button("Shop", "review", "", "", "shopping-basket")}${button("Plan", "schedule", "", "", "calendar-days")}${button("Share", "share-recipe", "", "btn-quiet", "share-2")}</div><div class="recipe-columns spacer"><section class="panel stack-sm"><div class="row between"><h2>Ingredients</h2>${unitSelect()}</div><div class="serving-control"><span class="label">${r.servings ? "Servings" : "Original quantities"}</span>${r.servings ? `<div class="stepper">${button("", "servings", 'data-delta="-1" aria-label="Fewer servings" ' + (servings(r) <= 1 ? "disabled" : ""), "btn-quiet btn-icon btn-sm", "minus")}<strong>${servings(r)}</strong>${button("", "servings", 'data-delta="1" aria-label="More servings" ' + (servings(r) >= 24 ? "disabled" : ""), "btn-quiet btn-icon btn-sm", "plus")}</div>` : button("Set yield", "edit", "", "btn-sm")}</div><div>${ingredientRows(r)}</div>${state.units === "us" ? '<p class="small muted">Cups use 240 mL. Weight stays in ounces; cup-to-gram estimates need an ingredient reference.</p>' : ""}${r.servings && servings(r) !== r.servings ? '<p class="small muted">Ingredient amounts adjusted. Cooking times stay the same.</p>' : ""}${equipmentView([{ recipeId: r.id }])}</section><section class="stack"><h2>Method</h2><ol class="method">${r.steps.map((s) => `<li><h3>${esc(s.title)}</h3><p>${esc(scaledText(s.text))}</p></li>`).join("")}</ol>${r.note ? callout(esc(r.note), { ico: "notebook-pen" }) : ""}${linksView(r.links)}${disclosure("Original recipe", `<pre class="source-text">${esc(originalText(r))}</pre>`, { quiet: true })}<div class="stack-sm">${area("Your cooking notes", "note", state.notes[r.id] || "", 'id="recipe-note" rows="3" placeholder="What worked? What would you change?"')}<div>${button("Save note", "save-note", "", "btn-sm", "check")}</div></div></section></div>`;
   }
   function captureView() {
     return `${pageHeader({ title: "Add a recipe", subtitle: "Copy it from a message, or write it yourself. The original text stays with the recipe.", back: { label: "Recipes", action: "nav", extra: 'data-view="library"' } })}<div class="segmented" role="group" aria-label="How to add it"><button type="button" aria-pressed="true">${icon("clipboard-paste")}Paste text</button><button type="button" data-action="manual-recipe" aria-pressed="false">${icon("pen-line")}Write it myself</button></div><form id="paste-form" class="panel stack"><h2>Paste a recipe</h2>${area("Paste a recipe", "text", "", 'id="paste" rows="10" required maxlength="6000" placeholder="Recipe name&#10;Serves 4&#10;&#10;Ingredients&#10;250 g orzo&#10;2 tbsp olive oil&#10;&#10;Method&#10;1. Warm the olive oil…"', "You’ll be able to edit the ingredients and method before saving.")}<div class="form-footer"><button type="button" data-local-submit class="btn btn-primary">${icon("arrow-right")}Review recipe</button></div></form>`;
@@ -442,7 +551,11 @@ async function boot() {
       : draft.originalText
         ? "Review draft"
         : "New recipe";
-    return `${pageHeader({ title, subtitle: draft.id ? "Unknown amounts and timings can stay blank." : "Check the ingredients, servings and method before saving.", back: { label: draft.id ? recipe(draft.id).title : "Recipes", action: "editor-back" } })}<form id="editor-form" class="stack"><section class="panel stack"><h2>Basics</h2><div class="editor-meta">${field("Recipe name", "title", draft.title, 'required maxlength="120"')}${field("Servings", "servings", draft.servings || "", 'min="1" max="24" step="1" placeholder="Unknown"', "number")}</div></section><section class="panel stack"><h2>Ingredients</h2>${area("Ingredients · one per line", "ingredients", draft.ingredientsText, 'rows="8" required maxlength="4000" placeholder="250 g orzo&#10;2 tbsp olive oil"', "Cups use 240 mL, tablespoons 15 mL and teaspoons 5 mL. Unclear amounts stay as written.")}</section><section class="panel stack"><h2>Method</h2>${area("Method · one step per paragraph", "steps", draft.stepsText, 'rows="8" required maxlength="5000" placeholder="Warm the olive oil.&#10;&#10;Add the orzo and stir."')}</section><section class="panel stack"><h2>Equipment</h2>${area("Required tools · one per line", "equipment", draft.equipmentText || "", 'rows="3" maxlength="1500" placeholder="Wide pan&#10;Measuring jug"', "Leave blank if the recipe does not specify its equipment.")}</section>${disclosure("Links and videos", area("Links and videos · one per line", "links", draft.linksText || "", 'rows="3" maxlength="4000" placeholder="https://youtu.be/… Folding the dough&#10;example.com/the-original The written version"', "A web address, then an optional title. YouTube, Vimeo, Facebook, Instagram and TikTok videos play on the recipe page; other links open in your browser."), { open: Boolean(draft.linksText) })}${errorSlot("editor-error")}<div class="form-footer"><button type="button" data-local-submit class="btn btn-primary">${icon("check")}Save recipe</button>${button("Cancel", "editor-back", "", "btn-quiet")}</div></form>`;
+    return `${pageHeader({ title, subtitle: draft.id ? "Unknown amounts and timings can stay blank." : "Check the ingredients, servings and method before saving.", back: { label: draft.id ? recipe(draft.id).title : "Recipes", action: "editor-back" } })}<form id="editor-form" class="stack"><section class="panel stack"><h2>Basics</h2><div class="editor-meta">${field("Recipe name", "title", draft.title, 'required maxlength="120"')}${field("Servings", "servings", draft.servings || "", 'min="1" max="24" step="1" placeholder="Unknown"', "number")}</div><div class="form-grid"><label class="field"><span>Course</span><select class="select" name="course">${[["", "Not recorded"], ...courses.map((c) => [c.key, c.label])].map(([value, label]) => `<option value="${value}" ${(draft.course ?? "") === value ? "selected" : ""}>${label}</option>`).join("")}</select></label><label class="field"><span>Cuisine</span><input name="cuisine" list="cuisines" maxlength="100" value="${esc(draft.cuisine || "")}" placeholder="Italian, Israeli…"><datalist id="cuisines">${cuisineOptions()
+      .map((name) => `<option value="${esc(name)}"></option>`)
+      .join(
+        "",
+      )}</datalist></label></div>${field("Tags · separated by commas", "tags", draft.tagsText || "", 'maxlength="4000" placeholder="Weeknight, Shabbat, kid-friendly"')}<div class="stack-sm"><span class="label">Diet labels</span><div class="chips">${diets.map((d) => `<label class="chip-input"><input type="checkbox" name="diets" value="${d.key}" ${(draft.diets || []).includes(d.key) ? "checked" : ""}><span>${d.label}</span></label>`).join("")}</div><span class="help">What you know about this recipe, not an allergen check.</span></div></section><section class="panel stack"><h2>Ingredients</h2>${area("Ingredients · one per line", "ingredients", draft.ingredientsText, 'rows="8" required maxlength="4000" placeholder="250 g orzo&#10;2 tbsp olive oil"', "Cups use 240 mL, tablespoons 15 mL and teaspoons 5 mL. Unclear amounts stay as written.")}</section><section class="panel stack"><h2>Method</h2>${area("Method · one step per paragraph", "steps", draft.stepsText, 'rows="8" required maxlength="5000" placeholder="Warm the olive oil.&#10;&#10;Add the orzo and stir."')}</section><section class="panel stack"><h2>Equipment</h2>${area("Required tools · one per line", "equipment", draft.equipmentText || "", 'rows="3" maxlength="1500" placeholder="Wide pan&#10;Measuring jug"', "Leave blank if the recipe does not specify its equipment.")}</section>${disclosure("Links and videos", area("Links and videos · one per line", "links", draft.linksText || "", 'rows="3" maxlength="4000" placeholder="https://youtu.be/… Folding the dough&#10;example.com/the-original The written version"', "A web address, then an optional title. YouTube, Vimeo, Facebook, Instagram and TikTok videos play on the recipe page; other links open in your browser."), { open: Boolean(draft.linksText) })}${errorSlot("editor-error")}<div class="form-footer"><button type="button" data-local-submit class="btn btn-primary">${icon("check")}Save recipe</button>${button("Cancel", "editor-back", "", "btn-quiet")}</div></form>`;
   }
 
   // ---------- Plan ----------
@@ -692,7 +805,7 @@ async function boot() {
   }
   function finishedView() {
     const r = recipe();
-    return `${pageHeader({ title: r.title, eyebrow: "Finished", subtitle: "That’s a keeper. Leave a note for next time." })}<form class="panel stack">${area("A note for next time", "note", state.notes[r.id] || "", 'id="finish-note" rows="3" placeholder="A little more lemon? Five extra minutes?"')}<div class="form-footer">${button("Save & return to recipes", "finish-note", "", "btn-primary", "check")}${button("Skip for now", "nav", 'data-view="library"', "btn-quiet")}</div></form>`;
+    return `${pageHeader({ title: r.title, eyebrow: "Finished", subtitle: "That’s a keeper. Leave a note for next time.", back: { label: "Recipe", action: "nav", extra: 'data-view="detail"' } })}<form class="panel stack">${area("A note for next time", "note", state.notes[r.id] || "", 'id="finish-note" rows="3" placeholder="A little more lemon? Five extra minutes?"')}<div class="form-footer">${button("Save & return to recipes", "finish-note", "", "btn-primary", "check")}${button("Skip for now", "nav", 'data-view="library"', "btn-quiet")}</div></form>`;
   }
 
   // ---------- Settings ----------
@@ -1009,9 +1122,18 @@ async function boot() {
         ? state.favorites.filter((x) => x !== id)
         : [...state.favorites, id];
     } else if (a === "filter") state.filter = target.dataset.value;
-    else if (a === "clear-search") {
+    else if (a === "facet") {
+      const { facet, value } = target.dataset,
+        same = (v) => labelKey(v) === labelKey(value);
+      if (Array.isArray(facets[facet]))
+        facets[facet] = facets[facet].some(same)
+          ? facets[facet].filter((v) => !same(v))
+          : [...facets[facet], value];
+      else facets[facet] = same(facets[facet]) ? "" : value;
+    } else if (a === "clear-search") {
       state.query = "";
       state.filter = "all";
+      facets = noFacets();
     } else if (a === "servings") {
       const r = recipe();
       state.servings[r.id] = Math.min(
@@ -1260,6 +1382,10 @@ async function boot() {
       draft.stepsText = String(form.get("steps"));
       draft.equipmentText = String(form.get("equipment") || "");
       draft.linksText = String(form.get("links") || "");
+      draft.course = String(form.get("course") || "") || null;
+      draft.cuisine = String(form.get("cuisine") || "");
+      draft.diets = form.getAll("diets").map(String);
+      draft.tagsText = String(form.get("tags") || "");
     }
   });
   root.addEventListener("change", async (event) => {
@@ -1400,7 +1526,10 @@ async function boot() {
         title,
         description:
           old?.description || "A good recipe, saved for another day.",
-        tag: old?.tag || "Your collection",
+        course: String(values.get("course") || "") || null,
+        cuisine: String(values.get("cuisine") || "").trim(),
+        diets: values.getAll("diets").map(String),
+        tags: parseLabels(values.get("tags")),
         time: old?.time || null,
         servings: selectedYield,
         source: draft.originalText ? "Copied recipe" : "Your recipe",
@@ -1466,7 +1595,7 @@ async function boot() {
       capture: "library",
       editor: draft?.id ? "detail" : "library",
       review: review?.returnView || "detail",
-      finished: "library",
+      finished: "detail",
       meal: "meals",
       "meal-editor": mealDraft?.id ? "meal" : "meals",
     };

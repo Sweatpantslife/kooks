@@ -239,3 +239,27 @@ test("mobile equipment summary flags shared tools, unknown tools and oven temper
     false,
   );
 });
+
+test("mobile drafts carry course, cuisine, diet labels and tags", () => {
+  const pasted = pasteDraft("Rice\nIngredients\n100 g rice\nMethod\nCook.");
+  assert.equal(pasted.course, null);
+  assert.equal(pasted.cuisine, "");
+  assert.deepEqual(pasted.diets, []);
+  assert.equal(pasted.tagsText, "");
+  const draft = editDraft(recipes[0]);
+  assert.equal(draft.course, "main");
+  assert.equal(draft.cuisine, "Mediterranean");
+  assert.deepEqual(draft.diets, ["vegan"]);
+  assert.equal(draft.tagsText, "Weeknight, One pot");
+  const bare = editDraft({
+    ...recipes[0],
+    course: undefined,
+    cuisine: undefined,
+    diets: undefined,
+    tags: undefined,
+  });
+  assert.equal(bare.course, null);
+  assert.equal(bare.cuisine, "");
+  assert.deepEqual(bare.diets, []);
+  assert.equal(bare.tagsText, "");
+});

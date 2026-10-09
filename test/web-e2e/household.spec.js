@@ -425,6 +425,9 @@ test("every section fits phone, tablet and desktop widths without sideways scrol
     "today",
     "recipes",
     "recipes/add",
+    "techniques",
+    "inspiration",
+    "library",
     "plan",
     "plan/meals",
     "plan/leftovers",
@@ -455,4 +458,295 @@ test("every section fits phone, tablet and desktop widths without sideways scrol
       visible: width >= 840,
     });
   }
+});
+
+test("courses, cuisines, diet labels and tags filter the cookbook and round-trip through the editor", async ({
+  page,
+  request,
+  baseURL,
+}) => {
+  const orzo = recipe("Weeknight orzo", {
+    course: "main",
+    cuisine: "Italian",
+    diets: ["vegan"],
+    tags: ["Weeknight", "One pot"],
+    total_minutes: 25,
+  });
+  const salad = recipe("Chopped salad", {
+    course: "salad",
+    cuisine: "Israeli",
+    diets: ["vegan", "gluten_free"],
+    tags: ["No cook"],
+  });
+  const stew = recipe("Slow stew", { tags: ["Weekend"] });
+  for (const item of [orzo, salad, stew])
+    await seed(request, baseURL, "recipe_save", { recipe: item });
+  await page.reload();
+  await page.goto("/#/recipes");
+  const card = (name) => page.locator(".card", { hasText: name });
+  const filters = page.getByLabel("Recipe filters");
+  const row = (label) => filters.locator(".facet-row", { hasText: label });
+  await expect(card(orzo.title)).toContainText("Main");
+  await expect(card(stew.title)).toContainText("Your collection");
+  await row("Course")
+    .getByRole("button", { name: "Main", exact: true })
+    .click();
+  await expect(card(orzo.title)).toHaveCount(1);
+  await expect(card(salad.title)).toHaveCount(0);
+  await expect(card(stew.title)).toHaveCount(0);
+  await expect(page.getByText(/without a course recorded/)).toBeVisible();
+  await filters.getByRole("button", { name: "Clear filters" }).click();
+  await expect(card(salad.title)).toHaveCount(1);
+  // Every chosen diet label must be present.
+  await row("Diet").getByRole("button", { name: "Vegan", exact: true }).click();
+  await expect(card(orzo.title)).toHaveCount(1);
+  await expect(card(salad.title)).toHaveCount(1);
+  await expect(card(stew.title)).toHaveCount(0);
+  await row("Diet")
+    .getByRole("button", { name: "Gluten-free", exact: true })
+    .click();
+  await expect(card(orzo.title)).toHaveCount(0);
+  await expect(card(salad.title)).toHaveCount(1);
+  await filters.getByRole("button", { name: "Clear filters" }).click();
+  // A chip on a card narrows the cookbook to that tag.
+  await card(stew.title)
+    .getByRole("button", { name: "Show Weekend recipes" })
+    .click();
+  await expect(card(stew.title)).toHaveCount(1);
+  await expect(card(orzo.title)).toHaveCount(0);
+  await expect(
+    row("Tags").getByRole("button", { name: "Weekend", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await filters.getByRole("button", { name: "Clear filters" }).click();
+  await row("Show")
+    .getByRole("button", { name: "30 minutes or less", exact: true })
+    .click();
+  await expect(card(orzo.title)).toHaveCount(1);
+  await expect(card(salad.title)).toHaveCount(0);
+  await expect(page.getByText(/without a total time recorded/)).toBeVisible();
+  await filters.getByRole("button", { name: "Clear filters" }).click();
+  // The editor shows the facets and offers the household's existing tags.
+  await page.getByRole("link", { name: orzo.title, exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Show Italian recipes" }),
+  ).toBeVisible();
+  await page.getByRole("link", { name: "Edit recipe" }).click();
+  await expect(page.getByLabel("Course")).toHaveValue("main");
+  await expect(page.getByLabel("Cuisine")).toHaveValue("Italian");
+  await expect(page.getByLabel("Vegan", { exact: true })).toBeChecked();
+  await page.getByLabel("Gluten-free", { exact: true }).check();
+  await page.getByRole("button", { name: "No cook", exact: true }).click();
+  await expect(page.getByLabel("Tags, separated by commas")).toHaveValue(
+    "Weeknight, One pot, No cook",
+  );
+  await page.getByRole("button", { name: "Save recipe" }).click();
+  await expect(h1(page, orzo.title)).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Show Gluten-free recipes" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Show No cook recipes" }),
+  ).toBeVisible();
+  // The dinner finder narrows by course as well.
+  await page.goto("/#/today");
+  await page.getByLabel("Course").selectOption("salad");
+  await page.getByRole("button", { name: "Find dinner" }).click();
+  await expect(card(salad.title)).toHaveCount(1);
+  await expect(card(orzo.title)).toHaveCount(0);
+});
+
+test("techniques, ideas and books: a video technique, an idea written up as a recipe, and an uploaded cookbook", async ({
+  page,
+  request,
+  baseURL,
+}) => {
+  const dish = recipe("Seared orzo");
+  await seed(request, baseURL, "recipe_save", { recipe: dish });
+  await page.reload();
+  const technique = title("Reverse sear");
+  await page.goto("/#/techniques/new");
+  await page.getByLabel("Technique name").fill(technique);
+  await page
+    .getByLabel("Steps · separate steps with a blank line")
+    .fill("Low oven first.\n\nSear last.");
+  await page
+    .getByLabel("Links and videos · one per line")
+    .fill("https://youtu.be/dQw4w9WgXcQ Watch it");
+  await page.getByLabel(dish.title).check();
+  await page.getByRole("button", { name: "Add technique" }).click();
+  await expect(h1(page, technique)).toBeVisible();
+  // The video waits for play, exactly as on a recipe page.
+  await expect(
+    page.getByRole("button", { name: "Play Watch it on YouTube" }),
+  ).toBeVisible();
+  await expect(page.locator(".links iframe")).toHaveCount(0);
+  await page.getByRole("link", { name: dish.title }).click();
+  await expect(
+    page.locator(".connections").getByRole("link", { name: technique }),
+  ).toBeVisible();
+  const idea = title("Crispy chickpea bowls");
+  await page.goto("/#/inspiration/new");
+  await page.getByLabel("Idea", { exact: true }).fill(idea);
+  await page.getByLabel("Where it came from").fill("Noa’s dinner");
+  await page.getByLabel("Notes", { exact: true }).fill("Tahini and lemon.");
+  await page
+    .getByLabel("Links and videos · one per line")
+    .fill("www.instagram.com/reel/C1abcdefg/ The reel");
+  await page.getByRole("button", { name: "Add idea" }).click();
+  await expect(h1(page, idea)).toBeVisible();
+  await expect(page.locator(".tag", { hasText: "Want to try" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Play The reel on Instagram" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "We tried it" }).click();
+  await expect(page.locator(".tag", { hasText: "Tried it" })).toBeVisible();
+  await page.getByRole("link", { name: "Write it up as a recipe" }).click();
+  await expect(page.getByLabel("Recipe name")).toHaveValue(idea);
+  await expect(page.getByLabel("Recipe notes")).toHaveValue(
+    "Tahini and lemon.",
+  );
+  await page.getByLabel("Ingredients · one per line").fill("400 g chickpeas");
+  await page
+    .getByLabel("Method · separate steps with a blank line")
+    .fill("Roast until crisp.");
+  await page.getByRole("button", { name: "Save recipe" }).click();
+  await expect(h1(page, idea)).toBeVisible();
+  await expect(
+    page.locator(".connections").getByRole("link", { name: idea }),
+  ).toBeVisible();
+  await page.goto("/#/inspiration");
+  await expect(page.locator(".card", { hasText: idea })).toContainText(
+    "In the cookbook",
+  );
+  const book = title("Family cookbook");
+  await page.goto("/#/library/new");
+  await page.locator('input[name="file"]').setInputFiles({
+    name: "family.pdf",
+    mimeType: "application/pdf",
+    buffer: Buffer.from("%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n"),
+  });
+  await page.getByLabel("Title", { exact: true }).fill(book);
+  await page.getByLabel("Author").fill("Grandma");
+  await page.getByRole("button", { name: "Add to shelf" }).click();
+  await expect(h1(page, book)).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: /Download PDF/ }),
+  ).toHaveAttribute("href", /^\/api\/assets\/[^?]+\?download=1$/);
+  await page.getByLabel("What’s there").fill("The braise");
+  await page.getByLabel("Page", { exact: true }).fill("12");
+  await page.getByRole("button", { name: "Add bookmark" }).click();
+  await expect(page.getByText("Page 12")).toBeVisible();
+  // The PDF frame is created only when asked for, at the bookmarked page.
+  await expect(page.locator(".reader iframe")).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "Read The braise on page 12" })
+    .click();
+  await expect(page.locator(".reader iframe")).toHaveAttribute(
+    "src",
+    /^\/api\/assets\/[^#]+#page=12$/,
+  );
+  await page.goto("/#/library");
+  const card = page.locator(".card.book", { hasText: book });
+  await expect(card).toContainText("PDF");
+  await expect(card).toContainText("1 bookmark");
+});
+
+test("every page that opens from another page offers a way back to it", async ({
+  page,
+  request,
+  baseURL,
+}) => {
+  const dish = recipe("Braised leeks");
+  const { record: saved } = await seed(request, baseURL, "recipe_save", {
+    recipe: dish,
+  });
+  const { record: idea } = await seed(request, baseURL, "inspiration_save", {
+    inspiration: { title: title("Leeks with brown butter") },
+  });
+  await page.reload();
+  const back = page.locator("a.back");
+  // The way back names where the page was opened from: the list of its
+  // section, or the record it belongs to.
+  const leadsBack = async (route, label, target) => {
+    await page.goto(`/#/${route}`);
+    await expect(back, route).toHaveText(label);
+    await expect(back, route).toHaveAttribute("href", `#/${target}`);
+  };
+  await leadsBack("recipes/add", "Recipes", "recipes");
+  await leadsBack("recipes/new", "Recipes", "recipes");
+  await leadsBack(
+    `recipes/${saved.id}/edit`,
+    dish.title,
+    `recipes/${saved.id}`,
+  );
+  await leadsBack(
+    `recipes/${saved.id}/variant`,
+    dish.title,
+    `recipes/${saved.id}`,
+  );
+  await leadsBack(
+    `recipes/${saved.id}/memory`,
+    dish.title,
+    `recipes/${saved.id}`,
+  );
+  await leadsBack(
+    `recipes/new/inspiration/${idea.id}`,
+    idea.data.title,
+    `inspiration/${idea.id}`,
+  );
+  await leadsBack("techniques/new", "Techniques", "techniques");
+  await leadsBack("inspiration/new", "Ideas", "inspiration");
+  await leadsBack(
+    `inspiration/${idea.id}/edit`,
+    idea.data.title,
+    `inspiration/${idea.id}`,
+  );
+  await leadsBack("plan/leftovers/new", "Leftovers", "plan/leftovers");
+  await leadsBack(
+    `plan/leftovers/new/${saved.id}`,
+    dish.title,
+    `recipes/${saved.id}`,
+  );
+  await leadsBack(
+    `shop/review/recipe/${saved.id}`,
+    dish.title,
+    `recipes/${saved.id}`,
+  );
+  // Addresses from before the redesign land on the same pages.
+  await leadsBack(`edit/${saved.id}`, dish.title, `recipes/${saved.id}`);
+  await leadsBack(
+    `new-recipe/inspiration/${idea.id}`,
+    idea.data.title,
+    `inspiration/${idea.id}`,
+  );
+  const book = title("Shelf book");
+  await page.goto("/#/library/new");
+  await page.locator('input[name="file"]').setInputFiles({
+    name: "shelf.pdf",
+    mimeType: "application/pdf",
+    buffer: Buffer.from("%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n"),
+  });
+  await page.getByLabel("Title", { exact: true }).fill(book);
+  await page.getByRole("button", { name: "Add to shelf" }).click();
+  await expect(h1(page, book)).toBeVisible();
+  await expect(back).toHaveText("Books");
+  const bookId = page.url().split("/").pop();
+  await leadsBack(`library/${bookId}/edit`, book, `library/${bookId}`);
+  // A cooking session leads back to Cook, and the leftovers form opened from
+  // a finished session leads back to that session.
+  await page.goto(`/#/recipes/${saved.id}`);
+  await page.getByRole("button", { name: "Cook", exact: true }).click();
+  await expect(h1(page, dish.title)).toBeVisible();
+  await expect(back).toHaveText("Cook");
+  const session = page.url().split("/").pop();
+  await page.getByRole("button", { name: "Finish cooking" }).click();
+  await expect(page.getByText("Finished", { exact: true })).toBeVisible();
+  await expect(back).toHaveText("Cook");
+  await page.getByRole("link", { name: "Record leftovers" }).click();
+  await expect(back).toHaveText(dish.title);
+  await back.click();
+  await expect(page.getByText("Finished", { exact: true })).toBeVisible();
+  expect(page.url()).toContain(`#/cook/${session}`);
+  await back.click();
+  await expect(h1(page, "Cook")).toBeVisible();
 });
