@@ -1,5 +1,6 @@
 import http from "node:http";
 import { readFile } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { resolve, extname } from "node:path";
 import { randomBytes, timingSafeEqual } from "node:crypto";
@@ -24,8 +25,22 @@ export function createWebServer({
   store,
   host = "127.0.0.1",
   accessToken = "",
+  publicOrigin = "",
 }) {
-  if (!isLoopback(host) && accessToken.length < 24)
+  const external = publicOrigin ? new URL(publicOrigin) : null;
+  if (
+    external &&
+    (external.protocol !== "https:" ||
+      external.username ||
+      external.password ||
+      external.pathname !== "/" ||
+      external.search ||
+      external.hash)
+  )
+    throw new Error(
+      "KOOKS_PUBLIC_ORIGIN must be an HTTPS origin without a path.",
+    );
+  if ((!isLoopback(host) || external) && accessToken.length < 24)
     throw new Error(
       "LAN access requires KOOKS_ACCESS_TOKEN with at least 24 characters.",
     );
@@ -78,9 +93,16 @@ export function createWebServer({
     );
     try {
       const url = new URL(req.url, `http://${req.headers.host}`);
+      if (url.pathname === "/healthz" && req.method === "GET")
+        return send(res, 200, { ok: true });
+      if (external && req.headers.host !== external.host)
+        return send(res, 403, { message: "Unrecognized host." });
       if (isLoopback(host) && !isLoopback(url.hostname.replace(/^\[|\]$/g, "")))
         return send(res, 403, { message: "Unrecognized host." });
-      if (req.method === "POST" && req.headers.origin !== url.origin)
+      if (
+        req.method === "POST" &&
+        req.headers.origin !== (external?.origin ?? url.origin)
+      )
         return send(res, 403, {
           message: "Open Kooks directly to make changes.",
         });
@@ -115,7 +137,7 @@ export function createWebServer({
         sessions.set(session, Date.now() + 24 * 60 * 60 * 1000);
         res.setHeader(
           "Set-Cookie",
-          `kooks_session=${session}; HttpOnly; SameSite=Strict; Path=/; Max-Age=86400`,
+          `kooks_session=${session}; HttpOnly; SameSite=Strict; Path=/; Max-Age=86400${external ? "; Secure" : ""}`,
         );
         return send(res, 200, { ok: true });
       }
@@ -249,7 +271,10 @@ if (
   const server = createWebServer({
     store,
     host,
-    accessToken: process.env.KOOKS_ACCESS_TOKEN ?? "",
+    accessToken: process.env.KOOKS_ACCESS_TOKEN_FILE
+      ? readFileSync(process.env.KOOKS_ACCESS_TOKEN_FILE, "utf8").trim()
+      : (process.env.KOOKS_ACCESS_TOKEN ?? ""),
+    publicOrigin: process.env.KOOKS_PUBLIC_ORIGIN ?? "",
   });
   server.listen(port, host, () =>
     console.log(`Kooks is ready at http://${host}:${port}`),
