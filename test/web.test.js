@@ -33,7 +33,7 @@ test("browser API shares persistent actions, reports revisions and rejects stale
   const { origin, post } = await setup(t);
   const page = await fetch(origin);
   assert.equal(page.status, 200);
-  assert.match(await page.text(), /Your everyday kitchen/);
+  assert.match(await page.text(), /<title>Kooks<\/title>/);
   assert.match(
     page.headers.get("content-security-policy"),
     /frame-ancestors 'none'/,

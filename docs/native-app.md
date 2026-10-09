@@ -40,12 +40,13 @@ For a physical iPhone, select your Apple development team in Xcode's Signing & C
 
 ## Included experience
 
+- The same navigation as the browser app: Today, Recipes, Plan (Week and Meals), Shop and Cook, with backup, preferences, timer alerts and the assistant preview under the Settings gear. See [the IA and UX guide](ia-ux.md).
 - Recipe library, ingredient search, favorites, manual/paste entry, editing, original recipe text, serving adjustments, required equipment, cooking notes, and links and videos: YouTube, Vimeo, Facebook, Instagram and TikTok players load from the provider only when play is pressed; other links open in the browser.
 - Composed meals with independent dish portions and combined equipment. Reviewed shopping contributions combine matching ingredients, avoid duplicate additions, and clear checkmarks when amounts change.
 - A simple Monday–Sunday plan with saved dish portions.
 - Cooking sessions with independent dish progress and timers that retain their deadlines after navigation and app restarts.
 - Native timer notifications, share sheet, haptics, Android back navigation, safe-area spacing, app icons, and launch screens.
-- Settings with palette/layout choices and mobile backup export/restore. Restores validate the whole backup and ask explicitly before replacing the current device's cookbook.
+- Settings with theme (system, light or dark), palette, layout and spacing choices, measurement display, and mobile backup export/restore. Restores validate the whole backup and ask explicitly before replacing the current device's cookbook.
 
 Six labeled example recipes and one example meal help with first launch. English and metric remain the initial defaults. The inherited kitchen-volume convention is stated in the editor: cup = 240 mL, tablespoon = 15 mL, teaspoon = 5 mL. Mass-to-volume conversions are not inferred.
 
@@ -53,11 +54,11 @@ Six labeled example recipes and one example meal help with first launch. English
 
 The native app keeps `kooks/cookbook.json` and the last validated snapshot `kooks/cookbook.previous.json` in `Directory.Data`. Writes are serialized; a temporary file is written before replacing the primary file. If a saved file is corrupt, the previous valid snapshot is recovered. Unrecoverable/read-permission errors stop loading without resetting data. Storage failures remain visible and allow an export of the in-memory cookbook.
 
-Use **Settings → Export backup** to save or share a `kooks-mobile` JSON file. Restore is supported across the iOS, Android, and browser versions of this interface. Device OS backup services may also include app data according to the user's system settings. Uninstalling removes local app data; keep exported copies.
+Use **Settings › Backup › Export backup** to save or share a `kooks-mobile` JSON file. Restore is supported across the iOS, Android, and browser versions of this interface. Device OS backup services may also include app data according to the user's system settings. Uninstalling removes local app data; keep exported copies.
 
-The mobile cookbook is separate from `.data/kooks.sqlite`, the MCP tools, and the desktop server. It does not yet synchronize household members or import the MCP backup format. The mobile assistant shows explicitly labeled sample actions; AI account login and live AI inference have not been connected. Incoming share-menu imports, website/photo extraction, multi-day batch planning, and production household authentication are outside this native implementation.
+The mobile cookbook is separate from `.data/kooks.sqlite`, the MCP tools, and the desktop server. It does not yet synchronize household members or import the MCP backup format. Settings › Assistant shows explicitly labeled sample actions; AI account login and live AI inference have not been connected. Incoming share-menu imports, website/photo extraction, multi-day batch planning, and production household authentication are outside this native implementation.
 
-Notifications are requested when the user starts a timer or enables alerts in Settings. Pausing, removing, or completing timers cancels their pending notifications; resuming schedules the new deadline. Android uses ordinary notifications without requesting special exact-alarm access, so alerts can be delayed. Permission, Focus/Do Not Disturb, and battery settings affect delivery. These are reminders, not a guarantee of exact or audible locked-screen alarms. See the [Local Notifications plugin](https://capacitorjs.com/docs/apis/local-notifications).
+Notifications are requested when the user starts a timer or enables alerts in Settings › Timers. Pausing, removing, or completing timers cancels their pending notifications; resuming schedules the new deadline. Android uses ordinary notifications without requesting special exact-alarm access, so alerts can be delayed. Permission, Focus/Do Not Disturb, and battery settings affect delivery. These are reminders, not a guarantee of exact or audible locked-screen alarms. See the [Local Notifications plugin](https://capacitorjs.com/docs/apis/local-notifications).
 
 The iOS privacy manifest is included in the Xcode Resources build phase and declares file-timestamp and UserDefaults access used by storage/plugins, following the [Filesystem](https://capacitorjs.com/docs/apis/filesystem) and [Preferences privacy guidance](https://capacitorjs.com/docs/apis/preferences). No analytics, account credentials, or remote server URL are configured in the native app.
 

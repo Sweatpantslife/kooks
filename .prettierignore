@@ -7,3 +7,6 @@ package-lock.json
 test-results/
 playwright-report/
 .data/
+
+# Generated from Lucide by scripts/icons.mjs
+shared/icons.js

@@ -31,15 +31,14 @@ const recipe = (name, overrides = {}) => ({
   steps: [{ text: "Toast the orzo." }, { text: "Simmer until tender." }],
   ...overrides,
 });
+const h1 = (page, name) => page.getByRole("heading", { level: 1, name });
 
 test.beforeEach(async ({ page }) => {
   page.on("pageerror", (error) => {
     throw error;
   });
   await page.goto("/#/today");
-  await expect(
-    page.getByRole("heading", { name: "What sounds good today?" }),
-  ).toBeVisible();
+  await expect(h1(page, "Today")).toBeVisible();
 });
 
 test("paste a recipe, review the draft, save it, rescale and read the original", async ({
@@ -47,15 +46,14 @@ test("paste a recipe, review the draft, save it, rescale and read the original",
 }) => {
   const name = title("Family rice");
   await page.getByRole("link", { name: "Add recipe" }).click();
+  await expect(h1(page, "Add a recipe")).toBeVisible();
   await page
     .getByLabel("Recipe text")
     .fill(
       `${name}\nServes 2\n\nIngredients\n100 g rice\n200 ml water\n\nMethod\nRinse the rice.\n\nSimmer gently.`,
     );
   await page.getByRole("button", { name: "Review pasted recipe" }).click();
-  await expect(
-    page.getByRole("heading", { name: "Check it, then make it yours." }),
-  ).toBeVisible();
+  await expect(h1(page, "Review draft")).toBeVisible();
   await expect(page.getByLabel("Ingredients · one per line")).toHaveValue(
     /100 g rice/,
   );
@@ -65,7 +63,7 @@ test("paste a recipe, review the draft, save it, rescale and read the original",
     )
     .check();
   await page.getByRole("button", { name: "Save reviewed recipe" }).click();
-  await expect(page.getByRole("heading", { name })).toBeVisible();
+  await expect(h1(page, name)).toBeVisible();
   const rice = page.locator(".ingredient", { hasText: "rice" });
   await expect(rice).toContainText("100 g");
   const servings = page.locator('form[data-form="servings"]');
@@ -99,20 +97,23 @@ test("pantry, household tastes and effort filters shape today's suggestions", as
   await seed(request, baseURL, "recipe_save", { recipe: quick });
   await seed(request, baseURL, "recipe_save", { recipe: vague });
   await page.reload();
+  // Pantry lives under Shop; the old #/pantry address still gets there.
   await page.goto("/#/pantry");
+  await expect(page).toHaveURL(/#\/shop\/pantry$/);
+  await page.getByRole("link", { name: "Add ingredient" }).click();
   await page.getByLabel("Ingredient name").fill("Zucchini");
   await page.getByLabel("Use this soon").check();
   await page.getByRole("button", { name: "Add to pantry" }).click();
   await expect(
-    page.locator(".list-row", { hasText: "Zucchini" }).first(),
+    page.locator(".list-item", { hasText: "Zucchini" }).first(),
   ).toContainText("Use soon ✓");
-  await page.goto("/#/household");
+  await page.goto("/#/settings/household/new");
   const person = title("Ari");
   await page.getByLabel("Name", { exact: true }).fill(person);
   await page
     .getByLabel("Likes · ingredients or tags, separated by commas")
     .fill("Rice");
-  await page.getByRole("button", { name: "Add household member" }).click();
+  await page.getByRole("button", { name: "Add person" }).click();
   await expect(page.getByRole("heading", { name: person })).toBeVisible();
   await page.goto("/#/today");
   await page.getByLabel(person).check();
@@ -122,6 +123,7 @@ test("pantry, household tastes and effort filters shape today's suggestions", as
   await expect(card).toContainText(`${person} likes Rice`);
   await expect(card).toContainText("1 shopping gap");
   await expect(page.locator(".card", { hasText: vague.title })).toHaveCount(1);
+  await page.getByText("More filters").click();
   await page.getByLabel("Hands-on minutes, at most").fill("15");
   await page.getByRole("button", { name: "Find dinner" }).click();
   await expect(page.getByText(/need effort details/)).toBeVisible();
@@ -146,20 +148,22 @@ test("a planned meal reviews into one shopping list without duplicating grocerie
   await seed(request, baseURL, "recipe_save", { recipe: side });
   const meal = title("Friday dinner");
   await page.reload();
-  await page.goto("/#/meals");
+  await page.goto("/#/plan/meals");
+  await page.getByRole("link", { name: "New meal" }).click();
   await page.getByLabel("Meal name").fill(meal);
-  await page.getByLabel(main.title).check();
-  await page.getByLabel(side.title).check();
+  await page.getByLabel(main.title, { exact: true }).check();
+  await page.getByLabel(side.title, { exact: true }).check();
   await page.getByRole("button", { name: "Save meal" }).click();
   await expect(page.getByRole("heading", { name: meal })).toBeVisible();
   await page.goto("/#/plan");
-  await page.getByText("Plan something to cook").first().click();
-  const planForm = page.locator('form[data-form="plan"]').first();
+  const monday = page.locator(".day").first();
+  await monday.locator("summary").click();
+  const planForm = monday.locator('form[data-form="plan"]');
   await planForm
     .getByLabel("Recipe or meal")
     .selectOption({ label: `${meal} · Meal` });
   await planForm.getByRole("button", { name: "Add to this day" }).click();
-  const planned = page.locator(".list-row", { hasText: meal });
+  const planned = page.locator(".list-item", { hasText: meal });
   await expect(planned).toBeVisible();
   const shopPlanned = async () => {
     await planned.getByRole("link", { name: "Shop" }).click();
@@ -168,16 +172,12 @@ test("a planned meal reviews into one shopping list without duplicating grocerie
     ).toBeVisible();
     const create = page.getByRole("button", { name: "Create shopping list" });
     if (await create.isVisible()) await create.click();
-    await expect(
-      page.getByRole("heading", { name: `Shop for ${meal}` }),
-    ).toBeVisible();
-    await page.getByRole("button", { name: "Apply to shopping list" }).click();
-    await expect(
-      page.getByRole("heading", { name: "Pick up something good." }),
-    ).toBeVisible();
+    await expect(h1(page, `Shop for ${meal}`)).toBeVisible();
+    await page.getByRole("button", { name: "Add to shopping list" }).click();
+    await expect(h1(page, "Shop")).toBeVisible();
   };
   await shopPlanned();
-  const oil = page.locator(".list-row", { hasText: "Olive oil" });
+  const oil = page.locator(".list-item", { hasText: "Olive oil" });
   await expect(oil).toHaveCount(1);
   await expect(oil).toContainText("45 mL");
   await page.goto("/#/plan");
@@ -187,11 +187,11 @@ test("a planned meal reviews into one shopping list without duplicating grocerie
   await expect(oil).toContainText("45 mL");
   await expect(
     page
-      .locator(".list-row")
+      .locator(".list-item")
       .filter({ has: page.getByText("Orzo", { exact: true }) }),
   ).toContainText("250 g");
   await page.getByRole("checkbox", { name: "Bought Olive oil" }).check();
-  await expect(page.getByRole("status")).toContainText("Saved.");
+  await expect(page.locator("#toast")).toContainText("Saved.");
   await page.reload();
   await expect(
     page.getByRole("checkbox", { name: "Bought Olive oil" }),
@@ -211,17 +211,16 @@ test("cooking together records progress, tasks and timers, then leftovers reach 
   await seed(request, baseURL, "member_save", { member: { name: cook } });
   await page.reload();
   await page.goto(`/#/recipes/${record.id}`);
-  await page.getByRole("button", { name: "Start cooking" }).click();
-  await expect(
-    page.getByRole("heading", { level: 1, name: dish.title }),
-  ).toBeVisible();
+  await page.getByRole("button", { name: "Cook", exact: true }).click();
+  await expect(h1(page, dish.title)).toBeVisible();
+  await expect(page.getByText("Cooking", { exact: true })).toBeVisible();
   await expect(page.getByText("0 of 2 steps complete")).toBeVisible();
   await page.getByRole("button", { name: "Done, next step" }).click();
   await expect(page.getByText("1 of 2 steps complete")).toBeVisible();
   await page.getByLabel("New task").fill("Chop the herbs");
   await page.getByLabel("Who’s doing it?").selectOption({ label: cook });
   await page.getByRole("button", { name: "Add cooking task" }).click();
-  const task = page.locator(".task-row", { hasText: "Chop the herbs" });
+  const task = page.locator(".task", { hasText: "Chop the herbs" });
   await expect(task).toBeVisible();
   await expect(task.getByRole("combobox")).toHaveValue(/./);
   await page.getByLabel("Timer name").fill("Orzo");
@@ -233,15 +232,12 @@ test("cooking together records progress, tasks and timers, then leftovers reach 
   await expect(timer.locator("[data-deadline]")).toHaveText(/0[01]:\d\d/);
   await page.getByLabel("A note about this meal").fill("Crispy top.");
   await page.getByRole("button", { name: "Finish cooking" }).click();
-  await expect(
-    page.getByRole("heading", { name: "That’s one for the cookbook." }),
-  ).toBeVisible();
+  await expect(page.getByText("Finished", { exact: true })).toBeVisible();
+  await expect(h1(page, dish.title)).toBeVisible();
   await page.getByRole("link", { name: "Record leftovers" }).click();
   await expect(page.getByLabel("Portions actually cooked")).toHaveValue("4");
   await page.getByRole("button", { name: "Record cooked batch" }).click();
-  await expect(
-    page.getByRole("heading", { level: 1, name: dish.title }),
-  ).toBeVisible();
+  await expect(h1(page, dish.title)).toBeVisible();
   const allocation = page.locator('form[data-form="allocation"]');
   await allocation.getByLabel("Portions", { exact: true }).fill("2");
   await allocation.getByLabel("Meal date (optional)").fill(today());
@@ -252,13 +248,13 @@ test("cooking together records progress, tasks and timers, then leftovers reach 
   ).toBeVisible();
   await page.goto("/#/plan");
   await expect(
-    page.locator(".list-row", { hasText: dish.title }).filter({
+    page.locator(".list-item", { hasText: dish.title }).filter({
       hasText: "Already cooked",
     }),
   ).toBeVisible();
 });
 
-test("confirmed prices cost a recipe and a weekly budget appears on the spending page", async ({
+test("confirmed prices cost a recipe and a weekly budget appears under settings", async ({
   page,
   request,
   baseURL,
@@ -271,7 +267,10 @@ test("confirmed prices cost a recipe and a weekly budget appears on the spending
     recipe: plain,
   });
   await page.reload();
+  // Spending moved under Settings; the old address redirects.
   await page.goto("/#/spending");
+  await expect(page).toHaveURL(/#\/settings\/prices$/);
+  await page.getByRole("link", { name: "Add price" }).click();
   const price = page.locator('form[data-form="price"]');
   await price.getByLabel("Ingredient name").fill("Rice");
   await price.getByLabel("Package amount").fill("1");
@@ -297,7 +296,7 @@ test("confirmed prices cost a recipe and a weekly budget appears on the spending
   await expect(cost).toContainText("$1.00 per portion");
 });
 
-test("cooking memories and preferred variations stay attached to the original", async ({
+test("cooking notes and preferred variations stay attached to the original", async ({
   page,
   request,
   baseURL,
@@ -308,24 +307,20 @@ test("cooking memories and preferred variations stay attached to the original", 
   });
   await page.reload();
   await page.goto(`/#/recipes/${record.id}`);
-  await page.getByRole("link", { name: "Add a cooking memory" }).click();
+  await page.getByRole("link", { name: "Add a cooking note" }).click();
   await page.getByLabel("How did it turn out?").fill("A keeper.");
   await page
     .getByLabel("What should you remember next time?")
     .fill("Less salt next time.");
-  await page.getByRole("button", { name: "Save cooking memory" }).click();
-  await expect(
-    page.getByRole("heading", { name: original.title }),
-  ).toBeVisible();
+  await page.getByRole("button", { name: "Save cooking note" }).click();
+  await expect(h1(page, original.title)).toBeVisible();
   await expect(page.getByText("Less salt next time.").first()).toBeVisible();
   await page.getByRole("link", { name: "Make a variation" }).click();
   await expect(page.getByLabel("Recipe name")).toHaveValue(
     `${original.title} · My version`,
   );
   await page.getByRole("button", { name: "Save variation" }).click();
-  await expect(
-    page.getByRole("heading", { name: `${original.title} · My version` }),
-  ).toBeVisible();
+  await expect(h1(page, `${original.title} · My version`)).toBeVisible();
   await page.reload();
   await page.goto(`/#/recipes/${record.id}`);
   await expect(
@@ -340,6 +335,7 @@ test("the cookbook exports as a portable Kooks backup", async ({
 }) => {
   const kept = recipe("Exported soup");
   await seed(request, baseURL, "recipe_save", { recipe: kept });
+  await page.goto("/#/settings/backup");
   const downloadEvent = page.waitForEvent("download");
   await page.getByRole("button", { name: "Export cookbook" }).click();
   const download = await downloadEvent;
@@ -408,9 +404,7 @@ test("links and videos save with a recipe, play on request and round-trip throug
     "https://example.com/orzo The written recipe\nwww.instagram.com/reel/C1abcdefg/ Folding the dough",
   );
   await page.getByRole("button", { name: "Save recipe" }).click();
-  await expect(
-    page.getByRole("heading", { level: 1, name: dish.title }),
-  ).toBeVisible();
+  await expect(h1(page, dish.title)).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Play Folding the dough on Instagram" }),
   ).toBeVisible();
@@ -418,8 +412,47 @@ test("links and videos save with a recipe, play on request and round-trip throug
     0,
   );
   // The cooking snapshot keeps the links as plain links beside the steps.
-  await page.getByRole("button", { name: "Start cooking" }).click();
+  await page.getByRole("button", { name: "Cook", exact: true }).click();
   await expect(
     page.getByRole("link", { name: "Folding the dough" }),
   ).toHaveAttribute("href", "https://www.instagram.com/reel/C1abcdefg/");
+});
+
+test("every section fits phone, tablet and desktop widths without sideways scrolling", async ({
+  page,
+}) => {
+  const routes = [
+    "today",
+    "recipes",
+    "recipes/add",
+    "plan",
+    "plan/meals",
+    "plan/leftovers",
+    "shop",
+    "shop/pantry",
+    "cook",
+    "settings/household",
+    "settings/prices",
+    "settings/preferences",
+  ];
+  for (const width of [320, 390, 768, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const route of routes) {
+      await page.goto(`/#/${route}`);
+      await expect(page.locator("h1.page-title")).toBeVisible();
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth,
+        ),
+        `${route} at ${width}px`,
+      ).toBe(true);
+    }
+    // Phones get bottom tabs; desktops get the sidebar. Never both.
+    await expect(page.locator(".tabbar")).toBeVisible({
+      visible: width < 840,
+    });
+    await expect(page.locator(".sidebar")).toBeVisible({
+      visible: width >= 840,
+    });
+  }
 });

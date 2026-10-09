@@ -12,6 +12,8 @@ Reconciled October 9, 2026 against the source. See [the developer handoff](hando
 - Backup/restore and reversible action history exist in the backend; mobile has its own backup format and storage recovery. Prototype-era statements saying no backups/history exist do not describe the present code.
 - Logic both clients need lives in `shared/` as dependency-free modules; image bytes live outside record documents and history (database schema 2).
 - Imported recipe text is data. Preserve source values, unknown quantities, independent shopping contributions, and cooking snapshots. Retries and undo must not overwrite later changes.
+- Both interfaces share one information architecture: Today, Recipes, Plan (Week, Meals, Leftovers), Shop (List, Pantry) and Cook are the destinations; Household, Prices & budget, Backup and Preferences sit under Settings. Cooking is a mode entered from a recipe, meal or planned day, and the Cook tab carries a badge while something is on the stove. Page titles equal navigation labels; the warm voice lives in subtitles, empty states and confirmations. `docs/ia-ux.md` is the authority.
+- The warm paper, olive and serif identity is kept and expressed as shared design tokens with a system-following dark theme. Components and icons are shared modules under `shared/`, so neither app styles a control on its own.
 - Recipe links are stored addresses, never fetched by the server. Both apps embed YouTube, Vimeo, Facebook, Instagram and TikTok players from `shared/links.js`, load a player only when the person presses play, and keep every other link a plain link.
 
 ## Open decisions and unfinished delivery
