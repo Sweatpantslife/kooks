@@ -698,7 +698,7 @@ async function boot() {
   }
   function finishedView() {
     const r = recipe();
-    return `<div class="k-empty" style="padding-top:30px">${icon("check")}<div class="k-kicker">Made with care</div><h1>That’s a keeper.</h1><p>${esc(r.title)}</p></div><label class="k-field"><span>A note for next time</span><textarea id="k-finish-note" class="k-input" placeholder="A little more lemon? Five extra minutes?">${esc(state.notes[r.id] || "")}</textarea></label><div class="k-actions">${button("Save & return to recipes", "finish-note", "", "k-primary")}${button("Skip for now", "nav", 'data-view="library"', "k-quiet")}</div>`;
+    return `${button(icon("arrow-left") + "Recipe", "nav", 'data-view="detail"', "k-quiet k-back")}<div class="k-empty" style="padding-top:30px">${icon("check")}<div class="k-kicker">Made with care</div><h1>That’s a keeper.</h1><p>${esc(r.title)}</p></div><label class="k-field"><span>A note for next time</span><textarea id="k-finish-note" class="k-input" placeholder="A little more lemon? Five extra minutes?">${esc(state.notes[r.id] || "")}</textarea></label><div class="k-actions">${button("Save & return to recipes", "finish-note", "", "k-primary")}${button("Skip for now", "nav", 'data-view="library"', "k-quiet")}</div>`;
   }
   function captureView() {
     return `${button(icon("arrow-left") + "Recipes", "nav", 'data-view="library"', "k-quiet k-back")}<div class="k-heading"><div><div class="k-kicker">Keep a good thing</div><h1>A new recipe.</h1><p class="k-muted k-small">Copy it from a message. Make it yours.</p></div></div><form id="k-paste-form" class="k-stack"><label class="k-field"><span>Paste a recipe</span><textarea class="k-input" id="k-paste" name="text" style="min-height:260px" required maxlength="6000" placeholder="Recipe name&#10;Serves 4&#10;&#10;Ingredients&#10;250 g orzo&#10;2 tbsp olive oil&#10;&#10;Method&#10;1. Warm the olive oil…"></textarea></label><div class="k-row"><button type="button" data-local-submit class="k-button k-primary cursor-interaction">Review recipe ${icon("arrow-right")}</button>${button("Write it myself", "manual-recipe", "", "k-quiet")}</div><p class="k-note">You’ll be able to edit the ingredients and method before saving. The original message stays with your recipe.</p></form>`;
@@ -1430,7 +1430,7 @@ async function boot() {
       editor: draft?.id ? "detail" : "library",
       review: review?.returnView || "detail",
       cook: state.session?.mealId ? "meal" : "detail",
-      finished: "library",
+      finished: "detail",
       meal: "meals",
       "meal-editor": mealDraft?.id ? "meal" : "meals",
       settings: "library",

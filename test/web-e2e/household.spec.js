@@ -626,3 +626,84 @@ test("techniques, ideas and the shelf: a video technique, an idea written up as 
   await expect(card).toContainText("PDF");
   await expect(card).toContainText("1 bookmark");
 });
+
+test("every page that opens from another page offers a way back to it", async ({
+  page,
+  request,
+  baseURL,
+}) => {
+  const dish = recipe("Braised leeks");
+  const { record: saved } = await seed(request, baseURL, "recipe_save", {
+    recipe: dish,
+  });
+  const { record: idea } = await seed(request, baseURL, "inspiration_save", {
+    inspiration: { title: title("Leeks with brown butter") },
+  });
+  await page.reload();
+  const back = page.locator("a.back");
+  const leadsBack = async (route, label, target) => {
+    await page.goto(`/#/${route}`);
+    await expect(back, route).toHaveText(label);
+    await expect(back, route).toHaveAttribute("href", `#/${target}`);
+  };
+  await leadsBack("capture", "Recipes", "recipes");
+  await leadsBack("new-recipe", "Recipes", "recipes");
+  await leadsBack(`edit/${saved.id}`, "Recipe", `recipes/${saved.id}`);
+  await leadsBack(`variant/${saved.id}`, "Recipe", `recipes/${saved.id}`);
+  await leadsBack(`memory/${saved.id}`, "Recipe", `recipes/${saved.id}`);
+  await leadsBack(
+    `new-recipe/inspiration/${idea.id}`,
+    "Idea",
+    `inspiration/${idea.id}`,
+  );
+  await leadsBack("techniques/new", "Techniques", "techniques");
+  await leadsBack("inspiration/new", "Inspiration", "inspiration");
+  await leadsBack(
+    `inspiration/${idea.id}/edit`,
+    "Idea",
+    `inspiration/${idea.id}`,
+  );
+  await leadsBack("new-batch", "Leftovers", "leftovers");
+  await leadsBack(`new-batch/${saved.id}`, "Recipe", `recipes/${saved.id}`);
+  await leadsBack(`review/recipe/${saved.id}`, "Recipe", `recipes/${saved.id}`);
+  const book = title("Shelf book");
+  await page.goto("/#/library");
+  await page.locator('input[name="file"]').setInputFiles({
+    name: "shelf.pdf",
+    mimeType: "application/pdf",
+    buffer: Buffer.from("%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n"),
+  });
+  await page.getByLabel("Title", { exact: true }).fill(book);
+  await page.getByRole("button", { name: "Add to shelf" }).click();
+  await expect(
+    page.getByRole("heading", { level: 1, name: book }),
+  ).toBeVisible();
+  await expect(back).toHaveText("Library");
+  const bookId = page.url().split("/").pop();
+  await leadsBack(`library/${bookId}/edit`, "Book", `library/${bookId}`);
+  // A cooking session leads back to the list of sessions, and the leftovers
+  // form opened from a finished session leads back to that session.
+  await page.goto(`/#/recipes/${saved.id}`);
+  await page.getByRole("button", { name: "Start cooking" }).click();
+  await expect(
+    page.getByRole("heading", { level: 1, name: dish.title }),
+  ).toBeVisible();
+  await expect(back).toHaveText("Cooking");
+  const session = page.url().split("/").pop();
+  await page.getByRole("button", { name: "Finish cooking" }).click();
+  await expect(
+    page.getByRole("heading", { name: "That’s one for the cookbook." }),
+  ).toBeVisible();
+  await expect(back).toHaveText("Cooking");
+  await page.getByRole("link", { name: "Record leftovers" }).click();
+  await expect(back).toHaveText("Cooking session");
+  await back.click();
+  await expect(
+    page.getByRole("heading", { name: "That’s one for the cookbook." }),
+  ).toBeVisible();
+  expect(page.url()).toContain(`#/cooking/${session}`);
+  await back.click();
+  await expect(
+    page.getByRole("heading", { name: "Let’s cook together." }),
+  ).toBeVisible();
+});
