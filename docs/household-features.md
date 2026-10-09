@@ -38,6 +38,14 @@ The Recipes page filters by course, cuisine, diet label and tag with chips built
 
 Diet labels record what you know about a recipe. They are not allergen checks, and nothing is inferred from the ingredients.
 
+## Techniques, inspiration and the shelf
+
+**Inspiration** in the sidebar opens two boards. **Techniques** keeps the methods behind your recipes: a short summary, numbered steps, tips, tags, photos, the same click-to-play videos recipes have, and the recipes that use the technique, which show it under _Techniques_ on their own pages. **Inspiration** keeps ideas worth trying: a reel, a dish at a friend’s table, a line in a newsletter, with notes, where it came from, links, photos and tags. An idea starts as _Want to try_ and can be marked _Tried it_; **Write it up as a recipe** opens the recipe editor with the idea’s title, notes, tags and links, and once the recipe is saved the idea shows _In the cookbook_ while the recipe lists the idea under _Inspired by_.
+
+**Library** is the household’s shelf of cookbooks it owns as files. Add a PDF or EPUB of up to 64 MB with a title, author, tags, notes and an optional cover photo; the file is stored once in the household database and served only to signed-in browsers. A book page offers the file for download, opens a PDF in a new tab, and can show it in an in-page reader frame that is created only when you press **Read here**; bookmarks with page numbers open the reader at that page. EPUBs are downloaded to your reading app rather than shown in the browser. Link the recipes you write up from a book in its edit form and they appear under _From your shelf_ on the recipe page. Removing a book from the shelf archives the entry, which undo reverses; the file stays in the database.
+
+Photos for techniques and ideas use the same PNG, JPEG and WebP limit as recipe photos (8 MB each). While a book is open in the reader, other cooks’ changes are held back until you leave the page, as they are for a playing video. The server never reads, summarizes or sends any of this anywhere: techniques, ideas and books are plain records searched by their words, and files are only ever served back to the household.
+
 ## Photos
 
 On macOS install Apple's command line tools if needed (`xcode-select --install`). Full Xcode is not required for the OCR helper. The helper is compiled once per source revision into `~/Library/Caches/kooks` (override the location with `KOOKS_CACHE_DIR`) and reused by later imports. On other platforms install Tesseract through your usual package manager. Photo content is processed locally and is not uploaded to a model provider. OCR runs outside database transactions; errors leave the cookbook unchanged. An unreadable image can be retried or entered as text.
@@ -52,7 +60,7 @@ This is one shared household with one shared access key, not per-person accounts
 
 ## Data, compatibility and checks
 
-All mutations use the same validated tools, SQLite transactions, optimistic versions, request keys and reversible history as the original MCP implementation. `backup_export` now emits schema version 2 and includes the new records, photos, recipe links and recipe facets; exports made before the facets restore with them unset. Restore accepts both versions 1 and 2 and still requires an empty database. It rejects invalid references and over-allocated batches atomically. Browser Export cookbook downloads this portable JSON.
+All mutations use the same validated tools, SQLite transactions, optimistic versions, request keys and reversible history as the original MCP implementation. `backup_export` now emits schema version 2 and includes the new records, photos, recipe links, recipe facets, techniques, ideas and books together with their PDF and EPUB files, so a large shelf makes exports large; exports made before the facets restore with them unset. Restore accepts both versions 1 and 2 and still requires an empty database. It rejects invalid references and over-allocated batches atomically. Browser Export cookbook downloads this portable JSON.
 
 ```sh
 npm test

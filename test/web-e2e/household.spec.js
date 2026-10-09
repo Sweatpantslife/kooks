@@ -520,3 +520,109 @@ test("courses, cuisines, diet labels and tags filter the cookbook and round-trip
   await expect(card(salad.title)).toHaveCount(1);
   await expect(card(orzo.title)).toHaveCount(0);
 });
+
+test("techniques, ideas and the shelf: a video technique, an idea written up as a recipe, and an uploaded cookbook", async ({
+  page,
+  request,
+  baseURL,
+}) => {
+  const dish = recipe("Seared orzo");
+  const { record } = await seed(request, baseURL, "recipe_save", {
+    recipe: dish,
+  });
+  await page.reload();
+  const technique = title("Reverse sear");
+  await page.goto("/#/techniques/new");
+  await page.getByLabel("Technique name").fill(technique);
+  await page
+    .getByLabel("Steps · separate steps with a blank line")
+    .fill("Low oven first.\n\nSear last.");
+  await page
+    .getByLabel("Links and videos · one per line")
+    .fill("https://youtu.be/dQw4w9WgXcQ Watch it");
+  await page.getByLabel(dish.title).check();
+  await page.getByRole("button", { name: "Add technique" }).click();
+  await expect(
+    page.getByRole("heading", { level: 1, name: technique }),
+  ).toBeVisible();
+  // The video waits for play, exactly as on a recipe page.
+  await expect(
+    page.getByRole("button", { name: "Play Watch it on YouTube" }),
+  ).toBeVisible();
+  await expect(page.locator(".links iframe")).toHaveCount(0);
+  await page.getByRole("link", { name: dish.title }).click();
+  await expect(
+    page.locator(".connections").getByRole("link", { name: technique }),
+  ).toBeVisible();
+  const idea = title("Crispy chickpea bowls");
+  await page.goto("/#/inspiration/new");
+  await page.getByLabel("Idea", { exact: true }).fill(idea);
+  await page.getByLabel("Where it came from").fill("Noa’s dinner");
+  await page.getByLabel("Notes", { exact: true }).fill("Tahini and lemon.");
+  await page
+    .getByLabel("Links and videos · one per line")
+    .fill("www.instagram.com/reel/C1abcdefg/ The reel");
+  await page.getByRole("button", { name: "Add idea" }).click();
+  await expect(
+    page.getByRole("heading", { level: 1, name: idea }),
+  ).toBeVisible();
+  await expect(page.locator(".tag", { hasText: "Want to try" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Play The reel on Instagram" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "We tried it" }).click();
+  await expect(page.locator(".tag", { hasText: "Tried it" })).toBeVisible();
+  await page.getByRole("link", { name: "Write it up as a recipe" }).click();
+  await expect(page.getByLabel("Recipe name")).toHaveValue(idea);
+  await expect(page.getByLabel("Recipe notes")).toHaveValue(
+    "Tahini and lemon.",
+  );
+  await page.getByLabel("Ingredients · one per line").fill("400 g chickpeas");
+  await page
+    .getByLabel("Method · separate steps with a blank line")
+    .fill("Roast until crisp.");
+  await page.getByRole("button", { name: "Save recipe" }).click();
+  await expect(
+    page.getByRole("heading", { level: 1, name: idea }),
+  ).toBeVisible();
+  await expect(
+    page.locator(".connections").getByRole("link", { name: idea }),
+  ).toBeVisible();
+  await page.goto("/#/inspiration");
+  await expect(page.locator(".card", { hasText: idea })).toContainText(
+    "In the cookbook",
+  );
+  const book = title("Family cookbook");
+  await page.goto("/#/library");
+  await page.locator('input[name="file"]').setInputFiles({
+    name: "family.pdf",
+    mimeType: "application/pdf",
+    buffer: Buffer.from("%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n"),
+  });
+  await page.getByLabel("Title", { exact: true }).fill(book);
+  await page.getByLabel("Author").fill("Grandma");
+  await page.getByRole("button", { name: "Add to shelf" }).click();
+  await expect(
+    page.getByRole("heading", { level: 1, name: book }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: /Download PDF/ }),
+  ).toHaveAttribute("href", /^\/api\/assets\/[^?]+\?download=1$/);
+  await page.getByLabel("What’s there").fill("The braise");
+  await page.getByLabel("Page", { exact: true }).fill("12");
+  await page.getByRole("button", { name: "Add bookmark" }).click();
+  await expect(page.getByText("Page 12")).toBeVisible();
+  // The PDF frame is created only when asked for, at the bookmarked page.
+  await expect(page.locator(".reader iframe")).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "Read The braise on page 12" })
+    .click();
+  await expect(page.locator(".reader iframe")).toHaveAttribute(
+    "src",
+    /^\/api\/assets\/[^#]+#page=12$/,
+  );
+  await page.goto("/#/library");
+  const card = page.locator(".card.book", { hasText: book });
+  await expect(card).toContainText("PDF");
+  await expect(card).toContainText("1 bookmark");
+});

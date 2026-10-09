@@ -13,7 +13,8 @@ import { requireThat } from "./store.js";
 import { shoppingItems } from "./shopping.js";
 import * as f from "./feature-schemas.js";
 import { validateFeatureRelations } from "./features.js";
-import { imageBytes } from "./imports.js";
+import * as l from "./library-schemas.js";
+import { fileBytes, validateLibraryRelations } from "./library.js";
 
 const reference = z.object({
   kind: z.enum(["recipe", "meal", "plan"]),
@@ -58,8 +59,11 @@ const dataSchemas = {
   member: f.member,
   price: f.price,
   budget: f.budget,
-  asset: f.asset,
+  asset: l.file,
   import: f.importDraft,
+  technique: l.technique,
+  inspiration: l.inspiration,
+  book: l.book,
   batch: z.object({
     title: z.string(),
     recipe_id: id,
@@ -197,7 +201,40 @@ export function restoreBackup(store, input) {
     "Backup contains duplicate record IDs.",
   );
   for (const record of backup.records) {
-    if (record.kind === "asset") imageBytes(record.data);
+    if (record.kind === "asset") fileBytes(record.data);
+    if (record.kind === "technique" || record.kind === "book")
+      for (const recipeId of record.data.recipe_ids)
+        requireThat(
+          keys.has(`recipe:${recipeId}`),
+          "INVALID_BACKUP",
+          `A ${record.kind} references a missing recipe.`,
+        );
+    if (record.kind === "technique" || record.kind === "inspiration")
+      for (const photoId of record.data.photo_ids)
+        requireThat(
+          keys.has(`asset:${photoId}`),
+          "INVALID_BACKUP",
+          `A ${record.kind} photo is missing.`,
+        );
+    if (record.kind === "inspiration" && record.data.recipe_id)
+      requireThat(
+        keys.has(`recipe:${record.data.recipe_id}`),
+        "INVALID_BACKUP",
+        "An idea references a missing recipe.",
+      );
+    if (record.kind === "book") {
+      requireThat(
+        keys.has(`asset:${record.data.file_id}`),
+        "INVALID_BACKUP",
+        "A book’s file is missing.",
+      );
+      requireThat(
+        record.data.cover_id === null ||
+          keys.has(`asset:${record.data.cover_id}`),
+        "INVALID_BACKUP",
+        "A book cover is missing.",
+      );
+    }
     if (record.kind === "batch" && record.data.session_id)
       requireThat(
         keys.has(`session:${record.data.session_id}`),
@@ -375,5 +412,6 @@ export function restoreBackup(store, input) {
   for (const { kind, ...record } of backup.records)
     store.restoreRecord(kind, record);
   validateFeatureRelations(store);
+  validateLibraryRelations(store);
   return { restored_records: backup.records.length };
 }

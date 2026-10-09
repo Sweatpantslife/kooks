@@ -98,6 +98,10 @@ const paths = {
   calendar:
     '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 2v6m10-6v6M3 11h18"/>',
   play: '<path d="M7 4v16l13-8Z"/>',
+  bulb: '<path d="M9 18h6m-5 3h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1V17h6v-.2c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2Z"/>',
+  shelf:
+    '<path d="M3 21h18M4 21V7h4v14M10 21V4h4v17M15.5 21 17 8l3.6.8L19 21"/>',
+  download: '<path d="M12 3v12m-5-5 5 5 5-5M4 19h16"/>',
 };
 const icon = (name) =>
   `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${paths[name] ?? paths.leaf}</svg>`;
@@ -157,7 +161,7 @@ let db = {},
   sharing = false,
   filters = {},
   library = noLibraryFilters(),
-  search = "",
+  searches = {},
   week = monday(today()),
   toastTimeout;
 let currency = localStorage.getItem("kooks.currency") ?? "USD";
@@ -273,7 +277,9 @@ async function loadState({ polling = false } = {}) {
       notice.hidden = false;
       notice.textContent = dirty
         ? "Someone updated the kitchen. Your draft is kept here; save checks for conflicting changes."
-        : "Someone updated the kitchen. Your video keeps playing; the page refreshes when you move on.";
+        : playing.closest(".reader")
+          ? "Someone updated the kitchen. Your book stays open; the page refreshes when you move on."
+          : "Someone updated the kitchen. Your video keeps playing; the page refreshes when you move on.";
     }
     return false;
   }
@@ -297,6 +303,8 @@ function shell(content, active) {
   const nav = [
     ["today", "sun", "Today"],
     ["recipes", "book", "Recipes"],
+    ["inspiration", "bulb", "Inspiration"],
+    ["library", "shelf", "Library"],
     ["plan", "calendar", "Meals & plan"],
     ["pantry", "jar", "Pantry"],
     ["leftovers", "box", "Leftovers"],
@@ -389,7 +397,7 @@ function suggestFacets() {
 function libraryPage() {
   const all = records("recipe");
   const vocabulary = taxonomy(all.map((r) => r.data));
-  const term = search.toLowerCase();
+  const term = (searches.recipes ?? "").toLowerCase();
   const found = all.filter(
     (r) =>
       (!term ||
@@ -451,7 +459,7 @@ function libraryPage() {
         ]
       : [];
   const drafts = records("import").filter((r) => r.data.status === "draft");
-  return `${heading("Your everyday cookbook", "Your kitchen, collected.", "Old favorites, small discoveries, and your own little adjustments.")}${drafts.length ? `<div class="callout"><h3>Ready for a read-through</h3><div class="row spacer">${drafts.map((r) => link(r.data.title, `imports/${r.id}`)).join("")}</div></div>` : ""}<form data-form="search" class="search-bar"><label class="sr-only" for="search">Find a recipe or ingredient</label><input class="input" id="search" name="query" placeholder="Find a recipe, ingredient, cuisine or tag…" value="${esc(search)}"><button class="button" type="submit">Search</button></form><div class="facets" aria-label="Recipe filters">${facetRow("Show", [chip("Favorites", "library-toggle", 'data-key="favorites"', library.favorites), chip("30 minutes or less", "library-toggle", 'data-key="quick"', library.quick), ...(active ? [button("Clear filters", "library-clear", "", "quiet small-button")] : [])])}${facetRow(
+  return `${heading("Your everyday cookbook", "Your kitchen, collected.", "Old favorites, small discoveries, and your own little adjustments.")}${drafts.length ? `<div class="callout"><h3>Ready for a read-through</h3><div class="row spacer">${drafts.map((r) => link(r.data.title, `imports/${r.id}`)).join("")}</div></div>` : ""}${searchBar("recipes", "Find a recipe or ingredient", "Find a recipe, ingredient, cuisine or tag…")}<div class="facets" aria-label="Recipe filters">${facetRow("Show", [chip("Favorites", "library-toggle", 'data-key="favorites"', library.favorites), chip("30 minutes or less", "library-toggle", 'data-key="quick"', library.quick), ...(active ? [button("Clear filters", "library-clear", "", "quiet small-button")] : [])])}${facetRow(
     "Course",
     single(
       "course",
@@ -483,7 +491,7 @@ function libraryPage() {
       (t) => t.name,
       (t) => t.name,
     ),
-  )}</div><div class="section-heading"><h2>${active || search ? "What matches" : "Everything you’ve kept"}</h2><span class="small muted">${found.length} of ${all.length} recipe${all.length === 1 ? "" : "s"}</span></div>${unseen.length ? `<p class="small muted">Not shown: ${esc(unseen.join(" · "))}. Add the missing details from each recipe’s editor.</p>` : ""}${found.length ? `<div class="grid three">${found.map((r) => recipeCard(r)).join("")}</div>` : empty(search || active ? "No recipes match." : "A cookbook waiting to happen.", search || active ? "Try another ingredient, name or filter." : "Start with something you already love to cook.", search || active ? button("Clear filters", "library-clear") : link("Add a recipe", "capture", true))}`;
+  )}</div><div class="section-heading"><h2>${active || term ? "What matches" : "Everything you’ve kept"}</h2><span class="small muted">${found.length} of ${all.length} recipe${all.length === 1 ? "" : "s"}</span></div>${unseen.length ? `<p class="small muted">Not shown: ${esc(unseen.join(" · "))}. Add the missing details from each recipe’s editor.</p>` : ""}${found.length ? `<div class="grid three">${found.map((r) => recipeCard(r)).join("")}</div>` : empty(term || active ? "No recipes match." : "A cookbook waiting to happen.", term || active ? "Try another ingredient, name or filter." : "Start with something you already love to cook.", term || active ? button("Clear filters", "library-clear") : link("Add a recipe", "capture", true))}`;
 }
 
 async function recipePage(id) {
@@ -508,15 +516,17 @@ async function recipePage(id) {
     api("cost_estimate", { source, currency, as_of: today() }),
   ]);
   const d = scaled.recipe;
-  return `${link("Recipes", "recipes", false, "back")}${heading(r.data.original_recipe_id ? "Your own variation" : "From your cookbook", r.data.title, "", link("Edit recipe", `edit/${id}`, false, "edit"))}${effort(r)}${facetChips(r.data, { course: true, cls: "chips spacer-small" })}<div class="actions spacer">${button("Start cooking", "cook", `data-kind="recipe" data-id="${id}"`, "primary", "flame")}${link("Review groceries", `review/recipe/${id}`, false, "basket")}${link("Make a variation", `variant/${memory.original_recipe_id}`, false, "edit")}${link("Record a cooked batch", `new-batch/${id}`, false, "box")}</div>${memory.preferred_recipe && memory.preferred_recipe.id !== id ? `<div class="callout spacer row between"><span>Your preferred version: ${esc(memory.preferred_recipe.data.title)}</span>${link("Open variation", `recipes/${memory.preferred_recipe.id}`)}</div>` : ""}${memory.latest ? `<div class="callout spacer"><div class="eyebrow">Remember for next time</div><p class="preline">${esc(memory.latest.data.next_time || memory.latest.data.changes || memory.latest.data.text)}</p><small>${esc(memory.latest.data.cooked_on ?? memory.latest.created_at.slice(0, 10))}</small></div>` : ""}<div class="recipe-columns spacer"><section class="panel"><h3>Ingredients</h3><form data-form="servings" class="row spacer">${hidden("id", id)}${field("Portions", "servings", d.servings ?? "", "number", `min="0.01" max="10000" step="any" ${r.data.servings === null ? 'disabled placeholder="Unknown"' : "required"}`)}${r.data.servings !== null ? '<button class="button" type="submit">Update</button>' : ""}</form>${d.ingredients.map((i) => `<div class="ingredient"><span>${esc(i.name)}${i.preparation ? `<br><small class="muted">${esc(i.preparation)}</small>` : ""}</span><span class="amount">${esc(amount(i))}</span></div>`).join("") || '<p class="small muted spacer">Ingredients have not been recorded.</p>'}${d.equipment.length ? `<hr class="divider"><h3>What you’ll use</h3><div class="chips spacer">${d.equipment.map((e) => `<span class="tag neutral">${e.quantity > 1 ? e.quantity + " × " : ""}${esc(e.name)}${e.capacity ? ` · ${esc(e.capacity)}` : ""}</span>`).join("")}</div>` : ""}<hr class="divider"><h3>Estimated ingredient cost</h3><p class="spacer">${cost.complete ? `<strong>${money(cost.total)}</strong> <span class="small muted">· ${cost.dishes[0].per_portion == null ? "" : `${money(cost.dishes[0].per_portion)} per portion`}</span>` : `<strong>${money(cost.known_cost)}</strong> <span class="small cost-unknown">known subtotal · incomplete</span>`}</p>${cost.missing_prices.length ? `<p class="small muted">Missing amounts or prices: ${esc(cost.missing_prices.map((l) => l.ingredient.name).join(", "))}.</p>` : ""}${link("Manage prices", "spending")}</section><section><h2>The method</h2><ol class="method spacer">${d.steps.map((s) => `<li>${esc(s.text)}${s.duration_seconds ? `<p class="small muted">${num(s.duration_seconds / 60)} minutes</p>` : ""}</li>`).join("")}</ol>${d.warnings.length ? `<div class="callout warning">${d.warnings.map(esc).join("<br>")}</div>` : ""}${r.data.notes ? `<div class="note"><p>${esc(r.data.notes)}</p></div>` : ""}${linksSection(r.data)}<details><summary>Original recipe and sources</summary>${r.data.source_url ? `<a href="${esc(r.data.source_url)}" target="_blank" rel="noreferrer">Original source</a>` : ""}${(r.data.source_image_ids ?? []).map((id) => `<img class="source-image" src="/api/assets/${encodeURIComponent(id)}" alt="Original recipe photo">`).join("")}<pre class="source-text">${esc(r.data.original_text || "No original text was provided.")}</pre></details></section></div><div class="section-heading"><h2>What worked in your kitchen</h2>${link("Add a cooking memory", `memory/${id}`, false, "plus")}</div>${memory.notes.length ? memory.notes.map((n) => `<article class="panel spacer"><div class="row between"><span class="eyebrow">${esc(n.data.cooked_on ?? n.created_at.slice(0, 10))}</span><span>${n.data.rating ? "★".repeat(n.data.rating) : ""}${n.data.cook_again === true ? " · Cook again" : n.data.cook_again === false ? " · Try something else" : ""}</span></div><p class="preline spacer">${esc(n.data.text)}</p>${n.data.changes ? `<p class="small preline spacer"><strong>Changed:</strong> ${esc(n.data.changes)}</p>` : ""}${n.data.next_time ? `<p class="small preline spacer"><strong>Next time:</strong> ${esc(n.data.next_time)}</p>` : ""}</article>`).join("") : '<p class="muted small">Your notes and successful changes will appear here before the next cook.</p>'}${memory.variants.length ? `<div class="section-heading"><h2>Ways you make it</h2></div><div class="chips">${memory.variants.map((v) => link(`${v.data.title}${v.data.preferred ? " · Preferred" : ""}`, `recipes/${v.id}`)).join("")}</div>` : ""}`;
+  return `${link("Recipes", "recipes", false, "back")}${heading(r.data.original_recipe_id ? "Your own variation" : "From your cookbook", r.data.title, "", link("Edit recipe", `edit/${id}`, false, "edit"))}${effort(r)}${facetChips(r.data, { course: true, cls: "chips spacer-small" })}<div class="actions spacer">${button("Start cooking", "cook", `data-kind="recipe" data-id="${id}"`, "primary", "flame")}${link("Review groceries", `review/recipe/${id}`, false, "basket")}${link("Make a variation", `variant/${memory.original_recipe_id}`, false, "edit")}${link("Record a cooked batch", `new-batch/${id}`, false, "box")}</div>${memory.preferred_recipe && memory.preferred_recipe.id !== id ? `<div class="callout spacer row between"><span>Your preferred version: ${esc(memory.preferred_recipe.data.title)}</span>${link("Open variation", `recipes/${memory.preferred_recipe.id}`)}</div>` : ""}${memory.latest ? `<div class="callout spacer"><div class="eyebrow">Remember for next time</div><p class="preline">${esc(memory.latest.data.next_time || memory.latest.data.changes || memory.latest.data.text)}</p><small>${esc(memory.latest.data.cooked_on ?? memory.latest.created_at.slice(0, 10))}</small></div>` : ""}<div class="recipe-columns spacer"><section class="panel"><h3>Ingredients</h3><form data-form="servings" class="row spacer">${hidden("id", id)}${field("Portions", "servings", d.servings ?? "", "number", `min="0.01" max="10000" step="any" ${r.data.servings === null ? 'disabled placeholder="Unknown"' : "required"}`)}${r.data.servings !== null ? '<button class="button" type="submit">Update</button>' : ""}</form>${d.ingredients.map((i) => `<div class="ingredient"><span>${esc(i.name)}${i.preparation ? `<br><small class="muted">${esc(i.preparation)}</small>` : ""}</span><span class="amount">${esc(amount(i))}</span></div>`).join("") || '<p class="small muted spacer">Ingredients have not been recorded.</p>'}${d.equipment.length ? `<hr class="divider"><h3>What you’ll use</h3><div class="chips spacer">${d.equipment.map((e) => `<span class="tag neutral">${e.quantity > 1 ? e.quantity + " × " : ""}${esc(e.name)}${e.capacity ? ` · ${esc(e.capacity)}` : ""}</span>`).join("")}</div>` : ""}<hr class="divider"><h3>Estimated ingredient cost</h3><p class="spacer">${cost.complete ? `<strong>${money(cost.total)}</strong> <span class="small muted">· ${cost.dishes[0].per_portion == null ? "" : `${money(cost.dishes[0].per_portion)} per portion`}</span>` : `<strong>${money(cost.known_cost)}</strong> <span class="small cost-unknown">known subtotal · incomplete</span>`}</p>${cost.missing_prices.length ? `<p class="small muted">Missing amounts or prices: ${esc(cost.missing_prices.map((l) => l.ingredient.name).join(", "))}.</p>` : ""}${link("Manage prices", "spending")}</section><section><h2>The method</h2><ol class="method spacer">${d.steps.map((s) => `<li>${esc(s.text)}${s.duration_seconds ? `<p class="small muted">${num(s.duration_seconds / 60)} minutes</p>` : ""}</li>`).join("")}</ol>${d.warnings.length ? `<div class="callout warning">${d.warnings.map(esc).join("<br>")}</div>` : ""}${r.data.notes ? `<div class="note"><p>${esc(r.data.notes)}</p></div>` : ""}${linksSection(r.data)}${recipeConnections(id)}<details><summary>Original recipe and sources</summary>${r.data.source_url ? `<a href="${esc(r.data.source_url)}" target="_blank" rel="noreferrer">Original source</a>` : ""}${(r.data.source_image_ids ?? []).map((id) => `<img class="source-image" src="/api/assets/${encodeURIComponent(id)}" alt="Original recipe photo">`).join("")}<pre class="source-text">${esc(r.data.original_text || "No original text was provided.")}</pre></details></section></div><div class="section-heading"><h2>What worked in your kitchen</h2>${link("Add a cooking memory", `memory/${id}`, false, "plus")}</div>${memory.notes.length ? memory.notes.map((n) => `<article class="panel spacer"><div class="row between"><span class="eyebrow">${esc(n.data.cooked_on ?? n.created_at.slice(0, 10))}</span><span>${n.data.rating ? "★".repeat(n.data.rating) : ""}${n.data.cook_again === true ? " · Cook again" : n.data.cook_again === false ? " · Try something else" : ""}</span></div><p class="preline spacer">${esc(n.data.text)}</p>${n.data.changes ? `<p class="small preline spacer"><strong>Changed:</strong> ${esc(n.data.changes)}</p>` : ""}${n.data.next_time ? `<p class="small preline spacer"><strong>Next time:</strong> ${esc(n.data.next_time)}</p>` : ""}</article>`).join("") : '<p class="muted small">Your notes and successful changes will appear here before the next cook.</p>'}${memory.variants.length ? `<div class="section-heading"><h2>Ways you make it</h2></div><div class="chips">${memory.variants.map((v) => link(`${v.data.title}${v.data.preferred ? " · Preferred" : ""}`, `recipes/${v.id}`)).join("")}</div>` : ""}`;
 }
 
-function recipeEditor(id, mode = "edit") {
+// `seed` is an inspiration record whose title, notes, tags and links start a
+// new recipe; saving links the idea to the recipe it became.
+function recipeEditor(id, mode = "edit", seed = null) {
   const draft = mode === "import" ? record("import", id) : null;
   const r = mode === "import" ? null : record("recipe", id);
   const data = draft?.data.recipe ??
     r?.data ?? {
-      title: "",
+      title: seed?.data.title ?? "",
       servings: null,
       ingredients: [],
       steps: [],
@@ -524,9 +534,9 @@ function recipeEditor(id, mode = "edit") {
       course: null,
       cuisine: null,
       diets: [],
-      tags: [],
-      notes: "",
-      links: [],
+      tags: seed?.data.tags ?? [],
+      notes: seed?.data.notes ?? "",
+      links: seed?.data.links ?? [],
     };
   const vocabulary = cookbookTaxonomy();
   if ((id && !r && !draft) || draft?.data.status === "saved")
@@ -540,7 +550,7 @@ function recipeEditor(id, mode = "edit") {
       `${i.quantity == null ? "" : `${i.quantity} ${i.unit ?? ""} `}${i.name}${i.preparation ? `, ${i.preparation}` : ""}`.trim(),
     )
     .join("\n");
-  return `${heading(mode === "import" ? "A quick read-through" : mode === "variant" ? "Keep what you love. Change what you need." : "Your recipe, your way", mode === "import" ? "Check it, then make it yours." : mode === "variant" ? "Make your own variation." : r ? "A little refinement." : "Something worth keeping.", mode === "variant" ? "The original stays in your cookbook. This version gets its own ingredients and method." : "Unknown amounts and timings can stay blank.")}<div class="${draft ? "review-grid" : ""}"><form data-form="recipe" class="stack" data-mode="${mode}" data-id="${esc(id ?? "")}" data-version="${draft?.version ?? r?.version ?? ""}"><div class="panel stack"><div class="form-grid">${field("Recipe name", "title", mode === "variant" ? `${data.title} · My version` : data.title, "text", 'required maxlength="500"')}${field("Original yield / portions", "servings", data.servings ?? "", "number", 'min="0.01" max="10000" step="any" placeholder="Unknown"')}</div><div class="form-grid four">${field("Hands-on minutes", "active_minutes", data.active_minutes ?? "", "number", 'min="0" max="10080" placeholder="Unknown"')}${field("Total minutes", "total_minutes", data.total_minutes ?? "", "number", 'min="0" max="10080" placeholder="Unknown"')}${field("Cooking pans", "pan_count", data.pan_count ?? "", "number", 'min="0" max="100" placeholder="Unknown"')}${select("Cleanup effort", "cleanup", cleanupOptions, data.cleanup ?? "")}</div><div class="form-grid">${select("Spice level", "spice_level", spiceOptions, data.spice_level ?? "")}${select("Course", "course", [["", "Not recorded"], ...courses.map((c) => [c.key, c.label])], data.course ?? "")}</div><div class="form-grid">${field("Cuisine", "cuisine", data.cuisine ?? "", "text", 'list="cuisine-options" maxlength="100" placeholder="Italian, Israeli…"', "Your own words; names already in your cookbook are suggested.")}<datalist id="cuisine-options">${cuisineOptions(
+  return `${heading(mode === "import" ? "A quick read-through" : mode === "variant" ? "Keep what you love. Change what you need." : seed ? "From your inspiration board" : "Your recipe, your way", mode === "import" ? "Check it, then make it yours." : mode === "variant" ? "Make your own variation." : seed ? "Make it your own." : r ? "A little refinement." : "Something worth keeping.", mode === "variant" ? "The original stays in your cookbook. This version gets its own ingredients and method." : seed ? "The idea stays on your board, linked to this recipe once it is saved." : "Unknown amounts and timings can stay blank.")}<div class="${draft ? "review-grid" : ""}"><form data-form="recipe" class="stack" data-mode="${mode}" data-id="${esc(id ?? "")}" data-version="${draft?.version ?? r?.version ?? ""}">${seed ? hidden("inspiration_id", seed.id) : ""}<div class="panel stack"><div class="form-grid">${field("Recipe name", "title", mode === "variant" ? `${data.title} · My version` : data.title, "text", 'required maxlength="500"')}${field("Original yield / portions", "servings", data.servings ?? "", "number", 'min="0.01" max="10000" step="any" placeholder="Unknown"')}</div><div class="form-grid four">${field("Hands-on minutes", "active_minutes", data.active_minutes ?? "", "number", 'min="0" max="10080" placeholder="Unknown"')}${field("Total minutes", "total_minutes", data.total_minutes ?? "", "number", 'min="0" max="10080" placeholder="Unknown"')}${field("Cooking pans", "pan_count", data.pan_count ?? "", "number", 'min="0" max="100" placeholder="Unknown"')}${select("Cleanup effort", "cleanup", cleanupOptions, data.cleanup ?? "")}</div><div class="form-grid">${select("Spice level", "spice_level", spiceOptions, data.spice_level ?? "")}${select("Course", "course", [["", "Not recorded"], ...courses.map((c) => [c.key, c.label])], data.course ?? "")}</div><div class="form-grid">${field("Cuisine", "cuisine", data.cuisine ?? "", "text", 'list="cuisine-options" maxlength="100" placeholder="Italian, Israeli…"', "Your own words; names already in your cookbook are suggested.")}<datalist id="cuisine-options">${cuisineOptions(
     vocabulary.cuisines,
   )
     .map((name) => `<option value="${esc(name)}"></option>`)
@@ -568,11 +578,295 @@ function linkLine(links) {
   if (!links?.length) return "";
   return `<p class="small">Links and videos: ${links.map((l) => `<a href="${esc(l.url)}" target="_blank" rel="noreferrer">${esc(l.title || describeLink(l.url)?.site || l.url)}</a>`).join(" · ")}</p>`;
 }
-function loadEmbed(button) {
-  const box = button.closest(".embed");
+function loadEmbed(box, src = box?.dataset.src) {
   if (!box) return;
   box.dataset.loaded = "true";
-  box.innerHTML = `<iframe src="${esc(box.dataset.src)}" title="${esc(box.dataset.title)}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
+  box.innerHTML = `<iframe src="${esc(src)}" title="${esc(box.dataset.title)}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
+}
+
+// Techniques, inspiration and the shelf: the household's know-how, the ideas
+// it wants to try, and the cookbooks it owns as files. Records live in the
+// same state as recipes; files are assets the server stores and serves.
+const learnNav = (active) =>
+  `<div class="pill-nav"><a href="#/techniques" class="${active === "techniques" ? "active" : ""}">Techniques</a><a href="#/inspiration" class="${active === "inspiration" ? "active" : ""}">Inspiration</a></div>`;
+const searchBar = (scope, label, placeholder) =>
+  `<form data-form="search" class="search-bar">${hidden("scope", scope)}<label class="sr-only" for="search-${scope}">${esc(label)}</label><input class="input" id="search-${scope}" name="query" placeholder="${esc(placeholder)}" value="${esc(searches[scope] ?? "")}"><button class="button" type="submit">Search</button></form>`;
+const matching = (scope, parts) => {
+  const q = (searches[scope] ?? "").trim().toLowerCase();
+  return !q || parts.join(" ").toLowerCase().includes(q);
+};
+const paragraphs = (text) =>
+  String(text ?? "")
+    .split(/\n\s*\n/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+function linksFrom(text) {
+  const links = parseLinkLines(text);
+  if (links.invalid.length)
+    throw new Error(
+      `Each link needs a web address such as https://example.com: ${links.invalid.join("; ")}`,
+    );
+  return links.links;
+}
+const fileTypes = {
+  image: {
+    label: "a PNG, JPEG or WebP image",
+    limit: 8,
+    types: { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp" },
+  },
+  book: {
+    label: "a PDF or EPUB file",
+    limit: 64,
+    types: { "application/pdf": "pdf", "application/epub+zip": "epub" },
+  },
+};
+const fileLabel = { "application/pdf": "PDF", "application/epub+zip": "EPUB" };
+const size = (bytes) =>
+  bytes >= 1048576
+    ? `${(bytes / 1048576).toFixed(1)} MB`
+    : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+const readBase64 = (file) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(",")[1]);
+    reader.onerror = () => reject(new Error(`Could not read ${file.name}.`));
+    reader.readAsDataURL(file);
+  });
+// Store one chosen file as an asset and return its id. The browser's type is
+// trusted when it names a supported kind; otherwise the extension decides.
+// The server checks the bytes either way.
+async function uploadFile(file, category) {
+  const { label, limit, types } = fileTypes[category];
+  const name = file.name.toLowerCase();
+  const mime =
+    file.type in types
+      ? file.type
+      : (Object.keys(types).find((type) => name.endsWith(`.${types[type]}`)) ??
+        (category === "image" && name.endsWith(".jpeg") ? "image/jpeg" : null));
+  if (!mime) throw new Error(`Choose ${label}.`);
+  if (!file.size || file.size > limit * 1024 * 1024)
+    throw new Error(`Choose ${label} smaller than ${limit} MB.`);
+  const result = await write("asset_save", {
+    file: { name: file.name, mime_type: mime, base64: await readBase64(file) },
+  });
+  return result.record.id;
+}
+// The photos a form keeps plus the ones it adds.
+async function photoIds(values) {
+  const ids = values.getAll("keep_photo");
+  for (const file of values.getAll("photos"))
+    if (file?.size) ids.push(await uploadFile(file, "image"));
+  return ids;
+}
+const photoFields = (ids) =>
+  `<div class="field"><span>Photos</span>${ids.length ? `<div class="photos">${ids.map((id) => `<label class="photo-keep"><img class="photo" src="/api/assets/${encodeURIComponent(id)}" alt="" loading="lazy"><span class="check"><input type="checkbox" name="keep_photo" value="${esc(id)}" checked>Keep</span></label>`).join("")}</div>` : ""}<input type="file" name="photos" accept="image/png,image/jpeg,image/webp" multiple>${help("PNG, JPEG or WebP up to 8 MB each. Photos stay on this household server.")}</div>`;
+const photoStrip = (ids) =>
+  ids.length
+    ? `<div class="photos">${ids.map((id) => `<a href="/api/assets/${encodeURIComponent(id)}" target="_blank" rel="noopener"><img class="photo" src="/api/assets/${encodeURIComponent(id)}" alt="Photo" loading="lazy"></a>`).join("")}</div>`
+    : "";
+const recipePicker = (selected, label) =>
+  records("recipe").length
+    ? `<div class="field"><span>${esc(label)}</span>${hidden("recipes_listed", "1")}<div class="chips">${records(
+        "recipe",
+      )
+        .map((r) =>
+          check(r.data.title, "recipes", r.id, selected.includes(r.id)),
+        )
+        .join("")}</div></div>`
+    : "";
+
+function techniqueCard(t) {
+  const d = t.data;
+  const videos = displayLinks(d).filter(
+    (l) => describeLink(l.url)?.embed,
+  ).length;
+  return `<article class="card"><div class="row between"><span class="tag">${esc(d.tags[0] ?? "Technique")}</span>${videos ? `<small class="muted">${videos} video${videos === 1 ? "" : "s"}</small>` : ""}</div><h2><a class="title" href="#/techniques/${t.id}">${esc(d.title)}</a></h2>${d.summary ? `<p class="clamp">${esc(d.summary)}</p>` : ""}<div class="card-end"><span class="small muted">${d.steps.length ? `${d.steps.length} step${d.steps.length === 1 ? "" : "s"}` : "Notes"}${d.recipe_ids.length ? ` · ${d.recipe_ids.length} recipe${d.recipe_ids.length === 1 ? "" : "s"}` : ""}</span>${link("Open", `techniques/${t.id}`, false, "arrow")}</div></article>`;
+}
+function techniquesPage() {
+  const found = [...records("technique")]
+    .sort((a, b) => a.data.title.localeCompare(b.data.title))
+    .filter((t) =>
+      matching("techniques", [
+        t.data.title,
+        t.data.summary,
+        t.data.tips,
+        ...t.data.tags,
+      ]),
+    );
+  return `${heading("Know-how worth keeping", "The way you do things.", "Folding, searing, proofing, plating: the methods behind your recipes, with the videos that taught you.", link("Add a technique", "techniques/new", true, "plus"))}${learnNav("techniques")}${searchBar("techniques", "Find a technique", "Find a technique or tag…")}${found.length ? `<div class="grid three">${found.map(techniqueCard).join("")}</div>` : empty(searches.techniques ? "No techniques found." : "Start with one thing you do well.", searches.techniques ? "Try another word or tag." : "Write down how you make the dough, or keep the video that finally explained it.", link("Add a technique", "techniques/new", true))}`;
+}
+function techniquePage(id) {
+  const t = record("technique", id);
+  if (!t)
+    return empty(
+      "Technique not found.",
+      "It may have been archived.",
+      link("Techniques", "techniques"),
+    );
+  const d = t.data;
+  const used = d.recipe_ids.map((r) => record("recipe", r)).filter(Boolean);
+  return `${link("Techniques", "techniques", false, "back")}${heading("Worth knowing", d.title, "", `${link("Edit", `techniques/${id}/edit`, false, "edit")}${button("Archive", "archive", `data-kind="technique" data-id="${id}" data-target="techniques"`, "quiet")}`)}${d.tags.length ? `<div class="chips">${d.tags.map((tag) => `<span class="tag">${esc(tag)}</span>`).join("")}</div>` : ""}<div class="learn-columns spacer"><section>${d.summary ? `<p class="preline lead">${esc(d.summary)}</p>` : ""}${d.steps.length ? `<h2 class="spacer">How it’s done</h2><ol class="method spacer">${d.steps.map((s) => `<li>${esc(s.text)}</li>`).join("")}</ol>` : ""}${d.tips ? `<div class="note"><p>${esc(d.tips)}</p><small>Tips and pitfalls</small></div>` : ""}${photoStrip(d.photo_ids)}${linksSection(d, "Watch and read")}</section><aside class="panel"><h3>Recipes that use it</h3>${used.length ? `<div class="chips spacer">${used.map((r) => link(r.data.title, `recipes/${r.id}`)).join("")}</div>` : '<p class="small muted spacer">Link recipes from the editor and this technique appears on their pages.</p>'}</aside></div>`;
+}
+function techniqueEditor(id) {
+  const t = id ? record("technique", id) : null;
+  if (id && !t)
+    return empty("Technique not found.", "", link("Techniques", "techniques"));
+  const d = t?.data ?? {
+    title: "",
+    summary: "",
+    steps: [],
+    tips: "",
+    tags: [],
+    links: [],
+    photo_ids: [],
+    recipe_ids: [],
+  };
+  return `${heading("Keep the know-how", t ? "A little refinement." : "Something worth learning.", "A method you want to remember. Add the videos that taught you and the recipes it belongs to.")}<form data-form="technique" class="panel stack" data-id="${t?.id ?? ""}" data-version="${t?.version ?? ""}">${field("Technique name", "title", d.title, "text", 'required maxlength="500" placeholder="Reverse sear"')}${area("In short", "summary", d.summary, 'rows="3" placeholder="Cook low in the oven first, then sear hard for the crust."')}${area("Steps · separate steps with a blank line", "steps", d.steps.map((s) => s.text).join("\n\n"), 'rows="7"')}${area("Tips and pitfalls", "tips", d.tips, 'rows="3"')}${field("Tags, separated by commas", "tags", d.tags.join(", "), "text", 'placeholder="Meat, knife skills"')}${area("Links and videos · one per line", "links", formatLinkLines(d.links), 'rows="3" placeholder="https://youtu.be/… The video that explains it"', "A web address, then an optional title. YouTube, Vimeo, Facebook, Instagram and TikTok videos play on the technique page.")}${photoFields(d.photo_ids)}${recipePicker(d.recipe_ids, "Recipes that use this technique")}<div class="row">${submit(t ? "Save technique" : "Add technique")}${link("Cancel", t ? `techniques/${t.id}` : "techniques")}</div></form>`;
+}
+
+const ideaState = (d) =>
+  d.recipe_id
+    ? ["In the cookbook", ""]
+    : d.status === "tried"
+      ? ["Tried it", "neutral"]
+      : ["Want to try", "warm"];
+function inspirationCard(i) {
+  const d = i.data,
+    [state, cls] = ideaState(d);
+  const first = displayLinks(d)[0],
+    info = first ? describeLink(first.url) : null;
+  return `<article class="card"><div class="row between"><span class="tag ${cls}">${state}</span>${d.source ? `<small class="muted">${esc(d.source)}</small>` : ""}</div>${d.photo_ids.length ? `<img class="card-photo" src="/api/assets/${encodeURIComponent(d.photo_ids[0])}" alt="" loading="lazy">` : ""}<h2><a class="title" href="#/inspiration/${i.id}">${esc(d.title)}</a></h2>${d.notes ? `<p class="clamp">${esc(d.notes)}</p>` : ""}${info ? `<p class="small muted">${info.embed ? `${esc(info.label)} video` : esc(info.site)}${first.title ? ` · ${esc(first.title)}` : ""}</p>` : ""}<div class="card-end"><span class="small muted">${esc(d.tags.slice(0, 3).join(" · "))}</span>${link("Open", `inspiration/${i.id}`, false, "arrow")}</div></article>`;
+}
+function inspirationPage() {
+  const order = (d) => (d.recipe_id ? 2 : d.status === "tried" ? 1 : 0);
+  const ideas = [...records("inspiration")]
+    .sort(
+      (a, b) =>
+        order(a.data) - order(b.data) ||
+        b.updated_at.localeCompare(a.updated_at),
+    )
+    .filter((i) =>
+      matching("inspiration", [
+        i.data.title,
+        i.data.notes,
+        i.data.source,
+        ...i.data.tags,
+      ]),
+    );
+  return `${heading("A little spark", "Ideas worth trying.", "A reel you saved, a dish from a friend’s table, a line in a newsletter. Keep it here until it becomes dinner.", link("Add an idea", "inspiration/new", true, "plus"))}${learnNav("inspiration")}${searchBar("inspiration", "Find an idea", "Find an idea, tag or source…")}${ideas.length ? `<div class="grid three">${ideas.map(inspirationCard).join("")}</div>` : empty(searches.inspiration ? "No ideas found." : "What caught your eye lately?", searches.inspiration ? "Try another word or tag." : "Save the reel, the restaurant dish or the idea from a friend before it slips away.", link("Add an idea", "inspiration/new", true))}`;
+}
+function inspirationDetail(id) {
+  const i = record("inspiration", id);
+  if (!i)
+    return empty(
+      "Idea not found.",
+      "It may have been archived.",
+      link("Inspiration", "inspiration"),
+    );
+  const d = i.data,
+    [state, cls] = ideaState(d);
+  const made = d.recipe_id ? record("recipe", d.recipe_id) : null;
+  return `${link("Inspiration", "inspiration", false, "back")}${heading(d.source ? `From ${d.source}` : "An idea to try", d.title, "", `${link("Edit", `inspiration/${id}/edit`, false, "edit")}${button("Archive", "archive", `data-kind="inspiration" data-id="${id}" data-target="inspiration"`, "quiet")}`)}<div class="chips"><span class="tag ${cls}">${state}</span>${d.tags.map((t) => `<span class="tag neutral">${esc(t)}</span>`).join("")}</div><div class="actions spacer">${made ? link(`Open ${made.data.title}`, `recipes/${made.id}`, true, "book") : d.recipe_id ? '<span class="small muted">The recipe it became was archived.</span>' : `${link("Write it up as a recipe", `new-recipe/inspiration/${id}`, true, "edit")}${button(d.status === "tried" ? "Still want to try it" : "We tried it", "idea-status", `data-id="${id}"`, "", "check")}`}</div><div class="learn-columns spacer"><section>${d.notes ? `<p class="preline lead">${esc(d.notes)}</p>` : ""}${photoStrip(d.photo_ids)}${linksSection(d, "Watch and read")}</section><aside class="panel"><h3>What happens next</h3><p class="small muted spacer">Write it up as a recipe when it’s worth keeping; the idea stays linked to the recipe. Mark it tried to remember you gave it a go.</p></aside></div>`;
+}
+function inspirationEditor(id) {
+  const i = id ? record("inspiration", id) : null;
+  if (id && !i)
+    return empty("Idea not found.", "", link("Inspiration", "inspiration"));
+  const d = i?.data ?? {
+    title: "",
+    notes: "",
+    source: "",
+    tags: [],
+    links: [],
+    photo_ids: [],
+    status: "idea",
+    recipe_id: null,
+  };
+  return `${heading("Catch it while it’s fresh", i ? "A second look." : "What caught your eye?", "A dish, a flavor pairing, a video. Enough to remember why it excited you.")}<form data-form="inspiration" class="panel stack" data-id="${i?.id ?? ""}" data-version="${i?.version ?? ""}"><div class="form-grid">${field("Idea", "title", d.title, "text", 'required maxlength="500" placeholder="Crispy chickpea bowls with tahini"')}${field("Where it came from", "source", d.source, "text", 'maxlength="500" placeholder="Noa’s dinner, a newsletter, a reel"')}</div>${area("Notes", "notes", d.notes, 'rows="4" placeholder="What made it special, and what you’d change."')}${field("Tags, separated by commas", "tags", d.tags.join(", "), "text", 'placeholder="Weeknight, vegetarian"')}${area("Links and videos · one per line", "links", formatLinkLines(d.links), 'rows="3" placeholder="www.instagram.com/reel/… The reel"', "A web address, then an optional title. Instagram, TikTok, YouTube, Vimeo and Facebook videos play on the idea’s page.")}${photoFields(d.photo_ids)}<div class="form-grid">${select(
+    "Status",
+    "status",
+    [
+      ["idea", "Want to try"],
+      ["tried", "Tried it"],
+    ],
+    d.status,
+  )}${select("The recipe it became", "recipe_id", [["", "Not written up yet"], ...optionsFor("recipe")], d.recipe_id ?? "")}</div><div class="row">${submit(i ? "Save idea" : "Add idea")}${link("Cancel", i ? `inspiration/${i.id}` : "inspiration")}</div></form>`;
+}
+
+function bookCover(b) {
+  const d = b.data;
+  return d.cover_id
+    ? `<img class="cover" src="/api/assets/${encodeURIComponent(d.cover_id)}" alt="" loading="lazy">`
+    : `<div class="cover spine" aria-hidden="true"><span>${esc(d.title)}</span><small>${esc(d.author)}</small></div>`;
+}
+function bookCard(b) {
+  const d = b.data,
+    file = record("asset", d.file_id);
+  return `<article class="card book"><a class="cover-link" href="#/library/${b.id}" tabindex="-1" aria-hidden="true">${bookCover(b)}</a><h2><a class="title" href="#/library/${b.id}">${esc(d.title)}</a></h2><p>${esc(d.author || "Author not recorded")}</p><div class="card-end"><span class="small muted">${file ? `${fileLabel[file.data.mime_type] ?? "File"} · ${size(file.data.byte_length)}` : "File missing"}${d.bookmarks.length ? ` · ${d.bookmarks.length} bookmark${d.bookmarks.length === 1 ? "" : "s"}` : ""}</span>${link("Open", `library/${b.id}`, false, "arrow")}</div></article>`;
+}
+function shelfPage() {
+  const books = [...records("book")]
+    .sort((a, b) => a.data.title.localeCompare(b.data.title))
+    .filter((b) =>
+      matching("library", [
+        b.data.title,
+        b.data.author,
+        b.data.notes,
+        ...b.data.tags,
+      ]),
+    );
+  return `${heading("Your cooking shelf", "The books you cook from.", "Keep the cookbooks you own as PDF or EPUB files, bookmark the pages you return to, and link the recipes you write up from them.")}${searchBar("library", "Find a book", "Find a book, author or tag…")}${books.length ? `<div class="grid three">${books.map(bookCard).join("")}</div>` : empty(searches.library ? "No books found." : "An empty shelf, for now.", searches.library ? "Try another title, author or tag." : "Add a cookbook you own as a PDF or EPUB. Files stay on this household server.")}<form data-form="book" class="panel stack spacer"><h2>Add a book to the shelf.</h2><label class="upload">${icon("shelf")}<strong>Choose a PDF or EPUB</strong><span class="small muted">Up to 64 MB · stays on this household server</span><input type="file" name="file" accept="application/pdf,application/epub+zip,.pdf,.epub" required></label><div class="form-grid">${field("Title", "title", "", "text", 'required maxlength="500"')}${field("Author", "author", "", "text", 'maxlength="500"')}</div>${field("Tags, separated by commas", "tags", "", "text", 'placeholder="Baking, Middle Eastern"')}${area("Notes", "notes", "", 'rows="2" placeholder="A gift from Noa. The lamb chapter is the one."')}<div class="field"><span>Cover photo (optional)</span><input type="file" name="cover" accept="image/png,image/jpeg,image/webp">${help("PNG, JPEG or WebP up to 8 MB.")}</div><div class="row">${submit("Add to shelf")}</div></form>`;
+}
+const fileName = (d, file) =>
+  file.data.name ||
+  `${d.title}.${fileLabel[file.data.mime_type]?.toLowerCase() ?? "bin"}`;
+function bookPage(id, editing = false) {
+  const b = record("book", id);
+  if (!b)
+    return empty(
+      "Book not found.",
+      "It may have been archived.",
+      link("Library", "library"),
+    );
+  const d = b.data,
+    file = record("asset", d.file_id);
+  const kind = file ? fileLabel[file.data.mime_type] : null,
+    readable = kind === "PDF";
+  const href = `/api/assets/${encodeURIComponent(d.file_id)}`;
+  const written = d.recipe_ids.map((r) => record("recipe", r)).filter(Boolean);
+  return `${link("Library", "library", false, "back")}${heading(d.author ? `By ${d.author}` : "On your shelf", d.title, "", `${link("Edit details", `library/${id}/edit`, false, "edit")}${button("Remove from shelf", "archive", `data-kind="book" data-id="${id}" data-target="library"`, "quiet")}`)}<div class="book-columns"><aside class="stack">${bookCover(b)}<div class="actions">${file ? `<a class="button" href="${href}?download=1" download="${esc(fileName(d, file))}">${icon("download")}Download ${kind} · ${size(file.data.byte_length)}</a>${readable ? `<a class="button" href="${href}" target="_blank" rel="noopener">Open in a new tab</a>` : ""}` : '<p class="small muted">The file for this book is missing.</p>'}</div>${d.tags.length ? `<div class="chips">${d.tags.map((t) => `<span class="tag neutral">${esc(t)}</span>`).join("")}</div>` : ""}${d.notes ? `<div class="note"><p>${esc(d.notes)}</p></div>` : ""}<section class="panel"><h3>Bookmarks</h3>${d.bookmarks.length ? d.bookmarks.map((m, index) => `<div class="list-row"><div class="grow"><strong>${esc(m.label)}</strong>${m.page ? `<p>Page ${m.page}</p>` : ""}</div><div class="actions">${readable && m.page ? button("Read", "reader-page", `data-page="${m.page}" aria-label="Read ${esc(m.label)} on page ${m.page}"`, "small-button", "play") : ""}${button("×", "bookmark-remove", `data-id="${id}" data-index="${index}" aria-label="Remove bookmark ${esc(m.label)}"`, "quiet icon-button")}</div></div>`).join("") : '<p class="small muted">The pages you keep coming back to.</p>'}<form data-form="bookmark" class="stack spacer" data-id="${id}" data-version="${b.version}"><div class="form-grid">${field("What’s there", "label", "", "text", 'required maxlength="500" placeholder="The braise"')}${field("Page", "page", "", "number", 'min="1" max="100000" placeholder="Optional"')}</div><div>${submit("Add bookmark")}</div></form></section>${written.length ? `<section class="panel"><h3>Written up from this book</h3><div class="chips spacer">${written.map((r) => link(r.data.title, `recipes/${r.id}`)).join("")}</div></section>` : ""}</aside><section class="stack">${editing ? bookEditor(b) : readable ? `<div class="embed reader" data-shape="page" data-src="${esc(href)}" data-title="${esc(d.title)}">${button("Read here", "embed-load", `aria-label="Read ${esc(d.title)} here"`, "embed-load", "shelf")}<small>Opens the PDF from this household server on this page.</small></div>` : `<div class="panel"><h3>Read it in your reading app</h3><p class="small muted spacer">${kind ? `${kind} books don’t open in the browser. Download the file and open it in your reader.` : "This book has no readable file."}</p></div>`}</section></div>`;
+}
+function bookEditor(b) {
+  const d = b.data;
+  return `<form data-form="book" class="panel stack" data-id="${b.id}" data-version="${b.version}"><h2>Edit the details.</h2><div class="form-grid">${field("Title", "title", d.title, "text", 'required maxlength="500"')}${field("Author", "author", d.author, "text", 'maxlength="500"')}</div>${field("Tags, separated by commas", "tags", d.tags.join(", "), "text")}${area("Notes", "notes", d.notes, 'rows="3"')}<div class="field"><span>${d.cover_id ? "Replace the cover" : "Cover photo (optional)"}</span><input type="file" name="cover" accept="image/png,image/jpeg,image/webp">${help("PNG, JPEG or WebP up to 8 MB.")}</div>${d.cover_id ? check("Remove the current cover", "remove_cover") : ""}${recipePicker(d.recipe_ids, "Recipes written up from this book")}<div class="row">${submit("Save book")}${link("Cancel", `library/${b.id}`)}</div></form>`;
+}
+
+// What a recipe is connected to beyond its own page: the techniques it uses,
+// the book it came from and the idea it grew out of.
+function recipeConnections(id) {
+  const groups = [
+    [
+      "Techniques",
+      records("technique")
+        .filter((t) => t.data.recipe_ids.includes(id))
+        .map((t) => link(t.data.title, `techniques/${t.id}`, false, "pan")),
+    ],
+    [
+      "From your shelf",
+      records("book")
+        .filter((b) => b.data.recipe_ids.includes(id))
+        .map((b) => link(b.data.title, `library/${b.id}`, false, "shelf")),
+    ],
+    [
+      "Inspired by",
+      records("inspiration")
+        .filter((i) => i.data.recipe_id === id)
+        .map((i) => link(i.data.title, `inspiration/${i.id}`, false, "bulb")),
+    ],
+  ].filter(([, items]) => items.length);
+  return groups.length
+    ? `<section class="connections spacer">${groups.map(([title, items]) => `<div><div class="eyebrow">${title}</div><div class="chips">${items.join("")}</div></div>`).join("")}</section>`
+    : "";
 }
 
 function capturePage() {
@@ -854,7 +1148,11 @@ async function render() {
       content = recipeEditor(id, page === "imports" ? "import" : page);
       active = "recipes";
     } else if (page === "new-recipe") {
-      content = recipeEditor(null, "new");
+      content = recipeEditor(
+        null,
+        "new",
+        id === "inspiration" ? record("inspiration", extra) : null,
+      );
       active = "recipes";
     } else if (page === "memory") {
       content = memoryPage(id);
@@ -862,7 +1160,28 @@ async function render() {
     } else if (page === "capture") {
       content = capturePage();
       active = "recipes";
-    } else if (page === "pantry") content = pantryPage(id);
+    } else if (page === "techniques") {
+      content =
+        id === "new"
+          ? techniqueEditor(null)
+          : extra === "edit"
+            ? techniqueEditor(id)
+            : id
+              ? techniquePage(id)
+              : techniquesPage();
+      active = "inspiration";
+    } else if (page === "inspiration")
+      content =
+        id === "new"
+          ? inspirationEditor(null)
+          : extra === "edit"
+            ? inspirationEditor(id)
+            : id
+              ? inspirationDetail(id)
+              : inspirationPage();
+    else if (page === "library")
+      content = id ? bookPage(id, extra === "edit") : shelfPage();
+    else if (page === "pantry") content = pantryPage(id);
     else if (page === "household") content = householdPage(id);
     else if (page === "leftovers")
       content = id ? batchPage(id) : leftoversPage();
@@ -996,6 +1315,20 @@ async function saveRecipe(form, values) {
       ...(id ? { id, expected_version: Number(form.dataset.version) } : {}),
       recipe,
     });
+  const idea = record("inspiration", values.get("inspiration_id"));
+  if (idea && idea.data.recipe_id !== result.record.id)
+    try {
+      await write("inspiration_save", {
+        id: idea.id,
+        expected_version: idea.version,
+        inspiration: { ...idea.data, recipe_id: result.record.id },
+      });
+    } catch (error) {
+      toast(
+        `The recipe is saved, but the idea could not be linked to it: ${error.message}`,
+        true,
+      );
+    }
   await afterSave("Recipe saved.", `recipes/${result.record.id}`);
 }
 
@@ -1056,7 +1389,7 @@ document.addEventListener("submit", async (event) => {
       if (v.get("cleanup")) filters.cleanup = v.get("cleanup");
       await render();
     } else if (type === "search") {
-      search = v.get("query");
+      searches[v.get("scope") || "recipes"] = v.get("query");
       await render();
     } else if (type === "servings") {
       portions.set(v.get("id"), Number(v.get("servings")));
@@ -1069,12 +1402,7 @@ document.addEventListener("submit", async (event) => {
       const image = v.get("image");
       if (!image?.size || image.size > 8 * 1024 * 1024)
         throw new Error("Choose a PNG, JPEG or WebP image smaller than 8 MB.");
-      const base64 = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result).split(",")[1]);
-        reader.onerror = () => reject(new Error("Could not read that photo."));
-        reader.readAsDataURL(image);
-      });
+      const base64 = await readBase64(image);
       toast("Reading your photo locally. This may take a moment.");
       const result = await write("recipe_import_image", {
         image: { name: image.name, mime_type: image.type, base64 },
@@ -1083,6 +1411,88 @@ document.addEventListener("submit", async (event) => {
         "Photo read. Check the draft beside the original.",
         `imports/${result.record.id}`,
       );
+    } else if (type === "technique") {
+      const t = record("technique", form.dataset.id);
+      const result = await write("technique_save", {
+        ...editing,
+        technique: {
+          ...(t?.data ?? {}),
+          title: v.get("title"),
+          summary: v.get("summary"),
+          steps: paragraphs(v.get("steps")).map((text) => ({ text })),
+          tips: v.get("tips"),
+          tags: comma(v.get("tags")),
+          links: linksFrom(v.get("links")),
+          photo_ids: await photoIds(v),
+          recipe_ids: v.has("recipes_listed")
+            ? v.getAll("recipes")
+            : (t?.data.recipe_ids ?? []),
+        },
+      });
+      await afterSave("Technique saved.", `techniques/${result.record.id}`);
+    } else if (type === "inspiration") {
+      const i = record("inspiration", form.dataset.id);
+      const result = await write("inspiration_save", {
+        ...editing,
+        inspiration: {
+          ...(i?.data ?? {}),
+          title: v.get("title"),
+          notes: v.get("notes"),
+          source: v.get("source"),
+          tags: comma(v.get("tags")),
+          links: linksFrom(v.get("links")),
+          photo_ids: await photoIds(v),
+          status: v.get("status"),
+          recipe_id: v.get("recipe_id") || null,
+        },
+      });
+      await afterSave("Idea saved.", `inspiration/${result.record.id}`);
+    } else if (type === "book") {
+      const b = record("book", form.dataset.id);
+      const upload = v.get("file"),
+        cover = v.get("cover");
+      if (!b && !upload?.size) throw new Error("Choose a PDF or EPUB file.");
+      if (upload?.size) toast("Storing your book on the household server…");
+      const file_id = upload?.size
+        ? await uploadFile(upload, "book")
+        : b.data.file_id;
+      const cover_id = cover?.size
+        ? await uploadFile(cover, "image")
+        : v.has("remove_cover")
+          ? null
+          : (b?.data.cover_id ?? null);
+      const result = await write("book_save", {
+        ...editing,
+        book: {
+          ...(b?.data ?? { bookmarks: [] }),
+          title: v.get("title"),
+          author: v.get("author"),
+          tags: comma(v.get("tags")),
+          notes: v.get("notes"),
+          file_id,
+          cover_id,
+          recipe_ids: v.has("recipes_listed")
+            ? v.getAll("recipes")
+            : (b?.data.recipe_ids ?? []),
+        },
+      });
+      await afterSave(
+        b ? "Book updated." : "Added to your shelf.",
+        `library/${result.record.id}`,
+      );
+    } else if (type === "bookmark") {
+      const b = record("book", form.dataset.id);
+      await write("book_save", {
+        ...editing,
+        book: {
+          ...b.data,
+          bookmarks: [
+            ...b.data.bookmarks,
+            { label: v.get("label"), page: inputNumber(v.get("page")) },
+          ],
+        },
+      });
+      await afterSave("Bookmark added.");
     } else if (type === "pantry") {
       await write("pantry_save", {
         ...editing,
@@ -1272,7 +1682,20 @@ document.addEventListener("click", async (event) => {
     return;
   }
   if (a === "embed-load") {
-    loadEmbed(el);
+    loadEmbed(el.closest(".embed"));
+    return;
+  }
+  if (a === "reader-page") {
+    // A bookmark opens the PDF reader at its page; the viewer reads the
+    // fragment when the document loads, so the frame is created afresh.
+    const box = document.querySelector(".embed.reader");
+    if (box) {
+      loadEmbed(
+        box,
+        `${box.dataset.src.split("#")[0]}#page=${Number(el.dataset.page)}`,
+      );
+      box.scrollIntoView({ block: "start" });
+    }
     return;
   }
   el.disabled = true;
@@ -1360,6 +1783,28 @@ document.addEventListener("click", async (event) => {
           ? "Portions marked eaten."
           : "Allocation released.",
       );
+    } else if (a === "idea-status") {
+      const i = record("inspiration", id);
+      const tried = i.data.status !== "tried";
+      await write("inspiration_save", {
+        id,
+        expected_version: i.version,
+        inspiration: { ...i.data, status: tried ? "tried" : "idea" },
+      });
+      await afterSave(tried ? "Marked as tried." : "Back on the list to try.");
+    } else if (a === "bookmark-remove") {
+      const b = record("book", id);
+      await write("book_save", {
+        id,
+        expected_version: b.version,
+        book: {
+          ...b.data,
+          bookmarks: b.data.bookmarks.filter(
+            (_, index) => index !== Number(el.dataset.index),
+          ),
+        },
+      });
+      await afterSave("Bookmark removed.");
     } else if (a === "archive") {
       const kind = el.dataset.kind,
         r = record(kind, id);
@@ -1369,7 +1814,12 @@ document.addEventListener("click", async (event) => {
         expected_version: r.version,
         archived: true,
       });
-      await afterSave("Removed from the plan.");
+      await afterSave(
+        kind === "plan"
+          ? "Removed from the plan."
+          : "Archived. Undo brings it back.",
+        el.dataset.target,
+      );
     } else if (a.startsWith("step-")) {
       const s = record("session", id),
         dish = s.data.dishes.find((d) => d.dish_id === el.dataset.dish),
@@ -1445,7 +1895,7 @@ document.addEventListener("click", async (event) => {
       anchor.download = `kooks-${today()}.json`;
       anchor.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
-      toast("Cookbook exported with photos and leftovers.");
+      toast("Cookbook exported with photos, books and leftovers.");
     }
   } catch (error) {
     toast(error.message, true);

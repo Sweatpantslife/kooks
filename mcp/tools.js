@@ -11,6 +11,7 @@ import {
 } from "./backup.js";
 import { version } from "./version.js";
 import { addFeatureTools } from "./feature-tools.js";
+import { addLibraryTools } from "./library-tools.js";
 import { noteExtras } from "./feature-schemas.js";
 import { batchView } from "./features.js";
 import {
@@ -93,10 +94,14 @@ export function createTools(store) {
         "local_photo_import",
         "recipe_links",
         "recipe_facets",
+        "techniques",
+        "inspiration_board",
+        "ebook_library",
       ],
       limits: [
         "One household database. Browser clients share this server; no hosted cloud sync or individual accounts.",
         "No direct WhatsApp, website, video, or model-provider connection. Recipe links are stored and embedded by the apps, never fetched here. Photo OCR runs locally and requires review.",
+        "Photos and ebooks (PDF, EPUB) are stored locally as immutable assets; this server never reads, summarizes or fetches them, and the browser opens PDFs in its own viewer and downloads EPUBs.",
         "Timers store deadlines but do not deliver background alarms.",
         "Equipment checks are conditional; no automatic serving-time optimizer.",
       ],
@@ -480,6 +485,7 @@ export function createTools(store) {
   );
 
   addFeatureTools(tool, store, kooks);
+  addLibraryTools(tool, store, kooks);
   return definitions.map((definition) => ({
     ...definition,
     execute(input) {
