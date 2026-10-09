@@ -38,9 +38,13 @@ Original images are retained in SQLite and included in portable backups. Header/
 
 ## Sharing a household server
 
-By default the server accepts only loopback connections. Multiple tabs can use the same cookbook, and a connected MCP client can use the same database. To use other devices on a trusted private network, explicitly configure `KOOKS_HOST=0.0.0.0` and a `KOOKS_ACCESS_TOKEN` of at least 24 characters, then open this computer's LAN address on each device. The browser asks for the household key and receives a one-day HttpOnly session cookie. Keep the service on a trusted network; plain HTTP is not suitable for public access. No LAN listener is enabled automatically.
+By default the server accepts only loopback connections and asks nobody to sign in. Multiple tabs can use the same cookbook, and a connected MCP client can use the same database.
 
-This is one shared household with one shared access key, not per-person accounts. Person profiles identify preferences and task assignments. The server must remain running; the browser interface does not have offline storage or cloud synchronization. The separate native app can still operate using its own local storage.
+To use other devices, list the household's addresses in `KOOKS_HOUSEHOLD_EMAILS` and give the server a way to send mail: `KOOKS_SMTP_URL` (with `KOOKS_MAIL_FROM`) for real email, or `KOOKS_MAIL_OUTBOX=/some/private/directory` to write each sign-in email to a file while developing. Then either host it behind HTTPS as [hosting](hosting.md) describes, or explicitly set `KOOKS_HOST=0.0.0.0` on a trusted private network and open this computer's LAN address on each device. No LAN listener is enabled automatically, and plain HTTP is not suitable for public access.
+
+Each member signs in with a one-time link sent to their address, then adds a passkey so the next sign-in is a fingerprint, face or screen lock. Passkeys need HTTPS or localhost, so a plain-HTTP LAN address offers email links only. Sessions last through 30 days of use, survive restarts, and end on sign-out or when an address leaves the list. Setting `KOOKS_HOUSEHOLD_EMAILS` on the loopback server also turns sign-in on, which is how to try the flow locally with an outbox. Sign-in state lives in `auth_` tables beside the cookbook and is left out of portable backups.
+
+Members are known by email address; person profiles remain taste preferences and task assignments, not accounts. The server must remain running; the browser interface does not have offline storage or cloud synchronization. The separate native app can still operate using its own local storage.
 
 ## Data, compatibility and checks
 

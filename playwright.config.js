@@ -1,7 +1,7 @@
 import { defineConfig } from "@playwright/test";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 // The managed Chromium is the default. PLAYWRIGHT_CHANNEL selects an installed
 // browser such as "chrome"; PLAYWRIGHT_EXECUTABLE_PATH points at a specific
@@ -23,6 +23,16 @@ const browser = {
 process.env.KOOKS_E2E_DB ??= join(
   mkdtempSync(join(tmpdir(), "kooks-web-e2e-")),
   "kooks.sqlite",
+);
+// A second browser app with sign-in on: one household address, and sign-in
+// emails written to an outbox directory the suite reads.
+process.env.KOOKS_E2E_AUTH_DB ??= join(
+  mkdtempSync(join(tmpdir(), "kooks-web-auth-e2e-")),
+  "kooks.sqlite",
+);
+process.env.KOOKS_E2E_OUTBOX ??= join(
+  dirname(process.env.KOOKS_E2E_AUTH_DB),
+  "outbox",
 );
 
 export default defineConfig({
@@ -47,6 +57,15 @@ export default defineConfig({
         viewport: { width: 1280, height: 900 },
       },
     },
+    {
+      // Passkeys need a named host; localhost counts as secure.
+      name: "web-auth",
+      testDir: "./test/web-auth-e2e",
+      use: {
+        baseURL: "http://localhost:4319",
+        viewport: { width: 1280, height: 900 },
+      },
+    },
   ],
   webServer: [
     {
@@ -61,6 +80,18 @@ export default defineConfig({
         PORT: "4318",
         KOOKS_HOST: "127.0.0.1",
         KOOKS_DB_PATH: process.env.KOOKS_E2E_DB,
+      },
+      reuseExistingServer: !process.env.CI,
+    },
+    {
+      command: "node web/server.js",
+      url: "http://127.0.0.1:4319/healthz",
+      env: {
+        PORT: "4319",
+        KOOKS_HOST: "127.0.0.1",
+        KOOKS_DB_PATH: process.env.KOOKS_E2E_AUTH_DB,
+        KOOKS_HOUSEHOLD_EMAILS: "cook@example.test, baker@example.test",
+        KOOKS_MAIL_OUTBOX: process.env.KOOKS_E2E_OUTBOX,
       },
       reuseExistingServer: !process.env.CI,
     },
