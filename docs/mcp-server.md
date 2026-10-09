@@ -1,6 +1,6 @@
 # Kooks MCP server
 
-The local Kooks server gives an MCP-compatible agent 43 tools for recipes, composed meals, plan occurrences, shopping, equipment, cooking, pantry suggestions, household preferences, leftovers, recipe memories/variants, cost estimates, photo imports, and reversible history. The host agent interprets requests; this server validates and performs the actions. It does not require an API key or choose an AI provider.
+The local Kooks server gives an MCP-compatible agent 47 tools for recipes, composed meals, plan occurrences, shopping, equipment, cooking, pantry suggestions, household preferences, leftovers, recipe memories/variants, cost estimates, photo imports, techniques, an inspiration board, an ebook shelf, and reversible history. The host agent interprets requests; this server validates and performs the actions. It does not require an API key or choose an AI provider.
 
 This integration and the [browser interface](household-features.md) use the same Node.js domain tools and SQLite data. The separately packaged native application currently has its own device storage. AI provider sign-in requirements remain documented in [AI account connections](archive/ai-connections.md).
 
@@ -28,22 +28,23 @@ The default database is `.data/kooks.sqlite`, resolved relative to the project, 
 
 ## Tools
 
-| Area                | Tools                                                                                                                      |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| Discover and search | `kooks_status`, `kooks_list`, `kooks_get`                                                                                  |
-| Recipes             | `recipe_save`, `recipe_scale`, `quantity_convert`                                                                          |
-| Meals and plan      | `meal_save`, `prepare_source`, `plan_save`                                                                                 |
-| Shopping            | `shopping_create`, `shopping_preview`, `shopping_sync`, `shopping_remove_source`, `shopping_manual_item`, `shopping_check` |
-| Equipment           | `equipment_save`                                                                                                           |
-| Cooking             | `cooking_start`, `cooking_progress`, `cooking_timer`, `cooking_finish`                                                     |
-| Notes and history   | `note_save`, `record_archive`, `history_list`, `history_undo`                                                              |
-| Backup              | `backup_export`, `backup_restore`                                                                                          |
-| Pantry and dinner   | `pantry_save`, `recipe_suggest`                                                                                            |
-| Household           | `member_save`, `cooking_task_save` (timers also accept `member_id`)                                                        |
-| Cooking memory      | `recipe_memory`, `recipe_variant_save`; `note_save` supports rating, changes, next-time notes and cook-again preference    |
-| Cooked batches      | `batch_create`, `batch_allocate`, `batch_list`                                                                             |
-| Costs and budgets   | `price_save`, `cost_estimate`, `budget_save`, `cost_week`                                                                  |
-| Reviewed capture    | `recipe_parse`, `recipe_import_text`, `recipe_import_image`, `recipe_import_commit`                                        |
+| Area                        | Tools                                                                                                                      |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Discover and search         | `kooks_status`, `kooks_list`, `kooks_get`                                                                                  |
+| Recipes                     | `recipe_save`, `recipe_scale`, `quantity_convert`                                                                          |
+| Meals and plan              | `meal_save`, `prepare_source`, `plan_save`                                                                                 |
+| Shopping                    | `shopping_create`, `shopping_preview`, `shopping_sync`, `shopping_remove_source`, `shopping_manual_item`, `shopping_check` |
+| Equipment                   | `equipment_save`                                                                                                           |
+| Cooking                     | `cooking_start`, `cooking_progress`, `cooking_timer`, `cooking_finish`                                                     |
+| Notes and history           | `note_save`, `record_archive`, `history_list`, `history_undo`                                                              |
+| Backup                      | `backup_export`, `backup_restore`                                                                                          |
+| Pantry and dinner           | `pantry_save`, `recipe_suggest`                                                                                            |
+| Household                   | `member_save`, `cooking_task_save` (timers also accept `member_id`)                                                        |
+| Cooking memory              | `recipe_memory`, `recipe_variant_save`; `note_save` supports rating, changes, next-time notes and cook-again preference    |
+| Cooked batches              | `batch_create`, `batch_allocate`, `batch_list`                                                                             |
+| Costs and budgets           | `price_save`, `cost_estimate`, `budget_save`, `cost_week`                                                                  |
+| Reviewed capture            | `recipe_parse`, `recipe_import_text`, `recipe_import_image`, `recipe_import_commit`                                        |
+| Techniques, ideas and shelf | `asset_save`, `technique_save`, `inspiration_save`, `book_save`                                                            |
 
 `kooks://workflow` provides the agent's workflow guide. Tool schemas are discoverable through MCP, with validation, descriptions, read/write annotations, and output schemas (results are open objects; writes carry `action_id` and `replayed`). `kooks_list` search matches the words in a record's values, not its field names.
 
@@ -57,6 +58,9 @@ Once connected, requests can look like:
 - “Plan that dinner for Friday, add its ingredients to my shopping list, and exclude the oil I already have.”
 - “Start cooking dinner, remember each dish's step, and record that I used less salt.”
 - “Attach the YouTube video and the written original to this recipe.”
+- “Save the reverse-sear method with that video, and note that the steak recipe uses it.”
+- “Put the chickpea idea from Noa’s dinner on the board; we tried it last night.”
+- “Add the cookbook PDF I attached to the shelf and bookmark the lamb chapter on page 112.”
 - “Export my cookbook” or “Undo the last shopping change.”
 
 The server starts empty; it does not seed demonstration recipes or import the user's WhatsApp archive. Pasted text and uploaded photos can create editable drafts through the import tools. Local photo recognition uses Apple Vision on macOS (command line tools required) or Tesseract elsewhere. Import commit requires `reviewed: true` and preserves the source image/text. The host can also supply structured recipes from other supported sources. Recipe text is data, never instructions granting the agent permissions.
@@ -85,9 +89,15 @@ Equipment overview matches names to inventory and shows dish uses, unknown avail
 
 Cooking progress uses zero-based step indices and independent dish tracks. Timers store UTC deadlines and survive restart. **This server does not deliver audible or background notifications.** The agent should use a device timer when an alarm is needed. Finishing a session cancels its remaining deadlines.
 
+## Techniques, inspiration and the shelf
+
+`technique_save` keeps a method the household wants to remember: a summary, ordered `steps`, `tips`, `tags`, `links` (the same web addresses recipes carry, shown with click-to-play players in the apps), `photo_ids`, and the `recipe_ids` that use it. `inspiration_save` keeps an idea to try, with `notes`, a free-text `source`, links, photos and tags; `status` is `idea` or `tried`, and `recipe_id` points at the recipe the idea became once the household writes it up. `book_save` keeps an ebook on the shelf: `title`, `author`, `notes`, `tags`, page `bookmarks`, the `recipe_ids` written up from it, `file_id` for its PDF or EPUB, and an optional `cover_id`.
+
+Files go through `asset_save` first: a PNG, JPEG or WebP photo up to 8 MB, or a PDF or EPUB up to 64 MB, as base64. The server checks the bytes against the declared type, stores them once as an immutable asset, and returns the id with its SHA-256 and size. It never fetches, reads, indexes or summarizes a file; the browser app shows PDFs in its own reader frame and downloads EPUBs. `kooks_get` returns an asset with its bytes, so avoid reading an ebook back through MCP. All three save tools replace the full record, so read first and carry the fields you are not changing. References to missing recipes, or to assets of the wrong type, are rejected; an archived recipe stays a valid reference.
+
 ## Backup and boundaries
 
-`backup_export` returns a versioned JSON object containing active and archived records, contributions, snapshots, and timer deadlines. Save the returned `backup` object to a file. `backup_restore` validates the data and restores only into an **empty database**; use another `KOOKS_DB_PATH` to verify a backup. Record IDs and versions are preserved. Action history is excluded from this portable export. For a full database backup including history, stop all MCP processes before copying the database and any WAL files, or use SQLite's backup tooling. Large exports remain subject to the connecting client's message-size limits. `kooks_get` returns an asset with its `base64` bytes as before; listings and the browser state carry only its name, type, SHA-256 and size. The database upgrades itself from schema 1 to 2 on first open, moving image bytes into a separate table; an older server refuses to open an upgraded file.
+`backup_export` returns a versioned JSON object containing active and archived records, contributions, snapshots, and timer deadlines. Photos and ebooks travel inside their asset records as base64, so a shelf of large PDFs makes the export correspondingly large. Save the returned `backup` object to a file. `backup_restore` validates the data and restores only into an **empty database**; use another `KOOKS_DB_PATH` to verify a backup. Record IDs and versions are preserved. Action history is excluded from this portable export. For a full database backup including history, stop all MCP processes before copying the database and any WAL files, or use SQLite's backup tooling. Large exports remain subject to the connecting client's message-size limits. `kooks_get` returns an asset with its `base64` bytes as before; listings and the browser state carry only its name, type, SHA-256 and size. The database upgrades itself from schema 1 to 2 on first open, moving image bytes into a separate table; an older server refuses to open an upgraded file.
 
 The MCP transport runs locally over stdio. A separate browser server (`npm run dev`) provides the household interface and an HTTP action API on loopback by default. Optional LAN access requires a shared household access key; individual accounts and cloud sync are not implemented. Neither entry point provides model-provider credentials, purchases, messages, public sharing, direct WhatsApp integration, or appliance control.
 

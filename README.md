@@ -16,7 +16,7 @@ npm run dev
 
 `npm run test:e2e` runs the Playwright suites for both interfaces (run `npx playwright install chromium` once), and `npm run format:check` enforces the shared Prettier style; the GitHub Actions workflow runs all of these on every push.
 
-Open `http://127.0.0.1:4317` for the persistent browser app. It starts with an empty cookbook and shares SQLite storage with the MCP server. Features include recipe capture/editing, meal composition, shopping, cooking sessions, pantry suggestions, leftovers, cooking memories, taste profiles, shared tasks, costs, reviewed photo imports, and recipe links with embedded YouTube, Vimeo, Facebook, Instagram and TikTok players that load only when you press play.
+Open `http://127.0.0.1:4317` for the persistent browser app. It starts with an empty cookbook and shares SQLite storage with the MCP server. Features include recipe capture/editing, meal composition, shopping, cooking sessions, pantry suggestions, leftovers, cooking memories, taste profiles, shared tasks, costs, reviewed photo imports, recipe links with embedded YouTube, Vimeo, Facebook, Instagram and TikTok players that load only when you press play, a place for techniques and inspiration with the same click-to-play videos, and a library of your own PDF and EPUB cookbooks with bookmarks and an in-page PDF reader.
 
 For the separate mobile interface:
 
@@ -39,7 +39,7 @@ Native compilation requires Xcode or the Android toolchain. The projects include
 
 ## Agent integration
 
-Connect an MCP client to `node /absolute/path/to/kooks/mcp/index.js`; adapt [the example configuration](mcp-config.example.json). The backend exposes 43 validated tools with persistent storage, request deduplication, optimistic versions, undo, and backup/restore. The host agent supplies intelligence; Kooks has no built-in model-provider connection. See [MCP setup and workflows](docs/mcp-server.md).
+Connect an MCP client to `node /absolute/path/to/kooks/mcp/index.js`; adapt [the example configuration](mcp-config.example.json). The backend exposes 47 validated tools with persistent storage, request deduplication, optimistic versions, undo, and backup/restore. The host agent supplies intelligence; Kooks has no built-in model-provider connection. See [MCP setup and workflows](docs/mcp-server.md).
 
 ## Data and privacy
 
@@ -49,7 +49,7 @@ The browser server binds to loopback by default. Optional trusted-LAN access use
 
 ## Code layout
 
-`mcp/` holds the SQLite store, domain rules and MCP tools; `web/` the browser server and client; `app/` the Capacitor mobile app; `shared/` the unit table, the ingredient tokenizer that both parsers build on, and the link module that recognises video players for both apps. `test/` holds the Node unit and integration tests plus the Playwright projects in `test/mobile-e2e` and `test/web-e2e`.
+`mcp/` holds the SQLite store, domain rules and MCP tools (`mcp/library*.js` for techniques, inspiration and the book shelf); `web/` the browser server and client; `app/` the Capacitor mobile app; `shared/` the unit table, the ingredient tokenizer that both parsers build on, and the link module that recognises video players for both apps. `test/` holds the Node unit and integration tests plus the Playwright projects in `test/mobile-e2e` and `test/web-e2e`.
 
 ## Documentation
 

@@ -8,6 +8,7 @@ import {
   preserveChecked,
 } from "./shopping.js";
 import { validateFeatureRelations, Features } from "./features.js";
+import { validateLibraryRelations } from "./library.js";
 
 // Searchable text of a record: its string and number values, never its keys.
 function searchText(value) {
@@ -62,6 +63,7 @@ export class Kooks {
     // This also protects against an undo archiving a recipe that a later meal uses.
     for (const meal of this.store.list("meal")) this.validateMeal(meal.data);
     validateFeatureRelations(this.store);
+    validateLibraryRelations(this.store);
   }
 
   resolve(source) {
