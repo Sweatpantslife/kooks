@@ -23,7 +23,7 @@
     "cap:run:android": "npm run cap:sync && cap run android",
     "build:android": "npm run cap:sync && node scripts/native-build.mjs android",
     "build:ios": "npm run cap:sync && node scripts/native-build.mjs ios",
-    "test:mobile": "node --test test/mobile.test.js",
+    "test:mobile": "node --test test/mobile.test.js test/mobile-logic.test.js",
     "test:mobile:e2e": "playwright test --project mobile",
     "native:doctor": "node scripts/native-build.mjs doctor",
     "native:assets": "node scripts/native-assets.mjs",

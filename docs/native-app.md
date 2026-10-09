@@ -64,13 +64,14 @@ The iOS privacy manifest is included in the Xcode Resources build phase and decl
 ## Development and verification
 
 ```sh
-npm test                    # Existing MCP workflows plus mobile storage/timer tests
+npm test                    # Existing MCP workflows plus mobile storage/timer/logic tests
 npm run test:mobile          # Just mobile unit tests
-npm run test:mobile:e2e      # Browser workflow tests (installed Chrome by default)
+npm run test:e2e             # Playwright suites for this interface and the browser app
+npm run test:mobile:e2e      # Only the mobile project
 npm run native:assets       # Regenerate checked-in icons/splashes from resources/logo.svg
 ```
 
-To use a Playwright-managed Chromium instead of installed Chrome, run `npx playwright install chromium`, then `PLAYWRIGHT_CHANNEL=chromium npm run test:mobile:e2e`.
+Playwright uses its managed Chromium by default (run `npx playwright install chromium` once). Set `PLAYWRIGHT_CHANNEL=chrome` to use an installed Chrome, or `PLAYWRIGHT_EXECUTABLE_PATH` to point at a specific browser binary.
 
 The mobile build and `cap sync` succeed. Browser verification covers adding/editing/scaling recipes, persistence after reload, meal shopping and changed quantities, cooking progress, paused timers, backup restore, early-iOS API fallbacks, and 320/390/768/1280-pixel layouts. Unit tests exercise failed/interrupted storage, recovery, invalid backups, and timer notification reconciliation. The browser checks do not validate native plugin execution.
 

@@ -14,6 +14,8 @@ npm test
 npm run dev
 ```
 
+`npm run test:e2e` runs the Playwright suites for both interfaces (run `npx playwright install chromium` once), and `npm run format:check` enforces the shared Prettier style; the GitHub Actions workflow runs all of these on every push.
+
 Open `http://127.0.0.1:4317` for the persistent browser app. It starts with an empty cookbook and shares SQLite storage with the MCP server. Features include recipe capture/editing, meal composition, shopping, cooking sessions, pantry suggestions, leftovers, cooking memories, taste profiles, shared tasks, costs, and reviewed photo imports.
 
 For the separate mobile interface:
@@ -44,6 +46,10 @@ Connect an MCP client to `node /absolute/path/to/kooks/mcp/index.js`; adapt [the
 The local server stores its cookbook in `.data/kooks.sqlite`; `KOOKS_DB_PATH` selects another location. The native app stores its own cookbook in its private app directory. Keep personal recipes, photos, exports, credentials, and logs outside version control. `.gitignore` excludes local data, configuration, backups, signing material, dependencies, and generated build outputs.
 
 The browser server binds to loopback by default. Optional trusted-LAN access uses a shared access key; it does not provide individual accounts or public-internet hosting. See [household setup](docs/household-features.md). Publishing this source repository does not deploy a running service.
+
+## Code layout
+
+`mcp/` holds the SQLite store, domain rules and MCP tools; `web/` the browser server and client; `app/` the Capacitor mobile app; `shared/` the unit table and ingredient tokenizer that both parsers build on. `test/` holds the Node unit and integration tests plus the Playwright projects in `test/mobile-e2e` and `test/web-e2e`.
 
 ## Documentation
 
