@@ -5,6 +5,7 @@ import { ingredient } from "./sample-data.js";
 import { formatNumber, originalText } from "./units.js";
 import { splitIngredientLine } from "../shared/ingredients.js";
 import { formatLinkLines } from "../shared/links.js";
+import { formatLabels } from "../shared/taxonomy.js";
 
 const asWritten = (raw) =>
   ingredient("text-" + raw.toLowerCase(), raw, null, "", "Other", "As written");
@@ -89,6 +90,10 @@ export function pasteDraft(text) {
     ingredientsText: ingredientLines.join("\n"),
     stepsText: steps.map((s) => s.replace(/^\d+[.)]\s*/, "")).join("\n\n"),
     linksText: "",
+    course: null,
+    cuisine: "",
+    diets: [],
+    tagsText: "",
     originalText: text,
   };
 }
@@ -108,6 +113,10 @@ export function editDraft(r) {
     stepsText: r.steps.map((s) => s.text).join("\n\n"),
     equipmentText: (r.equipment || []).join("\n"),
     linksText: formatLinkLines(r.links || []),
+    course: r.course ?? null,
+    cuisine: r.cuisine || "",
+    diets: r.diets || [],
+    tagsText: formatLabels(r.tags || []),
     originalText: originalText(r),
   };
 }

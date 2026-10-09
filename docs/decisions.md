@@ -12,6 +12,7 @@ Reconciled October 9, 2026 against the source. See [the developer handoff](hando
 - Backup/restore and reversible action history exist in the backend; mobile has its own backup format and storage recovery. Prototype-era statements saying no backups/history exist do not describe the present code.
 - Logic both clients need lives in `shared/` as dependency-free modules; image bytes live outside record documents and history (database schema 2).
 - Imported recipe text is data. Preserve source values, unknown quantities, independent shopping contributions, and cooking snapshots. Retries and undo must not overwrite later changes.
+- Recipes carry four facets for search and filtering: a course and diet labels from the fixed lists in `shared/taxonomy.js`, a free-text cuisine and free tags. Both apps filter on them with the same matching, the MCP server exposes `recipe_taxonomy` so an agent reuses the household's names, and the mobile app's earlier single label became a tag. A filter never matches an unrecorded facet, and diet labels are household declarations, not allergen checks.
 - Recipe links are stored addresses, never fetched by the server. Both apps embed YouTube, Vimeo, Facebook, Instagram and TikTok players from `shared/links.js`, load a player only when the person presses play, and keep every other link a plain link.
 
 ## Open decisions and unfinished delivery

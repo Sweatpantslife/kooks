@@ -2,6 +2,12 @@ import { z } from "zod";
 import { clone as structuredClone } from "./compat.js";
 import { initial, recipes } from "./sample-data.js";
 import { MAX_LINKS, isWebUrl } from "../shared/links.js";
+import {
+  MAX_LABEL_LENGTH,
+  MAX_TAGS,
+  courseKeys,
+  dietKeys,
+} from "../shared/taxonomy.js";
 
 const id = z.string().regex(/^[a-zA-Z0-9_-]{1,150}$/);
 const text = z.string().max(200000);
@@ -29,11 +35,18 @@ const link = z.object({
   url: z.string().max(4000).refine(isWebUrl, "Links must be web addresses."),
   title: z.string().max(4000).default(""),
 });
+const label = z.string().max(MAX_LABEL_LENGTH);
 const recipeSchema = z.object({
   id,
   title: text.min(1),
   description: text,
-  tag: text,
+  // Facets: a course and diet labels from the shared fixed lists, a free
+  // cuisine and free tags. `tag` is the single label of older backups.
+  tag: text.optional(),
+  course: z.enum(courseKeys).nullable().default(null),
+  cuisine: label.default(""),
+  diets: z.array(z.enum(dietKeys)).max(dietKeys.length).default([]),
+  tags: z.array(label.min(1)).max(MAX_TAGS).default([]),
   time: z.number().nonnegative().nullable(),
   servings: positive.nullable(),
   source: text,
@@ -188,9 +201,28 @@ function requireValid(condition, message) {
   if (!condition) throw new Error(`Invalid cookbook: ${message}`);
 }
 
+// Backups before facets carried one free label per recipe. It becomes a tag,
+// except the placeholder the editor used to give every saved recipe.
+function upgradeRecipe(recipe) {
+  if (!("tag" in recipe)) return recipe;
+  const { tag, ...upgraded } = recipe;
+  if (!upgraded.tags.length && tag && tag !== "Your collection")
+    upgraded.tags = [tag];
+  return upgraded;
+}
+
 export function validateBackup(input) {
   const backup = backupSchema.parse(input);
   const state = backup.state;
+  state.custom = state.custom.map(upgradeRecipe);
+  if (state.session) {
+    state.session.snapshot = upgradeRecipe(state.session.snapshot);
+    if (state.session.dishes)
+      state.session.dishes = state.session.dishes.map((dish) => ({
+        ...dish,
+        snapshot: upgradeRecipe(dish.snapshot),
+      }));
+  }
   const ids = new Set([...recipes, ...state.custom].map((recipe) => recipe.id));
   requireValid(
     new Set(state.custom.map((r) => r.id)).size === state.custom.length,

@@ -607,3 +607,137 @@ test("portable backups round-trip new data and still accept legacy version-one e
   );
   assert.equal(empty.call("kooks_status").counts.recipe, 0);
 });
+
+test("recipe facets are normalized, filter listings and suggestions, and are counted by the taxonomy", (t) => {
+  const { call } = setup(t);
+  const orzo = call("recipe_save", {
+    recipe: recipe("Lemon orzo", {
+      course: "main",
+      cuisine: "Italian",
+      diets: ["vegan", "vegan"],
+      tags: ["Weeknight", " weeknight ", "One pot"],
+    }),
+  }).record;
+  assert.deepEqual(orzo.data.tags, ["Weeknight", "One pot"]);
+  assert.deepEqual(orzo.data.diets, ["vegan"]);
+  call("recipe_save", {
+    recipe: recipe("Chopped salad", {
+      course: "salad",
+      cuisine: "italian",
+      diets: ["vegan", "gluten_free"],
+      tags: ["No cook"],
+      favorite: true,
+    }),
+  });
+  const plain = call("recipe_save", {
+    recipe: recipe("Plain rice", { cuisine: "  " }),
+  }).record;
+  assert.equal(plain.data.course, null);
+  assert.equal(plain.data.cuisine, null);
+  assert.deepEqual(plain.data.diets, []);
+  const titles = (result) => result.records.map((r) => r.title).sort();
+  const list = (input) =>
+    titles(call("kooks_list", { kind: "recipe", ...input }));
+  assert.deepEqual(list({ course: "main" }), ["Lemon orzo"]);
+  assert.deepEqual(list({ cuisine: "ITALIAN", diets: ["vegan"] }), [
+    "Chopped salad",
+    "Lemon orzo",
+  ]);
+  assert.deepEqual(list({ diets: ["vegan", "gluten_free"] }), [
+    "Chopped salad",
+  ]);
+  assert.deepEqual(list({ tags: ["one POT"] }), ["Lemon orzo"]);
+  assert.deepEqual(list({ tags: ["One pot", "No cook"] }), []);
+  assert.deepEqual(list({ favorite: true }), ["Chopped salad"]);
+  assert.deepEqual(list({ query: "gluten-free" }), ["Chopped salad"]);
+  assert.deepEqual(list({ course: "dessert" }), []);
+  const summary = call("kooks_list", { kind: "recipe", course: "main" })
+    .records[0];
+  assert.equal(summary.cuisine, "Italian");
+  assert.deepEqual(summary.tags, ["Weeknight", "One pot"]);
+  assert.equal(summary.favorite, false);
+  assert.equal(call("kooks_list", { kind: "pantry" }).total, 0);
+  assert.throws(
+    () => call("kooks_list", { kind: "pantry", tags: ["x"] }),
+    code("INVALID_INPUT"),
+  );
+  assert.throws(() =>
+    call("recipe_save", { recipe: recipe("Bad course", { course: "lunch" }) }),
+  );
+  assert.throws(() =>
+    call("recipe_save", { recipe: recipe("Bad diet", { diets: ["paleo"] }) }),
+  );
+  const vocabulary = call("recipe_taxonomy");
+  assert.deepEqual(
+    vocabulary.courses.map((c) => [c.key, c.label, c.count]),
+    [
+      ["main", "Main", 1],
+      ["salad", "Salad", 1],
+    ],
+  );
+  assert.deepEqual(vocabulary.cuisines, [{ name: "Italian", count: 2 }]);
+  assert.deepEqual(
+    vocabulary.diets.map((d) => [d.key, d.count]),
+    [
+      ["vegan", 2],
+      ["gluten_free", 1],
+    ],
+  );
+  assert.deepEqual(
+    vocabulary.tags.map((t) => t.name),
+    ["No cook", "One pot", "Weeknight"],
+  );
+  assert.equal(vocabulary.available_courses.length, 11);
+  assert.equal(vocabulary.available_diets.length, 10);
+  const suggested = call("recipe_suggest", { course: "salad" });
+  assert.deepEqual(
+    suggested.results.map((r) => r.record.data.title),
+    ["Chopped salad"],
+  );
+  assert.equal(suggested.skipped.facets, 2);
+  assert.equal(call("recipe_suggest", { query: "vegan" }).total, 2);
+  assert.equal(call("recipe_suggest", { tags: ["weeknight"] }).total, 1);
+  // Facets travel with a variant and through a backup; older exports
+  // without them restore with the facets unset.
+  const variant = call("recipe_variant_save", {
+    original_recipe_id: orzo.id,
+    recipe: { ...orzo.data, title: "Orzo, my way", tags: ["Weeknight"] },
+  }).record;
+  assert.equal(variant.data.course, "main");
+  assert.equal(variant.data.cuisine, "Italian");
+  const restored = setup(t);
+  restored.call("backup_restore", { backup: call("backup_export").backup });
+  const back = restored.call("kooks_get", { kind: "recipe", id: orzo.id })
+    .record.data;
+  assert.deepEqual(back.diets, ["vegan"]);
+  assert.deepEqual(back.tags, ["Weeknight", "One pot"]);
+  const legacy = setup(t);
+  const now = new Date().toISOString();
+  legacy.call("backup_restore", {
+    backup: {
+      format: "kooks",
+      schema_version: 1,
+      exported_at: now,
+      records: [
+        {
+          kind: "recipe",
+          id: "old",
+          version: 1,
+          archived: false,
+          created_at: now,
+          updated_at: now,
+          data: { title: "Old rice", tags: ["Family"] },
+        },
+      ],
+    },
+  });
+  const old = legacy.call("kooks_get", { kind: "recipe", id: "old" }).record
+    .data;
+  assert.equal(old.course, null);
+  assert.equal(old.cuisine, null);
+  assert.deepEqual(old.diets, []);
+  assert.deepEqual(old.tags, ["Family"]);
+  assert.deepEqual(legacy.call("recipe_taxonomy").tags, [
+    { name: "Family", count: 1 },
+  ]);
+});

@@ -16,7 +16,7 @@ npm run dev
 
 `npm run test:e2e` runs the Playwright suites for both interfaces (run `npx playwright install chromium` once), and `npm run format:check` enforces the shared Prettier style; the GitHub Actions workflow runs all of these on every push.
 
-Open `http://127.0.0.1:4317` for the persistent browser app. It starts with an empty cookbook and shares SQLite storage with the MCP server. Features include recipe capture/editing, meal composition, shopping, cooking sessions, pantry suggestions, leftovers, cooking memories, taste profiles, shared tasks, costs, reviewed photo imports, and recipe links with embedded YouTube, Vimeo, Facebook, Instagram and TikTok players that load only when you press play.
+Open `http://127.0.0.1:4317` for the persistent browser app. It starts with an empty cookbook and shares SQLite storage with the MCP server. Features include recipe capture/editing, courses, cuisines, diet labels and tags for search and filtering, meal composition, shopping, cooking sessions, pantry suggestions, leftovers, cooking memories, taste profiles, shared tasks, costs, reviewed photo imports, and recipe links with embedded YouTube, Vimeo, Facebook, Instagram and TikTok players that load only when you press play.
 
 For the separate mobile interface:
 
@@ -24,7 +24,7 @@ For the separate mobile interface:
 npm run dev:mobile
 ```
 
-Open `http://127.0.0.1:5173`. This interface uses IndexedDB in a browser and device-local files when packaged natively. Its six example recipes are synthetic demonstration data. It does **not** share the browser/MCP cookbook or automatically include all household additions.
+Open `http://127.0.0.1:5173`. This interface uses IndexedDB in a browser and device-local files when packaged natively. Its six example recipes are synthetic demonstration data, and its library filters by course, cuisine, diet label and tag like the browser app. It does **not** share the browser/MCP cookbook or automatically include all household additions.
 
 ## Native projects
 
@@ -39,7 +39,7 @@ Native compilation requires Xcode or the Android toolchain. The projects include
 
 ## Agent integration
 
-Connect an MCP client to `node /absolute/path/to/kooks/mcp/index.js`; adapt [the example configuration](mcp-config.example.json). The backend exposes 43 validated tools with persistent storage, request deduplication, optimistic versions, undo, and backup/restore. The host agent supplies intelligence; Kooks has no built-in model-provider connection. See [MCP setup and workflows](docs/mcp-server.md).
+Connect an MCP client to `node /absolute/path/to/kooks/mcp/index.js`; adapt [the example configuration](mcp-config.example.json). The backend exposes 44 validated tools with persistent storage, request deduplication, optimistic versions, undo, and backup/restore. The host agent supplies intelligence; Kooks has no built-in model-provider connection. See [MCP setup and workflows](docs/mcp-server.md).
 
 ## Data and privacy
 
@@ -49,7 +49,7 @@ The browser server binds to loopback by default. Optional trusted-LAN access use
 
 ## Code layout
 
-`mcp/` holds the SQLite store, domain rules and MCP tools; `web/` the browser server and client; `app/` the Capacitor mobile app; `shared/` the unit table, the ingredient tokenizer that both parsers build on, and the link module that recognises video players for both apps. `test/` holds the Node unit and integration tests plus the Playwright projects in `test/mobile-e2e` and `test/web-e2e`.
+`mcp/` holds the SQLite store, domain rules and MCP tools; `web/` the browser server and client; `app/` the Capacitor mobile app; `shared/` the unit table, the ingredient tokenizer that both parsers build on, the link module that recognises video players for both apps, and the recipe facet taxonomy (courses, diet labels, cuisine and tag matching) both apps filter with. `test/` holds the Node unit and integration tests plus the Playwright projects in `test/mobile-e2e` and `test/web-e2e`.
 
 ## Documentation
 

@@ -1,6 +1,6 @@
 # Kooks MCP server
 
-The local Kooks server gives an MCP-compatible agent 43 tools for recipes, composed meals, plan occurrences, shopping, equipment, cooking, pantry suggestions, household preferences, leftovers, recipe memories/variants, cost estimates, photo imports, and reversible history. The host agent interprets requests; this server validates and performs the actions. It does not require an API key or choose an AI provider.
+The local Kooks server gives an MCP-compatible agent 44 tools for recipes, their courses, cuisines, diet labels and tags, composed meals, plan occurrences, shopping, equipment, cooking, pantry suggestions, household preferences, leftovers, recipe memories/variants, cost estimates, photo imports, and reversible history. The host agent interprets requests; this server validates and performs the actions. It does not require an API key or choose an AI provider.
 
 This integration and the [browser interface](household-features.md) use the same Node.js domain tools and SQLite data. The separately packaged native application currently has its own device storage. AI provider sign-in requirements remain documented in [AI account connections](archive/ai-connections.md).
 
@@ -30,7 +30,7 @@ The default database is `.data/kooks.sqlite`, resolved relative to the project, 
 
 | Area                | Tools                                                                                                                      |
 | ------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| Discover and search | `kooks_status`, `kooks_list`, `kooks_get`                                                                                  |
+| Discover and search | `kooks_status`, `kooks_list`, `kooks_get`, `recipe_taxonomy`                                                               |
 | Recipes             | `recipe_save`, `recipe_scale`, `quantity_convert`                                                                          |
 | Meals and plan      | `meal_save`, `prepare_source`, `plan_save`                                                                                 |
 | Shopping            | `shopping_create`, `shopping_preview`, `shopping_sync`, `shopping_remove_source`, `shopping_manual_item`, `shopping_check` |
@@ -53,6 +53,7 @@ Once connected, requests can look like:
 
 - “Save this family recipe, keeping the original message and noting any missing quantities.”
 - “Find recipes with chickpeas and scale this one to six servings.”
+- “Show me vegan weeknight mains, or anything Israeli we could make on Friday.”
 - “Combine the orzo for six and salad for four into a meal, and show the equipment I need.”
 - “Plan that dinner for Friday, add its ingredients to my shopping list, and exclude the oil I already have.”
 - “Start cooking dinner, remember each dish's step, and record that I used less salt.”
@@ -75,6 +76,12 @@ One `source_key` identifies one shopping occurrence: reuse it when updating that
 
 Meals reference current recipes. Scheduled occurrences and cooking sessions each store independent dish snapshots. Updating a recipe or reusable meal does not silently change an existing occurrence, shopping list, or session. Resave an occurrence or preview/sync a list explicitly to update it.
 
+## Courses, cuisines, diet labels and tags
+
+Every recipe carries four facets for search and filtering. `course` is one of a fixed list (`breakfast`, `starter`, `main`, `side`, `soup`, `salad`, `dessert`, `baking`, `snack`, `drink`, `basic`) or null when not recorded; `cuisine` is free text; `diets` holds fixed, self-declared labels (`vegetarian`, `vegan`, `pescatarian`, `gluten_free`, `dairy_free`, `nut_free`, `egg_free`, `kosher`, `halal`, `low_carb`); `tags` are free keywords. Cuisines and tags keep the spelling they were saved with and match case-insensitively; duplicate tags and blank cuisines are dropped on save. The lists live in `shared/taxonomy.js`, which both apps use for the same matching.
+
+`recipe_taxonomy` returns the names in use with counts, the fixed lists and a few suggested cuisines, so an agent reuses the household's vocabulary instead of inventing spellings. `kooks_list` (kind `recipe`) and `recipe_suggest` accept `course`, `cuisine`, `diets` and `tags`, and listing also accepts `favorite`; every given value must match, and a course or cuisine filter leaves out recipes where that facet is not recorded rather than guessing. Free-text search also sees the facet names. `recipe_save` replaces the whole recipe, so carry the facets along with the rest of the data. Diet labels are what the household says about a recipe, not an allergen check.
+
 ## Quantities, equipment, and timers
 
 Original text, attribution, yield, and ingredient values remain on the recipe. A recipe's `links` (`url` plus optional `title`, HTTP or HTTPS only, up to 50) hold reference pages and videos; the household apps embed YouTube, Vimeo, Facebook, Instagram and TikTok players for them and open other links in the browser. The server stores and validates these addresses and never fetches them, so `recipe_save` must carry the existing `links` along with the rest of the data. Dish snapshots in plans and cooking sessions copy the links. Scaling produces a view; it does not rewrite the source or multiply times or temperatures. Amounts embedded in instruction prose remain unchanged, so the agent must use the scaled ingredient table when discussing them. A missing base yield blocks scaling; unspecified quantities stay null. Serving counts range from 0.01 to 10,000.
@@ -93,4 +100,4 @@ The MCP transport runs locally over stdio. A separate browser server (`npm run d
 
 ## Verification
 
-`npm test` covers meal portions, equipment conflicts, compatible and ambiguous units, exclusions, shopping retries and checkmarks, stale previews, undo conflicts, persistent cooking progress and deadlines, complete export/restore, invalid input, competing database connections, and a real MCP client that discovers tools and reconnects to persisted data. Tests use isolated temporary databases.
+`npm test` covers meal portions, equipment conflicts, compatible and ambiguous units, exclusions, recipe facet filters and the taxonomy, shopping retries and checkmarks, stale previews, undo conflicts, persistent cooking progress and deadlines, complete export/restore, invalid input, competing database connections, and a real MCP client that discovers tools and reconnects to persisted data. Tests use isolated temporary databases.
