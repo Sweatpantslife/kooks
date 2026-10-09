@@ -1,6 +1,16 @@
 import { spawn } from "node:child_process";
-import { mkdtemp, writeFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { createHash } from "node:crypto";
+import { constants } from "node:fs";
+import {
+  access,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rename,
+  rm,
+  writeFile,
+} from "node:fs/promises";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { KooksError, requireThat } from "./store.js";
@@ -200,6 +210,51 @@ function run(command, args, timeout = 30000) {
   });
 }
 
+export const defaultCacheDirectory = () =>
+  process.env.KOOKS_CACHE_DIR ??
+  (process.platform === "darwin"
+    ? join(homedir(), "Library", "Caches", "kooks")
+    : join(tmpdir(), "kooks-cache"));
+
+// Compile the macOS Vision helper once per source revision. The binary is
+// keyed by a hash of its source, built under a temporary name and renamed into
+// place, so concurrent importers never run a half-written executable.
+export async function ensureRecognizer({ source, cacheDir, compile }) {
+  const hash = createHash("sha256")
+    .update(await readFile(source))
+    .digest("hex")
+    .slice(0, 16);
+  const executable = join(cacheDir, `recognize-${hash}`);
+  try {
+    await access(executable, constants.X_OK);
+    return executable;
+  } catch {
+    /* Not built yet, or no longer usable. */
+  }
+  await mkdir(cacheDir, { recursive: true, mode: 0o700 });
+  const staging = `${executable}.${process.pid}.${Date.now()}.tmp`;
+  try {
+    await compile(staging);
+    await rename(staging, executable);
+  } finally {
+    await rm(staging, { force: true });
+  }
+  return executable;
+}
+
+const clangArguments = (source, output) => [
+  "-fobjc-arc",
+  "-framework",
+  "Foundation",
+  "-framework",
+  "Vision",
+  "-framework",
+  "ImageIO",
+  source,
+  "-o",
+  output,
+];
+
 export async function recognizeImage(image) {
   const bytes = imageBytes(image);
   const directory = await mkdtemp(join(tmpdir(), "kooks-ocr-"));
@@ -211,24 +266,19 @@ export async function recognizeImage(image) {
       const source = fileURLToPath(
         new URL("../ocr/recognize.m", import.meta.url),
       );
-      const executable = join(directory, "recognize");
-      await run(
-        "/usr/bin/clang",
-        [
-          "-fobjc-arc",
-          "-framework",
-          "Foundation",
-          "-framework",
-          "Vision",
-          "-framework",
-          "ImageIO",
-          source,
-          "-o",
-          executable,
-        ],
-        60000,
-      );
-      text = await run(executable, [path], 60000);
+      const cacheDir = defaultCacheDirectory();
+      const compile = (output) =>
+        run("/usr/bin/clang", clangArguments(source, output), 60000);
+      let executable = await ensureRecognizer({ source, cacheDir, compile });
+      try {
+        text = await run(executable, [path], 60000);
+      } catch (error) {
+        // A cached binary that vanished or lost its permissions is rebuilt once.
+        if (!["ENOENT", "EACCES"].includes(error.code)) throw error;
+        await rm(executable, { force: true });
+        executable = await ensureRecognizer({ source, cacheDir, compile });
+        text = await run(executable, [path], 60000);
+      }
     } else text = await run("tesseract", [path, "stdout", "--psm", "3"]);
     text = text.trim();
     requireThat(
