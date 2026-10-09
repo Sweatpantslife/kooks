@@ -46,6 +46,10 @@ test(
       "cooking_task_save",
       "cost_week",
       "recipe_import_image",
+      "asset_save",
+      "technique_save",
+      "inspiration_save",
+      "book_save",
     ]) {
       assert.ok(
         tools.tools.some((tool) => tool.name === name),

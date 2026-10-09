@@ -14,6 +14,7 @@ Reconciled October 9, 2026 against the source. See [the developer handoff](hando
 - Imported recipe text is data. Preserve source values, unknown quantities, independent shopping contributions, and cooking snapshots. Retries and undo must not overwrite later changes.
 - Household members sign in with passkeys, with a one-time emailed link as the fallback and as the first proof of an address; the list in `KOOKS_HOUSEHOLD_EMAILS` is the membership. Passkeys are verified with Node's own crypto in `web/webauthn.js` and links are sent by the small SMTP client in `web/mail.js`; neither adds a dependency. Loopback-only use stays sign-in free.
 - Recipe links are stored addresses, never fetched by the server. Both apps embed YouTube, Vimeo, Facebook, Instagram and TikTok players from `shared/links.js`, load a player only when the person presses play, and keep every other link a plain link.
+- Techniques, the inspiration board and the ebook shelf are browser/MCP records (`mcp/library*.js`). Uploaded photos and PDF/EPUB files are immutable assets in SQLite, checked by signature, served only to the household and never read or summarized by the server; portable backups include them. The mobile app does not have these sections.
 
 ## Open decisions and unfinished delivery
 

@@ -135,6 +135,9 @@ export const kind = z.enum([
   "budget",
   "asset",
   "import",
+  "technique",
+  "inspiration",
+  "book",
 ]);
 export const write = {
   request_id: id.describe(

@@ -32,6 +32,44 @@ const mime = {
 };
 const MINUTE = 60000;
 const isLoopback = (host) => ["127.0.0.1", "localhost", "::1"].includes(host);
+// Uploads travel as base64 inside JSON: an ebook of 64 MB needs about 86 MB.
+const maxBody = 96 * 1024 * 1024;
+const extensions = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/webp": "webp",
+  "application/pdf": "pdf",
+  "application/epub+zip": "epub",
+};
+const displayable = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "application/pdf",
+]);
+// How the browser receives an asset: photos and PDFs display (PDFs inside the
+// app's own reader frame), anything else downloads. The name is the stored
+// one with the extension its type calls for, in ASCII and in RFC 5987 form.
+function disposition(data, download) {
+  const extension = extensions[data.mime_type] ?? "bin";
+  let name =
+    String(data.name ?? "")
+      .trim()
+      .replace(/[\\/\0-\x1f"]/g, "_") || "file";
+  if (
+    !name.toLowerCase().endsWith(`.${extension}`) &&
+    !(extension === "jpg" && /\.jpe?g$/i.test(name))
+  )
+    name += `.${extension}`;
+  const ascii = name.replace(/[^\x20-\x7e]/g, "_");
+  const encoded = encodeURIComponent(name).replace(
+    /[!'()*]/g,
+    (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
+  const kind =
+    download || !displayable.has(data.mime_type) ? "attachment" : "inline";
+  return `${kind}; filename="${ascii}"; filename*=UTF-8''${encoded}`;
+}
 
 // Sign-in is on whenever the kitchen is reachable beyond this computer, or
 // when household addresses are configured on purpose. Members prove an
@@ -77,6 +115,10 @@ export function createWebServer({
     : null;
   const tools = new Map(createTools(store).map((t) => [t.name, t]));
   const limits = new Map();
+  // Video players load only from the embed origins the shared module
+  // produces, and only once the person presses play; the book reader frames
+  // PDFs from this origin, which asset responses allow in turn.
+  const policy = `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; connect-src 'self'; frame-src 'self' ${embedOrigins.join(" ")}; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'`;
   let importsInProgress = 0;
   function send(res, status, data) {
     res.writeHead(status, {
@@ -91,7 +133,7 @@ export function createWebServer({
     let size = 0;
     for await (const chunk of req) {
       size += chunk.length;
-      if (size > 64 * 1024 * 1024)
+      if (size > maxBody)
         throw new KooksError("TOO_LARGE", "Request is too large.");
       chunks.push(chunk);
     }
@@ -219,12 +261,7 @@ export function createWebServer({
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("Referrer-Policy", "no-referrer");
     res.setHeader("Cache-Control", "no-store");
-    res.setHeader(
-      "Content-Security-Policy",
-      // Video players load only from the embed origins the shared module
-      // produces, and only once the person presses play.
-      `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; connect-src 'self'; frame-src ${embedOrigins.join(" ")}; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'`,
-    );
+    res.setHeader("Content-Security-Policy", policy);
     try {
       const url = new URL(req.url, `http://${req.headers.host}`);
       if (url.pathname === "/healthz" && req.method === "GET")
@@ -288,12 +325,20 @@ export function createWebServer({
           url.pathname.slice("/api/assets/".length),
         );
         const asset = store.read(() => ({
-          mime_type: store.get("asset", id, true).data.mime_type,
+          data: store.get("asset", id, true).data,
           bytes: store.blob("asset", id),
         }));
+        res.setHeader(
+          "Content-Security-Policy",
+          policy.replace("frame-ancestors 'none'", "frame-ancestors 'self'"),
+        );
         res.writeHead(200, {
-          "Content-Type": asset.mime_type,
+          "Content-Type": asset.data.mime_type,
           "Content-Length": asset.bytes.length,
+          "Content-Disposition": disposition(
+            asset.data,
+            url.searchParams.has("download"),
+          ),
         });
         return res.end(asset.bytes);
       }
@@ -365,7 +410,9 @@ export function createWebServer({
       });
     }
   });
-  server.requestTimeout = 90000;
+  // Receiving a request: a 64 MB ebook arrives as 86 MB of JSON, which a
+  // slow household connection may take a few minutes to send.
+  server.requestTimeout = 300000;
   server.auth = auth;
   return server;
 }

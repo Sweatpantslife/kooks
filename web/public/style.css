@@ -1078,6 +1078,118 @@ th {
   color: white;
   border-color: var(--ink);
 }
+.lead {
+  font-size: 16px;
+  max-width: 70ch;
+}
+.clamp {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.learn-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(220px, 0.8fr);
+  gap: 30px;
+  align-items: start;
+}
+.learn-columns .method {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  counter-reset: steps;
+}
+.photos {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 14px 0;
+}
+.photo {
+  display: block;
+  width: 168px;
+  height: 126px;
+  object-fit: cover;
+  border-radius: 8px;
+  background: white;
+}
+.photo-keep {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+}
+.photo-keep .check {
+  font-size: 12px;
+}
+.card-photo {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 10px;
+}
+.field input[type="file"] {
+  padding: 9px 10px;
+  font-size: 12px;
+}
+.connections {
+  display: grid;
+  gap: 14px;
+}
+.connections .chips {
+  margin-top: 8px;
+}
+/* The shelf: a cover image, or a spine drawn from the title. */
+.book-columns {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.8fr) minmax(0, 1.6fr);
+  gap: 30px;
+  align-items: start;
+}
+.cover {
+  display: block;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  border-radius: 6px;
+  box-shadow:
+    0 6px 20px #20301b1f,
+    inset 3px 0 0 #ffffff33;
+}
+.spine {
+  background: linear-gradient(135deg, #3c5d45, #22312a);
+  color: #fffef9;
+  display: grid;
+  align-content: end;
+  gap: 6px;
+  padding: 18px;
+  font-family: Georgia, serif;
+  overflow: hidden;
+}
+.spine span {
+  font-size: 22px;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+.spine small {
+  opacity: 0.8;
+}
+.cover-link {
+  display: block;
+  text-decoration: none;
+}
+.card.book .cover {
+  max-height: 260px;
+}
+/* The book reader: a small panel until opened, then most of the screen. */
+.embed[data-shape="page"] {
+  aspect-ratio: auto;
+  height: 240px;
+}
+.embed[data-loaded][data-shape="page"] {
+  height: min(85vh, 1100px);
+  background: #fff;
+}
 @media (min-width: 1500px) {
   .content {
     margin-inline: auto;
@@ -1215,8 +1327,13 @@ th {
     right: -12px;
     bottom: -38px;
   }
-  .recipe-columns {
+  .recipe-columns,
+  .learn-columns,
+  .book-columns {
     grid-template-columns: 1fr;
+  }
+  .card.book .cover {
+    max-height: 200px;
   }
   .grid,
   .grid.three {
