@@ -24,6 +24,12 @@ No examples are inserted into the household database. Add a recipe manually, pas
 7. **Meal cost estimates.** Save user-confirmed package prices, dates, currency and manual/receipt provenance. A receipt price is entered and confirmed manually. Costing uses the latest compatible price on or before the estimate date; units normalize within supported dimensions. Missing quantities/prices leave the total incomplete and show a known subtotal. Recipe views show per-portion cost when complete. Spending compares planned cooking occurrences with a Monday-start weekly budget. No exchange rates, retailer prices or density conversions are invented. Costs describe ingredients used, not checkout package totals.
 8. **Screenshot/photo import.** Upload PNG, JPEG or WebP up to 8 MB. macOS uses Apple's local Vision text recognition through a small Objective-C helper; other systems use the `tesseract` executable. The original image stays beside editable recipe fields. Text extraction preserves unknown yields, ambiguous units and unstructured source text. English and Hebrew section headings are recognized by the conservative parser; OCR language/handwriting quality depends on the local engine. The review checkbox is required before committing a draft. Saving again with the same action key cannot create a duplicate recipe.
 
+## Links and videos
+
+A recipe can carry any number of links (up to 50) beside its source link: the written original, a technique video, a family post. In the editor, **Links and videos** takes one link per line, a web address with an optional title in either order; `youtu.be/…` without a scheme is accepted. YouTube (videos, Shorts, playlists, shared start times), Vimeo (including unlisted links), Facebook videos and reels, Instagram posts and reels, and TikTok videos appear on the recipe page as players; every other link, and short links such as `fb.watch` or `vm.tiktok.com`, opens in a new tab. A video used as the recipe's source link is shown the same way.
+
+Players are not loaded with the page. Each one shows a play button, and only pressing it loads the provider's player, so viewing a recipe sends nothing to a video site. The server stores the addresses and never fetches them; its Content-Security-Policy allows frames only from the five player origins. While a video is playing, other cooks' changes are held back until you leave the page so the video is not restarted. Cooking sessions snapshot the links and show them as plain links beside the steps.
+
 ## Photos
 
 On macOS install Apple's command line tools if needed (`xcode-select --install`). Full Xcode is not required for the OCR helper. The helper is compiled once per source revision into `~/Library/Caches/kooks` (override the location with `KOOKS_CACHE_DIR`) and reused by later imports. On other platforms install Tesseract through your usual package manager. Photo content is processed locally and is not uploaded to a model provider. OCR runs outside database transactions; errors leave the cookbook unchanged. An unreadable image can be retried or entered as text.
@@ -38,7 +44,7 @@ This is one shared household with one shared access key, not per-person accounts
 
 ## Data, compatibility and checks
 
-All mutations use the same validated tools, SQLite transactions, optimistic versions, request keys and reversible history as the original MCP implementation. `backup_export` now emits schema version 2 and includes the new records and photos. Restore accepts both versions 1 and 2 and still requires an empty database. It rejects invalid references and over-allocated batches atomically. Browser Export cookbook downloads this portable JSON.
+All mutations use the same validated tools, SQLite transactions, optimistic versions, request keys and reversible history as the original MCP implementation. `backup_export` now emits schema version 2 and includes the new records, photos and recipe links. Restore accepts both versions 1 and 2 and still requires an empty database. It rejects invalid references and over-allocated batches atomically. Browser Export cookbook downloads this portable JSON.
 
 ```sh
 npm test

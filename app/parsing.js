@@ -4,6 +4,7 @@
 import { ingredient } from "./sample-data.js";
 import { formatNumber, originalText } from "./units.js";
 import { splitIngredientLine } from "../shared/ingredients.js";
+import { formatLinkLines } from "../shared/links.js";
 
 const asWritten = (raw) =>
   ingredient("text-" + raw.toLowerCase(), raw, null, "", "Other", "As written");
@@ -87,6 +88,7 @@ export function pasteDraft(text) {
     servings: yieldMatch ? Number(yieldMatch[1]) : null,
     ingredientsText: ingredientLines.join("\n"),
     stepsText: steps.map((s) => s.replace(/^\d+[.)]\s*/, "")).join("\n\n"),
+    linksText: "",
     originalText: text,
   };
 }
@@ -105,6 +107,7 @@ export function editDraft(r) {
       .join("\n"),
     stepsText: r.steps.map((s) => s.text).join("\n\n"),
     equipmentText: (r.equipment || []).join("\n"),
+    linksText: formatLinkLines(r.links || []),
     originalText: originalText(r),
   };
 }

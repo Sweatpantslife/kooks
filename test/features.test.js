@@ -451,6 +451,69 @@ test("recipe drafts require review, preserve source wording and ambiguous units,
   );
 });
 
+test("recipe links are validated, travel with cooking snapshots and variants, and survive a backup", (t) => {
+  const { call } = setup(t);
+  const links = [
+    { url: "https://youtu.be/dQw4w9WgXcQ", title: "Grandma folds them" },
+    { url: "https://example.com/orzo", title: "" },
+  ];
+  const saved = call("recipe_save", {
+    recipe: recipe("Linked rice", {
+      source_url: "https://vimeo.com/76979871",
+      links: [
+        { url: "https://youtu.be/dQw4w9WgXcQ", title: " Grandma folds them " },
+        { url: "https://example.com/orzo" },
+      ],
+    }),
+  }).record;
+  assert.deepEqual(saved.data.links, links);
+  assert.deepEqual(
+    call("recipe_save", { recipe: recipe("Plain") }).record.data.links,
+    [],
+  );
+  for (const bad of [
+    [{ url: "javascript:alert(1)" }],
+    [{ url: "ftp://files.example.com/x" }],
+    [{ url: "not a link" }],
+    Array.from({ length: 51 }, () => ({ url: "https://example.com" })),
+  ])
+    assert.throws(
+      () =>
+        call("recipe_save", { recipe: recipe("Bad links", { links: bad }) }),
+      `rejects ${JSON.stringify(bad[0])}`,
+    );
+  const session = call("cooking_start", {
+    source: { kind: "recipe", id: saved.id },
+  }).record;
+  assert.deepEqual(session.data.dishes[0].links, links);
+  assert.deepEqual(
+    call("prepare_source", {
+      source: { kind: "recipe", id: saved.id, servings: 4 },
+    }).dishes[0].links,
+    links,
+  );
+  const variant = call("recipe_variant_save", {
+    original_recipe_id: saved.id,
+    recipe: recipe("Linked rice, my way", { links: [links[1]] }),
+  }).record;
+  assert.deepEqual(variant.data.links, [links[1]]);
+  assert.equal(variant.data.source_url, "https://vimeo.com/76979871");
+  const backup = call("backup_export").backup;
+  const target = setup(t);
+  target.call("backup_restore", { backup });
+  assert.deepEqual(
+    target.call("kooks_get", { kind: "recipe", id: saved.id }).record.data
+      .links,
+    links,
+  );
+  assert.deepEqual(
+    target.call("kooks_get", { kind: "session", id: session.id }).record.data
+      .dishes[0].links,
+    links,
+  );
+  assert.ok(call("kooks_status").capabilities.includes("recipe_links"));
+});
+
 test("portable backups round-trip new data and still accept legacy version-one exports", (t) => {
   const { call } = setup(t);
   const r = call("recipe_save", { recipe: recipe() }).record;

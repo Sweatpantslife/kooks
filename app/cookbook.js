@@ -17,6 +17,7 @@ import {
   applyShoppingReview as applyReview,
 } from "./shopping.js";
 import { equipmentSummary } from "./equipment.js";
+import { MAX_LINKS, describeLink, parseLinkLines } from "../shared/links.js";
 import { clone as structuredClone, randomId } from "./compat.js";
 import {
   createIcons,
@@ -429,9 +430,43 @@ async function boot() {
       )
       .join("");
   }
+  // Links and videos of a recipe. A recognised video shows a play button that
+  // loads the provider's player only when pressed; everything else is a link.
+  function linksView(links, heading = "Links and videos") {
+    if (!links?.length) return "";
+    return `<section class="k-links"><h3>${esc(heading)}</h3>${links
+      .map((item) => {
+        const info = describeLink(item.url);
+        if (!info) return "";
+        const title =
+          item.title || (info.embed ? `${info.label} video` : item.url);
+        const line = `<p class="k-small"><a href="${esc(item.url)}" target="_blank" rel="noreferrer">${esc(title)}</a> <span class="k-muted">· ${esc(info.site)}</span></p>`;
+        if (!info.embed) return line;
+        return `<div class="k-link-item"><div class="k-embed" data-shape="${info.embed.shape}" data-src="${esc(info.embed.autoplay_src)}" data-title="${esc(title)}">${button(icon("play") + `<span>Play on ${esc(info.label)}</span>`, "embed-load", `aria-label="${esc(item.title ? `Play ${item.title} on ${info.label}` : `Play on ${info.label}`)}"`, "k-embed-load")}<small>Loads the video from ${esc(info.label)} when you press play.</small></div>${line}</div>`;
+      })
+      .join("")}</section>`;
+  }
+  function linkLine(links) {
+    if (!links?.length) return "";
+    return `<p class="k-note">Links and videos: ${links.map((l) => `<a href="${esc(l.url)}" target="_blank" rel="noreferrer">${esc(l.title || describeLink(l.url)?.site || l.url)}</a>`).join(" · ")}</p>`;
+  }
+  function loadEmbed(target) {
+    const box = target.closest(".k-embed");
+    if (!box) return;
+    box.dataset.loaded = "true";
+    box.innerHTML = `<iframe src="${esc(box.dataset.src)}" title="${esc(box.dataset.title)}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
+  }
+  function shareText(r) {
+    const links = (r.links || []).map((l) =>
+      l.title ? `${l.title}: ${l.url}` : l.url,
+    );
+    return (
+      originalText(r) + (links.length ? "\n\nLinks\n" + links.join("\n") : "")
+    );
+  }
   function detailView() {
     const r = recipe();
-    return `${button(icon("arrow-left") + "Recipes", "nav", 'data-view="library"', "k-quiet k-back")}<div class="k-row k-between"><span class="k-tag">${esc(r.tag)}</span>${button(icon("pencil") + "Edit recipe", "edit", 'data-id="' + esc(r.id) + '"', "k-quiet")}</div><h1 class="k-detail-title">${esc(r.title)}</h1><p class="k-muted">${esc(r.description)}</p><div class="k-detail-meta"><span>${r.time ? r.time + " minutes" : "Time not set"}</span><span>·</span><span>${esc(r.source)}</span></div><div class="k-actions">${button(icon("play") + "Start cooking", "start-cook", "", "k-primary")}${button(icon("shopping-basket") + "Add to list", "review")}${button(icon("calendar-plus") + "Plan a meal", "schedule")}${button(icon("share-2") + "Share", "share-recipe")}</div><div class="k-recipe-columns"><section class="k-ingredients"><div class="k-row k-between"><h3>Ingredients</h3>${unitSelect()}</div><div class="k-serving-control"><span class="k-small">${r.servings ? "Servings" : "Original quantities"}</span>${r.servings ? `<div class="k-stepper">${button(icon("minus"), "servings", 'data-delta="-1" aria-label="Fewer servings" ' + (servings(r) <= 1 ? "disabled" : ""), "k-quiet k-icon")}<strong>${servings(r)}</strong>${button(icon("plus"), "servings", 'data-delta="1" aria-label="More servings" ' + (servings(r) >= 24 ? "disabled" : ""), "k-quiet k-icon")}</div>` : `${button("Set yield", "edit", "", "k-quiet")}`}</div>${ingredientRows(r)}${state.units === "us" ? '<p class="k-note">Cups use 240 mL. Weight stays in ounces; cup-to-gram estimates need an ingredient reference.</p>' : ""}${r.servings && servings(r) !== r.servings ? '<p class="k-note">Ingredient amounts adjusted. Cooking times stay the same.</p>' : ""}</section><section><h2>The method</h2><ol class="k-method">${r.steps.map((s) => `<li><h3>${esc(s.title)}</h3><p>${esc(scaledText(s.text))}</p></li>`).join("")}</ol>${r.note ? `<div class="k-notice">${esc(r.note)}</div>` : ""}<details class="k-source"><summary class="cursor-interaction">Original recipe</summary><pre>${esc(originalText(r))}</pre></details><label class="k-field" style="margin-top:20px"><span>Your cooking notes</span><textarea class="k-input" id="k-recipe-note" placeholder="What worked? What would you change?">${esc(state.notes[r.id] || "")}</textarea></label>${button("Save note", "save-note", 'style="margin-top:9px"', "k-quiet")}</section></div>`;
+    return `${button(icon("arrow-left") + "Recipes", "nav", 'data-view="library"', "k-quiet k-back")}<div class="k-row k-between"><span class="k-tag">${esc(r.tag)}</span>${button(icon("pencil") + "Edit recipe", "edit", 'data-id="' + esc(r.id) + '"', "k-quiet")}</div><h1 class="k-detail-title">${esc(r.title)}</h1><p class="k-muted">${esc(r.description)}</p><div class="k-detail-meta"><span>${r.time ? r.time + " minutes" : "Time not set"}</span><span>·</span><span>${esc(r.source)}</span></div><div class="k-actions">${button(icon("play") + "Start cooking", "start-cook", "", "k-primary")}${button(icon("shopping-basket") + "Add to list", "review")}${button(icon("calendar-plus") + "Plan a meal", "schedule")}${button(icon("share-2") + "Share", "share-recipe")}</div><div class="k-recipe-columns"><section class="k-ingredients"><div class="k-row k-between"><h3>Ingredients</h3>${unitSelect()}</div><div class="k-serving-control"><span class="k-small">${r.servings ? "Servings" : "Original quantities"}</span>${r.servings ? `<div class="k-stepper">${button(icon("minus"), "servings", 'data-delta="-1" aria-label="Fewer servings" ' + (servings(r) <= 1 ? "disabled" : ""), "k-quiet k-icon")}<strong>${servings(r)}</strong>${button(icon("plus"), "servings", 'data-delta="1" aria-label="More servings" ' + (servings(r) >= 24 ? "disabled" : ""), "k-quiet k-icon")}</div>` : `${button("Set yield", "edit", "", "k-quiet")}`}</div>${ingredientRows(r)}${state.units === "us" ? '<p class="k-note">Cups use 240 mL. Weight stays in ounces; cup-to-gram estimates need an ingredient reference.</p>' : ""}${r.servings && servings(r) !== r.servings ? '<p class="k-note">Ingredient amounts adjusted. Cooking times stay the same.</p>' : ""}</section><section><h2>The method</h2><ol class="k-method">${r.steps.map((s) => `<li><h3>${esc(s.title)}</h3><p>${esc(scaledText(s.text))}</p></li>`).join("")}</ol>${r.note ? `<div class="k-notice">${esc(r.note)}</div>` : ""}${linksView(r.links)}<details class="k-source"><summary class="cursor-interaction">Original recipe</summary><pre>${esc(originalText(r))}</pre></details><label class="k-field" style="margin-top:20px"><span>Your cooking notes</span><textarea class="k-input" id="k-recipe-note" placeholder="What worked? What would you change?">${esc(state.notes[r.id] || "")}</textarea></label>${button("Save note", "save-note", 'style="margin-top:9px"', "k-quiet")}</section></div>`;
   }
   function makeReview(entries, options = {}) {
     review = {
@@ -552,7 +587,7 @@ async function boot() {
       : s.timers.length
         ? "Finish & stop timers"
         : "Finish cooking";
-    return `<div class="k-row k-between">${button(icon("arrow-left") + (s.mealId ? "Meal" : "Recipe"), "leave-cook", "", "k-quiet k-back")}<span class="k-kicker">Cooking mode</span></div>${dishTabs(s)}<h2>${esc(r.title)}</h2><p class="k-muted k-small" style="margin-top:7px">${r.servings ? s.servings + " servings" : "Original quantities"} · ${s.units === "us" ? "US kitchen" : s.units === "original" ? "Original units" : "Metric"}</p><div class="k-progress" role="progressbar" aria-label="Recipe progress" aria-valuemin="0" aria-valuemax="${r.steps.length}" aria-valuenow="${s.step + 1}"><div class="k-progress-fill" style="width:${((s.step + 1) / r.steps.length) * 100}%"></div></div><div class="k-cook-layout"><section><div class="k-kicker">Step ${s.step + 1} of ${r.steps.length}</div><div class="k-cook-step">${esc(step.title)}</div><p class="k-cook-copy">${esc(scaledText(step.text, s.units))}</p>${step.mins && !dishTimers.some((t) => t.step === s.step) ? button(icon("timer") + `Start ${step.mins}-minute timer`, "start-timer", 'style="margin-top:22px"', "k-primary") : ""}<div>${s.timers.map(timerView).join("")}</div>${button(icon("timer") + "Add a 5-minute timer", "custom-timer", 'style="margin-top:12px"', "k-quiet")}<details class="k-source"><summary class="cursor-interaction">See the whole method</summary><ol class="k-method">${r.steps.map((st, i) => `<li>${button(esc(st.title), "jump-step", `data-step="${i}"`, "k-quiet")}<p>${esc(scaledText(st.text, s.units))}</p></li>`).join("")}</ol></details></section><aside class="k-cook-ingredients"><h3>${ids ? "For this step" : "Ingredients"}</h3>${ingredientRows(r, s.servings, ids, s.units)}${equipmentView([{ snapshot: r }])}</aside></div><p class="k-note">${isNative ? "Device notifications depend on permissions and system settings. Android alerts may be delayed." : "Keep this page open for browser timer alerts."}</p><div class="k-cook-footer">${button(icon("arrow-left") + "Previous", "cook-back", s.step === 0 ? "disabled" : "")}${s.step === r.steps.length - 1 ? button(icon("check") + finishLabel, "finish-cook", "", "k-primary") : button("Next step" + icon("arrow-right"), "cook-next", "", "k-primary")}</div>`;
+    return `<div class="k-row k-between">${button(icon("arrow-left") + (s.mealId ? "Meal" : "Recipe"), "leave-cook", "", "k-quiet k-back")}<span class="k-kicker">Cooking mode</span></div>${dishTabs(s)}<h2>${esc(r.title)}</h2><p class="k-muted k-small" style="margin-top:7px">${r.servings ? s.servings + " servings" : "Original quantities"} · ${s.units === "us" ? "US kitchen" : s.units === "original" ? "Original units" : "Metric"}</p><div class="k-progress" role="progressbar" aria-label="Recipe progress" aria-valuemin="0" aria-valuemax="${r.steps.length}" aria-valuenow="${s.step + 1}"><div class="k-progress-fill" style="width:${((s.step + 1) / r.steps.length) * 100}%"></div></div><div class="k-cook-layout"><section><div class="k-kicker">Step ${s.step + 1} of ${r.steps.length}</div><div class="k-cook-step">${esc(step.title)}</div><p class="k-cook-copy">${esc(scaledText(step.text, s.units))}</p>${linkLine(r.links)}${step.mins && !dishTimers.some((t) => t.step === s.step) ? button(icon("timer") + `Start ${step.mins}-minute timer`, "start-timer", 'style="margin-top:22px"', "k-primary") : ""}<div>${s.timers.map(timerView).join("")}</div>${button(icon("timer") + "Add a 5-minute timer", "custom-timer", 'style="margin-top:12px"', "k-quiet")}<details class="k-source"><summary class="cursor-interaction">See the whole method</summary><ol class="k-method">${r.steps.map((st, i) => `<li>${button(esc(st.title), "jump-step", `data-step="${i}"`, "k-quiet")}<p>${esc(scaledText(st.text, s.units))}</p></li>`).join("")}</ol></details></section><aside class="k-cook-ingredients"><h3>${ids ? "For this step" : "Ingredients"}</h3>${ingredientRows(r, s.servings, ids, s.units)}${equipmentView([{ snapshot: r }])}</aside></div><p class="k-note">${isNative ? "Device notifications depend on permissions and system settings. Android alerts may be delayed." : "Keep this page open for browser timer alerts."}</p><div class="k-cook-footer">${button(icon("arrow-left") + "Previous", "cook-back", s.step === 0 ? "disabled" : "")}${s.step === r.steps.length - 1 ? button(icon("check") + finishLabel, "finish-cook", "", "k-primary") : button("Next step" + icon("arrow-right"), "cook-next", "", "k-primary")}</div>`;
   }
   function finishedView() {
     const r = recipe();
@@ -569,10 +604,11 @@ async function boot() {
         servings: 4,
         ingredientsText: "",
         stepsText: "",
+        linksText: "",
         originalText: "",
       };
     }
-    return `${button(icon("arrow-left") + "Back", "editor-back", "", "k-quiet k-back")}<div class="k-heading"><div><div class="k-kicker">Your recipe, your way</div><h1>${draft.id ? "Make it your own." : "A quick read-through."}</h1><p class="k-muted k-small">Check the ingredients, servings, and method.</p></div></div><form id="k-editor-form" class="k-stack"><div class="k-editor-meta"><label class="k-field"><span>Recipe name</span><input class="k-input" name="title" value="${esc(draft.title)}" required maxlength="120"></label><label class="k-field"><span>Servings</span><input class="k-input" name="servings" type="number" min="1" max="24" step="1" value="${draft.servings || ""}" placeholder="Unknown"></label></div><div class="k-editor-grid"><label class="k-field"><span>Ingredients · one per line</span><textarea class="k-input" name="ingredients" style="min-height:240px" placeholder="250 g orzo&#10;2 tbsp olive oil" required maxlength="4000">${esc(draft.ingredientsText)}</textarea></label><label class="k-field"><span>Method · one step per paragraph</span><textarea class="k-input" name="steps" style="min-height:240px" placeholder="Warm the olive oil.&#10;&#10;Add the orzo and stir." required maxlength="5000">${esc(draft.stepsText)}</textarea></label></div><p class="k-note">For pasted recipes, cups use 240 mL, tablespoons 15 mL, and teaspoons 5 mL. Check these against your source. Unclear ingredient amounts stay as written. Add a serving count when you know it to enable scaling.</p><div class="k-row"><button type="button" data-local-submit class="k-button k-primary cursor-interaction">${icon("check")} Save recipe</button>${button("Cancel", "editor-back", "", "k-quiet")}</div><p class="k-form-error" id="k-editor-error" role="alert"></p></form>`;
+    return `${button(icon("arrow-left") + "Back", "editor-back", "", "k-quiet k-back")}<div class="k-heading"><div><div class="k-kicker">Your recipe, your way</div><h1>${draft.id ? "Make it your own." : "A quick read-through."}</h1><p class="k-muted k-small">Check the ingredients, servings, and method.</p></div></div><form id="k-editor-form" class="k-stack"><div class="k-editor-meta"><label class="k-field"><span>Recipe name</span><input class="k-input" name="title" value="${esc(draft.title)}" required maxlength="120"></label><label class="k-field"><span>Servings</span><input class="k-input" name="servings" type="number" min="1" max="24" step="1" value="${draft.servings || ""}" placeholder="Unknown"></label></div><div class="k-editor-grid"><label class="k-field"><span>Ingredients · one per line</span><textarea class="k-input" name="ingredients" style="min-height:240px" placeholder="250 g orzo&#10;2 tbsp olive oil" required maxlength="4000">${esc(draft.ingredientsText)}</textarea></label><label class="k-field"><span>Method · one step per paragraph</span><textarea class="k-input" name="steps" style="min-height:240px" placeholder="Warm the olive oil.&#10;&#10;Add the orzo and stir." required maxlength="5000">${esc(draft.stepsText)}</textarea></label></div><label class="k-field"><span>Links and videos · one per line</span><textarea class="k-input" name="links" maxlength="4000" placeholder="https://youtu.be/… Folding the dough&#10;example.com/the-original The written version">${esc(draft.linksText || "")}</textarea><span class="k-note">A web address, then an optional title. YouTube, Vimeo, Facebook, Instagram and TikTok videos play on the recipe page; other links open in your browser.</span></label><p class="k-note">For pasted recipes, cups use 240 mL, tablespoons 15 mL, and teaspoons 5 mL. Check these against your source. Unclear ingredient amounts stay as written. Add a serving count when you know it to enable scaling.</p><div class="k-row"><button type="button" data-local-submit class="k-button k-primary cursor-interaction">${icon("check")} Save recipe</button>${button("Cancel", "editor-back", "", "k-quiet")}</div><p class="k-form-error" id="k-editor-error" role="alert"></p></form>`;
   }
   const knownIngredients = recipes.flatMap((r) => r.ingredients);
   const parseIngredient = (line) => parseIngredientLine(line, knownIngredients);
@@ -665,6 +701,10 @@ async function boot() {
     const target = event.target.closest("button[data-action]");
     if (!target || target.disabled) return;
     const a = target.dataset.action;
+    if (a === "embed-load") {
+      loadEmbed(target);
+      return;
+    }
     noteMessage = "";
     if (["start-timer", "custom-timer"].includes(a)) {
       if (state.session.timers.length >= 60) {
@@ -695,7 +735,7 @@ async function boot() {
     }
     if (a === "share-recipe") {
       try {
-        await shareRecipe(recipe().title, originalText(recipe()));
+        await shareRecipe(recipe().title, shareText(recipe()));
       } catch (error) {
         if (error.name !== "AbortError")
           notify("Sharing was cancelled or unavailable.");
@@ -935,6 +975,7 @@ async function boot() {
         servings: 4,
         ingredientsText: "",
         stepsText: "",
+        linksText: "",
         originalText: "",
       };
       state.view = "editor";
@@ -1040,6 +1081,7 @@ async function boot() {
       draft.ingredientsText = String(form.get("ingredients"));
       draft.stepsText = String(form.get("steps"));
       draft.equipmentText = String(form.get("equipment") || "");
+      draft.linksText = String(form.get("links") || "");
     }
   });
   root.addEventListener("change", async (event) => {
@@ -1163,6 +1205,14 @@ async function boot() {
           "Add a name, ingredients, and at least one step.";
         return;
       }
+      const links = parseLinkLines(values.get("links"));
+      if (links.invalid.length || links.links.length > MAX_LINKS) {
+        root.querySelector("#k-editor-error").textContent = links.invalid.length
+          ? "Each link needs a web address such as https://example.com: " +
+            links.invalid.join("; ")
+          : `Keep it to ${MAX_LINKS} links.`;
+        return;
+      }
       const old = draft.id ? recipe(draft.id) : null;
       const id = draft.id || uid("recipe");
       const selectedYield = Number(values.get("servings")) || null;
@@ -1191,6 +1241,7 @@ async function boot() {
           }),
         note: old?.note || "",
         originalText: draft.originalText,
+        links: links.links,
       };
       r.equipment = String(values.get("equipment") || "")
         .split(/\n/)

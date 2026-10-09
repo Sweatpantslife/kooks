@@ -34,6 +34,37 @@ test("mobile cookbook round-trips recipes larger than the old widget state limit
   );
 });
 
+test("mobile recipes keep links and accept only web addresses", () => {
+  const book = newCookbook();
+  const custom = {
+    id: "linked",
+    title: "Linked rice",
+    description: "",
+    tag: "Your collection",
+    time: null,
+    servings: 2,
+    source: "Your recipe",
+    ingredients: [],
+    steps: [{ title: "Step 1", text: "Cook.", ids: [] }],
+    note: "",
+    equipment: [],
+  };
+  book.state.custom = [custom];
+  assert.deepEqual(validateBackup(book).state.custom[0].links, []);
+  book.state.custom = [
+    {
+      ...custom,
+      links: [{ url: "https://youtu.be/dQw4w9WgXcQ", title: "The method" }],
+    },
+  ];
+  assert.equal(
+    validateBackup(book).state.custom[0].links[0].title,
+    "The method",
+  );
+  book.state.custom = [{ ...custom, links: [{ url: "javascript:alert(1)" }] }];
+  assert.throws(() => validateBackup(book), /web addresses/);
+});
+
 test("mobile restore rejects broken relationships, invalid versions, and duplicate records", () => {
   const book = newCookbook();
   book.state.meals[0].components[0].recipeId = "missing";

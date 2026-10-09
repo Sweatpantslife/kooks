@@ -40,7 +40,7 @@ For a physical iPhone, select your Apple development team in Xcode's Signing & C
 
 ## Included experience
 
-- Recipe library, ingredient search, favorites, manual/paste entry, editing, original recipe text, serving adjustments, required equipment, and cooking notes.
+- Recipe library, ingredient search, favorites, manual/paste entry, editing, original recipe text, serving adjustments, required equipment, cooking notes, and links and videos: YouTube, Vimeo, Facebook, Instagram and TikTok players load from the provider only when play is pressed; other links open in the browser.
 - Composed meals with independent dish portions and combined equipment. Reviewed shopping contributions combine matching ingredients, avoid duplicate additions, and clear checkmarks when amounts change.
 - A simple Monday–Sunday plan with saved dish portions.
 - Cooking sessions with independent dish progress and timers that retain their deadlines after navigation and app restarts.
@@ -75,6 +75,6 @@ Playwright uses its managed Chromium by default (run `npx playwright install chr
 
 The mobile build and `cap sync` succeed. Browser verification covers adding/editing/scaling recipes, persistence after reload, meal shopping and changed quantities, cooking progress, paused timers, backup restore, early-iOS API fallbacks, and 320/390/768/1280-pixel layouts. Unit tests exercise failed/interrupted storage, recovery, invalid backups, and timer notification reconciliation. The browser checks do not validate native plugin execution.
 
-On the implementation machine, Xcode, Java, and the Android SDK are missing. Consequently no native binary, simulator run, signing, or physical-device notification delivery has been verified. Before distribution, run both native builds and exercise cold launch, safe areas/keyboard, back navigation, share/export/restore, offline editing, app termination/relaunch, and timer permissions/delivery on actual iOS and Android devices.
+On the implementation machine, Xcode, Java, and the Android SDK are missing. Consequently no native binary, simulator run, signing, or physical-device notification delivery has been verified. Before distribution, run both native builds and exercise cold launch, safe areas/keyboard, back navigation, share/export/restore, offline editing, app termination/relaunch, and timer permissions/delivery on actual iOS and Android devices. Also confirm that embedded players load inside the native WebView and that recipe links open in the system browser; both were checked in Chromium only.
 
 The app's production dependencies have no reported advisories in the implementation audit. The Capacitor CLI's build-only `xcode → uuid` dependency reports a moderate advisory; it is not included in the app bundle. Keep the CLI updated as upstream releases fixes.

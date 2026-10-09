@@ -196,3 +196,47 @@ test("phone and tablet views fit the viewport, including settings and cooking", 
     ).toBe(true);
   }
 });
+
+test("links and videos save with a recipe, play on request and survive a reload", async ({
+  page,
+}) => {
+  await page
+    .getByRole("button", { name: /Weeknight Lemon & chickpea orzo/ })
+    .click();
+  await page.getByRole("button", { name: "Edit recipe" }).click();
+  const links = page.getByRole("textbox", { name: "Links and videos" });
+  await links.fill("just words");
+  await page.getByRole("button", { name: "Save recipe" }).click();
+  await expect(page.locator("#k-editor-error")).toContainText("just words");
+  await links.fill(
+    "https://youtu.be/dQw4w9WgXcQ Watch the method\nexample.com/orzo The written version",
+  );
+  await page.getByRole("button", { name: "Save recipe" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Lemon & chickpea orzo" }),
+  ).toBeVisible();
+  const play = page.getByRole("button", {
+    name: "Play Watch the method on YouTube",
+  });
+  await expect(play).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "The written version" }),
+  ).toHaveAttribute("href", "https://example.com/orzo");
+  await expect(page.locator(".k-embed iframe")).toHaveCount(0);
+  await play.click();
+  await expect(page.locator(".k-embed iframe")).toHaveAttribute(
+    "src",
+    "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?autoplay=1",
+  );
+  await saved(page);
+  await page.reload();
+  await nav(page, "Recipes").click();
+  await page
+    .getByRole("button", { name: /Weeknight Lemon & chickpea orzo/ })
+    .click();
+  await expect(play).toBeVisible();
+  await page.getByRole("button", { name: "Start cooking" }).click();
+  await expect(
+    page.getByRole("link", { name: "Watch the method" }),
+  ).toHaveAttribute("href", "https://youtu.be/dQw4w9WgXcQ");
+});
