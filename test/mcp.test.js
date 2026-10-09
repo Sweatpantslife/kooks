@@ -62,6 +62,10 @@ test(
         .readOnlyHint,
       true,
     );
+    assert.equal(
+      tools.tools.find((t) => t.name === "recipe_save").outputSchema.type,
+      "object",
+    );
     const workflow = await client.readResource({ uri: "kooks://workflow" });
     assert.match(workflow.contents[0].text, /do not deliver alarms/);
     const saved = await client.callTool({

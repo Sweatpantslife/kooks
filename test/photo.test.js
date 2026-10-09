@@ -43,16 +43,19 @@ test(
       recipe: result.record.data.recipe,
     });
     assert.deepEqual(saved.record.data.source_image_ids, [result.image_id]);
-    assert.equal(store.get("asset", result.image_id).data.base64, image.base64);
+    const bytes = Buffer.from(image.base64, "base64");
+    assert.ok(store.blob("asset", result.image_id).equals(bytes));
+    assert.equal(
+      tools.get("kooks_get").execute({ kind: "asset", id: result.image_id })
+        .record.data.base64,
+      image.base64,
+    );
     const backup = tools.get("backup_export").execute({}).backup;
     const restore = createTools(target).find(
       (t) => t.name === "backup_restore",
     );
     restore.execute({ request_id: "restore-photo", backup });
-    assert.equal(
-      target.get("asset", result.image_id).data.base64,
-      image.base64,
-    );
+    assert.ok(target.blob("asset", result.image_id).equals(bytes));
     assert.equal(
       target.get("recipe", saved.record.id).data.original_text,
       result.record.data.original_text,

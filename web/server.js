@@ -11,12 +11,7 @@ import { batchView } from "../mcp/features.js";
 import { shoppingItems } from "../mcp/shopping.js";
 
 const publicRoot = fileURLToPath(new URL("./public/", import.meta.url));
-const staticFiles = new Set([
-  "/index.html",
-  "/app.js",
-  "/style.css",
-  "/icons.svg",
-]);
+const staticFiles = new Set(["/index.html", "/app.js", "/style.css"]);
 const mime = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
@@ -143,10 +138,6 @@ export function createWebServer({
               all
                 .filter((r) => r.kind === k && !r.archived)
                 .map((r) => {
-                  if (k === "asset") {
-                    const { base64, ...data } = r.data;
-                    return { ...r, data };
-                  }
                   if (k === "batch") return batchView(r);
                   if (k === "shopping")
                     return { ...r, items: shoppingItems(r.data) };
@@ -159,13 +150,18 @@ export function createWebServer({
         return send(res, 200, state);
       }
       if (url.pathname.startsWith("/api/assets/") && req.method === "GET") {
-        const record = store.get(
-          "asset",
-          decodeURIComponent(url.pathname.slice("/api/assets/".length)),
-          true,
+        const id = decodeURIComponent(
+          url.pathname.slice("/api/assets/".length),
         );
-        res.writeHead(200, { "Content-Type": record.data.mime_type });
-        return res.end(Buffer.from(record.data.base64, "base64"));
+        const asset = store.read(() => ({
+          mime_type: store.get("asset", id, true).data.mime_type,
+          bytes: store.blob("asset", id),
+        }));
+        res.writeHead(200, {
+          "Content-Type": asset.mime_type,
+          "Content-Length": asset.bytes.length,
+        });
+        return res.end(asset.bytes);
       }
       if (url.pathname.startsWith("/api/tools/") && req.method === "POST") {
         const tool = tools.get(
@@ -191,7 +187,13 @@ export function createWebServer({
       if (req.method === "GET") {
         const path = url.pathname === "/" ? "/index.html" : url.pathname;
         if (staticFiles.has(path)) {
-          const data = await readFile(resolve(publicRoot, `.${path}`));
+          let data;
+          try {
+            data = await readFile(resolve(publicRoot, `.${path}`));
+          } catch (error) {
+            if (error.code !== "ENOENT") throw error;
+            return send(res, 404, { message: "Not found." });
+          }
           res.writeHead(200, { "Content-Type": mime[extname(path)] });
           return res.end(data);
         }
@@ -212,8 +214,11 @@ export function createWebServer({
               : 500;
       send(res, status, {
         error:
-          error.code ??
-          (error instanceof ZodError ? "INVALID_INPUT" : "INTERNAL_ERROR"),
+          error instanceof KooksError
+            ? error.code
+            : error instanceof ZodError
+              ? "INVALID_INPUT"
+              : "INTERNAL_ERROR",
         message:
           error instanceof ZodError
             ? error.issues

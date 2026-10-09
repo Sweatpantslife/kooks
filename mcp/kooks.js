@@ -9,6 +9,15 @@ import {
 } from "./shopping.js";
 import { validateFeatureRelations, Features } from "./features.js";
 
+// Searchable text of a record: its string and number values, never its keys.
+function searchText(value) {
+  if (value == null || typeof value === "boolean") return "";
+  if (typeof value !== "object") return String(value);
+  return (Array.isArray(value) ? value : Object.values(value))
+    .map(searchText)
+    .join(" ");
+}
+
 export class Kooks {
   constructor(store) {
     this.store = store;
@@ -28,9 +37,7 @@ export class Kooks {
     const q = normalize(query);
     const records = this.store
       .list(kind, include_archived)
-      .filter(
-        (record) => !q || normalize(JSON.stringify(record.data)).includes(q),
-      );
+      .filter((record) => !q || normalize(searchText(record.data)).includes(q));
     return {
       total: records.length,
       records: records.slice(offset, offset + limit).map((record) => ({

@@ -3,7 +3,13 @@ import * as s from "./schemas.js";
 import { Kooks } from "./kooks.js";
 import { convert, scaleRecipe } from "./quantities.js";
 import { requireThat } from "./store.js";
-import { exportBackup, restoreBackup, backupSchema } from "./backup.js";
+import {
+  exportBackup,
+  restoreBackup,
+  backupSchema,
+  portableAsset,
+} from "./backup.js";
+import { version } from "./version.js";
 import { addFeatureTools } from "./feature-tools.js";
 import { noteExtras } from "./feature-schemas.js";
 import { batchView } from "./features.js";
@@ -11,11 +17,19 @@ import { batchView } from "./features.js";
 export function createTools(store) {
   const kooks = new Kooks(store);
   const definitions = [];
+  // Results are open objects; writes always carry the action key and whether
+  // a request_id replay was served instead of a fresh action.
+  const readOutput = z.looseObject({});
+  const writeOutput = z.looseObject({
+    action_id: z.string().optional(),
+    replayed: z.boolean().optional(),
+  });
   function tool(name, description, shape, readOnly, handler, prepare) {
     definitions.push({
       name,
       description,
       schema: z.strictObject(shape),
+      outputSchema: readOnly ? readOutput : writeOutput,
       readOnly,
       handler,
       prepare,
@@ -42,7 +56,7 @@ export function createTools(store) {
     {},
     true,
     () => ({
-      version: "0.2.0",
+      version,
       storage: "local SQLite",
       counts: Object.fromEntries(
         s.kind.options.map((kind) => [kind, store.list(kind).length]),
@@ -108,6 +122,13 @@ export function createTools(store) {
         return { record: kooks.cookingGet(args.id) };
       if (!args.include_archived && args.kind === "batch")
         return { record: batchView(store.get("batch", args.id)) };
+      if (args.kind === "asset")
+        return {
+          record: portableAsset(
+            store,
+            store.get("asset", args.id, args.include_archived),
+          ),
+        };
       return { record: store.get(args.kind, args.id, args.include_archived) };
     },
   );

@@ -543,3 +543,16 @@ test("invalid dates, servings, fields and references fail before writes", (t) =>
     1,
   );
 });
+
+test("list search matches record values, not field names", (t) => {
+  const { call } = harness(t);
+  call("recipe_save", { recipe: dish() });
+  call("recipe_save", { recipe: dish("Soup", 15) });
+  assert.equal(
+    call("kooks_list", { kind: "recipe", query: "servings" }).total,
+    0,
+  );
+  assert.equal(call("kooks_list", { kind: "recipe", query: "olive" }).total, 2);
+  assert.equal(call("kooks_list", { kind: "recipe", query: "soup" }).total, 1);
+  assert.equal(call("kooks_list", { kind: "recipe", query: "250" }).total, 2);
+});

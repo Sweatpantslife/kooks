@@ -1496,7 +1496,7 @@ async function boot() {
 
   function settingsView() {
     return `${button(icon("arrow-left") + "Recipes", "nav", 'data-view="library"', "k-quiet k-back")}
-   <div class="k-heading"><div><div class="k-kicker">Make yourself at home</div><h1>Your kitchen settings.</h1><p class="k-muted">Kooks for ${platform === "ios" ? "iOS" : platform === "android" ? "Android" : "the web"} · 0.2.0</p></div></div>
+   <div class="k-heading"><div><div class="k-kicker">Make yourself at home</div><h1>Your kitchen settings.</h1><p class="k-muted">Kooks for ${platform === "ios" ? "iOS" : platform === "android" ? "Android" : "the web"} · ${__KOOKS_VERSION__}</p></div></div>
    <div class="k-settings-grid"><section class="k-ingredients"><h2>Your cookbook</h2><p class="k-note" data-storage-label>${storageStatus === "error" ? "Not saved — please retry" : storageStatus === "saving" ? "Saving…" : "Saved on this device"}</p><p class="k-small" style="margin-top:15px">Recipes, meals, shopping, and cooking progress stay on this device. Export a backup to keep a copy or move to another device. Household sync and the desktop MCP cookbook are separate.</p>
    <div class="k-actions">${button("Export backup", "export-backup", "", "k-primary")}${button("Restore backup", "restore-backup")}${storageStatus === "error" ? button("Retry saving", "retry-save") : ""}</div>
    <input type="file" id="k-restore-file" accept=".json,application/json" hidden>

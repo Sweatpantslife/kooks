@@ -155,19 +155,35 @@ export const backupSchema = z.object({
   records: z.array(record).max(10000),
 });
 
+// The portable shape of an asset: the bytes travel inside the record again.
+export function portableAsset(store, record) {
+  return {
+    ...record,
+    data: {
+      name: record.data.name,
+      mime_type: record.data.mime_type,
+      base64: store.blob("asset", record.id).toString("base64"),
+    },
+  };
+}
+
 export function exportBackup(store) {
   return {
     format: "kooks",
     schema_version: 2,
     exported_at: new Date().toISOString(),
-    records: store.all(),
+    records: store
+      .all()
+      .map((record) =>
+        record.kind === "asset" ? portableAsset(store, record) : record,
+      ),
   };
 }
 
 export function restoreBackup(store, input) {
   const backup = backupSchema.parse(input);
   requireThat(
-    store.all().length === 0,
+    store.isEmpty(),
     "RESTORE_NOT_EMPTY",
     "Restore requires an empty database. Export the existing cookbook first and use a separate KOOKS_DB_PATH to restore.",
   );
