@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "kooks": {
+      "command": "node",
+      "args": ["/absolute/path/to/kooks/mcp/index.js"],
+      "env": {
+        "KOOKS_DB_PATH": "/absolute/path/to/kooks/.data/kooks.sqlite"
+      }
+    }
+  }
+}

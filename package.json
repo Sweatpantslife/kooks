@@ -1,0 +1,51 @@
+{
+  "name": "kooks-mcp",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Local MCP tools for the Kooks household cooking workflow",
+  "type": "module",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "start": "node mcp/index.js",
+    "dev": "node web/server.js",
+    "web": "node web/server.js",
+    "test": "node --test test/*.test.js",
+    "dev:mobile": "vite",
+    "build:mobile": "vite build",
+    "preview:mobile": "vite preview",
+    "cap:sync": "npm run build:mobile && cap sync",
+    "cap:ios": "npm run cap:sync && cap open ios",
+    "cap:android": "npm run cap:sync && cap open android",
+    "cap:run:ios": "npm run cap:sync && cap run ios",
+    "cap:run:android": "npm run cap:sync && cap run android",
+    "build:android": "npm run cap:sync && node scripts/native-build.mjs android",
+    "build:ios": "npm run cap:sync && node scripts/native-build.mjs ios",
+    "test:mobile": "node --test test/mobile.test.js",
+    "test:mobile:e2e": "playwright test",
+    "native:doctor": "node scripts/native-build.mjs doctor",
+    "native:assets": "node scripts/native-assets.mjs"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/app": "^8.1.1",
+    "@capacitor/core": "^8.5.2",
+    "@capacitor/filesystem": "^8.1.3",
+    "@capacitor/haptics": "^8.0.2",
+    "@capacitor/ios": "^8.5.2",
+    "@capacitor/local-notifications": "^8.3.1",
+    "@capacitor/share": "^8.0.2",
+    "@modelcontextprotocol/server": "2.0.0",
+    "lucide": "^1.47.0",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.2",
+    "@modelcontextprotocol/client": "2.0.0",
+    "@playwright/test": "^1.63.0",
+    "prettier": "^3.9.8",
+    "sharp": "^0.35.4",
+    "vite": "^8.3.0"
+  }
+}

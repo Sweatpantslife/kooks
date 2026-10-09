@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#f6f5ef" />
+    <meta name="color-scheme" content="light" />
+    <meta
+      name="description"
+      content="Your recipes, meals, shopping lists, and cooking companion. At home in your kitchen."
+    />
+    <title>Kooks · Your everyday cookbook</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/mobile.css" />
+  </head>
+  <body>
+    <div id="kooks-concept" aria-label="Kooks cookbook">
+      <div class="k-shell">
+        <header class="k-header">
+          <div class="k-wordmark">
+            <i data-lucide="cooking-pot" aria-hidden="true"></i>kooks
+          </div>
+          <button
+            type="button"
+            class="k-button k-quiet k-icon"
+            data-action="settings"
+            aria-label="Settings and backups"
+          >
+            <i data-lucide="settings" aria-hidden="true"></i>
+          </button>
+        </header>
+        <div
+          id="storage-status"
+          class="k-storage-error"
+          role="alert"
+          hidden
+        ></div>
+        <div class="k-body">
+          <nav class="k-sidebar" aria-label="Main navigation"></nav>
+          <main class="k-content" aria-label="Cookbook">
+            <div class="k-empty">
+              <h1>Your kitchen, collected.</h1>
+              <p>Opening your cookbook…</p>
+            </div>
+          </main>
+        </div>
+        <div class="k-toast" role="status" aria-live="polite"></div>
+        <nav class="k-mobile-nav" aria-label="Mobile navigation"></nav>
+      </div>
+    </div>
+    <script type="module" src="/cookbook.js"></script>
+  </body>
+</html>
