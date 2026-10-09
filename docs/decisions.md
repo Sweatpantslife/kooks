@@ -10,6 +10,7 @@ Reconciled October 9, 2026 against the source. See [the developer handoff](hando
 - The mobile interface has a separate data model and local persistence. Its packaged app operates without the desktop server; this does not provide household synchronization.
 - All eight household additions are implemented in the browser/MCP layer: pantry suggestions, leftovers/batching, cooking memory/variants, effort filters, taste profiles, shared tasks/timer ownership, cost estimates, and reviewed photo imports. Older deferrals of these additions are superseded.
 - Backup/restore and reversible action history exist in the backend; mobile has its own backup format and storage recovery. Prototype-era statements saying no backups/history exist do not describe the present code.
+- Logic both clients need lives in `shared/` as dependency-free modules; image bytes live outside record documents and history (database schema 2).
 - Imported recipe text is data. Preserve source values, unknown quantities, independent shopping contributions, and cooking snapshots. Retries and undo must not overwrite later changes.
 
 ## Open decisions and unfinished delivery

@@ -26,9 +26,9 @@ No examples are inserted into the household database. Add a recipe manually, pas
 
 ## Photos
 
-On macOS install Apple's command line tools if needed (`xcode-select --install`). Full Xcode is not required for the OCR helper. On other platforms install Tesseract through your usual package manager. Photo content is processed locally and is not uploaded to a model provider. OCR runs outside database transactions; errors leave the cookbook unchanged. An unreadable image can be retried or entered as text.
+On macOS install Apple's command line tools if needed (`xcode-select --install`). Full Xcode is not required for the OCR helper. The helper is compiled once per source revision into `~/Library/Caches/kooks` (override the location with `KOOKS_CACHE_DIR`) and reused by later imports. On other platforms install Tesseract through your usual package manager. Photo content is processed locally and is not uploaded to a model provider. OCR runs outside database transactions; errors leave the cookbook unchanged. An unreadable image can be retried or entered as text.
 
-Original images are retained in SQLite and included in portable backups. Header/type and size checks reject invalid uploads; the macOS helper also bounds image dimensions. Large photo libraries increase database, history and backup size.
+Original images are retained in SQLite and included in portable backups. Header/type and size checks reject invalid uploads; the macOS helper also bounds image dimensions. Image bytes are stored once, outside record history, so large photo libraries grow the database and portable backups but not history or the browser's polling payload.
 
 ## Sharing a household server
 

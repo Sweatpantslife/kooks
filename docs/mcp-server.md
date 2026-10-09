@@ -2,7 +2,7 @@
 
 The local Kooks server gives an MCP-compatible agent 43 tools for recipes, composed meals, plan occurrences, shopping, equipment, cooking, pantry suggestions, household preferences, leftovers, recipe memories/variants, cost estimates, photo imports, and reversible history. The host agent interprets requests; this server validates and performs the actions. It does not require an API key or choose an AI provider.
 
-This integration and the [browser interface](household-features.md) use the same Node.js domain tools and SQLite data. The separately packaged native application currently has its own device storage. AI provider sign-in requirements remain documented in [AI account connections](ai-connections.md).
+This integration and the [browser interface](household-features.md) use the same Node.js domain tools and SQLite data. The separately packaged native application currently has its own device storage. AI provider sign-in requirements remain documented in [AI account connections](archive/ai-connections.md).
 
 ## Install and connect
 
@@ -28,24 +28,24 @@ The default database is `.data/kooks.sqlite`, resolved relative to the project, 
 
 ## Tools
 
-| Area | Tools |
-| --- | --- |
-| Discover and search | `kooks_status`, `kooks_list`, `kooks_get` |
-| Recipes | `recipe_save`, `recipe_scale`, `quantity_convert` |
-| Meals and plan | `meal_save`, `prepare_source`, `plan_save` |
-| Shopping | `shopping_create`, `shopping_preview`, `shopping_sync`, `shopping_remove_source`, `shopping_manual_item`, `shopping_check` |
-| Equipment | `equipment_save` |
-| Cooking | `cooking_start`, `cooking_progress`, `cooking_timer`, `cooking_finish` |
-| Notes and history | `note_save`, `record_archive`, `history_list`, `history_undo` |
-| Backup | `backup_export`, `backup_restore` |
-| Pantry and dinner | `pantry_save`, `recipe_suggest` |
-| Household | `member_save`, `cooking_task_save` (timers also accept `member_id`) |
-| Cooking memory | `recipe_memory`, `recipe_variant_save`; `note_save` supports rating, changes, next-time notes and cook-again preference |
-| Cooked batches | `batch_create`, `batch_allocate`, `batch_list` |
-| Costs and budgets | `price_save`, `cost_estimate`, `budget_save`, `cost_week` |
-| Reviewed capture | `recipe_parse`, `recipe_import_text`, `recipe_import_image`, `recipe_import_commit` |
+| Area                | Tools                                                                                                                      |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Discover and search | `kooks_status`, `kooks_list`, `kooks_get`                                                                                  |
+| Recipes             | `recipe_save`, `recipe_scale`, `quantity_convert`                                                                          |
+| Meals and plan      | `meal_save`, `prepare_source`, `plan_save`                                                                                 |
+| Shopping            | `shopping_create`, `shopping_preview`, `shopping_sync`, `shopping_remove_source`, `shopping_manual_item`, `shopping_check` |
+| Equipment           | `equipment_save`                                                                                                           |
+| Cooking             | `cooking_start`, `cooking_progress`, `cooking_timer`, `cooking_finish`                                                     |
+| Notes and history   | `note_save`, `record_archive`, `history_list`, `history_undo`                                                              |
+| Backup              | `backup_export`, `backup_restore`                                                                                          |
+| Pantry and dinner   | `pantry_save`, `recipe_suggest`                                                                                            |
+| Household           | `member_save`, `cooking_task_save` (timers also accept `member_id`)                                                        |
+| Cooking memory      | `recipe_memory`, `recipe_variant_save`; `note_save` supports rating, changes, next-time notes and cook-again preference    |
+| Cooked batches      | `batch_create`, `batch_allocate`, `batch_list`                                                                             |
+| Costs and budgets   | `price_save`, `cost_estimate`, `budget_save`, `cost_week`                                                                  |
+| Reviewed capture    | `recipe_parse`, `recipe_import_text`, `recipe_import_image`, `recipe_import_commit`                                        |
 
-`kooks://workflow` provides the agent's workflow guide. Tool schemas are discoverable through MCP, with validation, descriptions, and read/write annotations.
+`kooks://workflow` provides the agent's workflow guide. Tool schemas are discoverable through MCP, with validation, descriptions, read/write annotations, and output schemas (results are open objects; writes carry `action_id` and `replayed`). `kooks_list` search matches the words in a record's values, not its field names.
 
 ## Ask the agent
 
@@ -66,7 +66,7 @@ Every write requires a `request_id`. Use a new key for each intended action; ret
 
 Creates omit `id` and `expected_version`. Edits supply both, using the version from the latest read. `recipe_save`, `meal_save`, and `equipment_save` replace the full data object, so the agent must read and preserve fields it is not changing. Validation or stale-version failures roll back all changes. SQLite serializes writes across processes.
 
-Writes return an `action_id`. `history_undo` restores an action's previous data only if its records have not changed since. Undoing creation archives the records. Active meal dependencies also block an invalid undo. Archive/undo retain records for recovery; neither permanently deletes data. History records successful actions and their before/after records; failed actions return errors without creating audit entries.
+Writes return an `action_id`. `history_undo` restores an action's previous data only if its records have not changed since. Undoing creation archives the records. Active meal dependencies also block an invalid undo. Archive/undo retain records for recovery; neither permanently deletes data. History records successful actions and their before/after records; failed actions return errors without creating audit entries. Image bytes are not copied into history; an asset's history entry carries its SHA-256 and size.
 
 For shopping, call `shopping_preview` first. Apply the exact same source, `source_key`, and exclusions to `shopping_sync`, adding the preview's token and `list_version` as `expected_version`. A source or list change invalidates the preview. The host can present the returned diff according to the user's chosen autonomy policy.
 
@@ -86,7 +86,7 @@ Cooking progress uses zero-based step indices and independent dish tracks. Timer
 
 ## Backup and boundaries
 
-`backup_export` returns a versioned JSON object containing active and archived records, contributions, snapshots, and timer deadlines. Save the returned `backup` object to a file. `backup_restore` validates the data and restores only into an **empty database**; use another `KOOKS_DB_PATH` to verify a backup. Record IDs and versions are preserved. Action history is excluded from this portable export. For a full database backup including history, stop all MCP processes before copying the database and any WAL files, or use SQLite's backup tooling. Large exports remain subject to the connecting client's message-size limits.
+`backup_export` returns a versioned JSON object containing active and archived records, contributions, snapshots, and timer deadlines. Save the returned `backup` object to a file. `backup_restore` validates the data and restores only into an **empty database**; use another `KOOKS_DB_PATH` to verify a backup. Record IDs and versions are preserved. Action history is excluded from this portable export. For a full database backup including history, stop all MCP processes before copying the database and any WAL files, or use SQLite's backup tooling. Large exports remain subject to the connecting client's message-size limits. `kooks_get` returns an asset with its `base64` bytes as before; listings and the browser state carry only its name, type, SHA-256 and size. The database upgrades itself from schema 1 to 2 on first open, moving image bytes into a separate table; an older server refuses to open an upgraded file.
 
 The MCP transport runs locally over stdio. A separate browser server (`npm run dev`) provides the household interface and an HTTP action API on loopback by default. Optional LAN access requires a shared household access key; individual accounts and cloud sync are not implemented. Neither entry point provides model-provider credentials, purchases, messages, public sharing, direct WhatsApp integration, or appliance control.
 

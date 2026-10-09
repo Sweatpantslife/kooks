@@ -14,6 +14,8 @@ npm test
 npm run dev
 ```
 
+`npm run test:e2e` runs the Playwright suites for both interfaces (run `npx playwright install chromium` once), and `npm run format:check` enforces the shared Prettier style; the GitHub Actions workflow runs all of these on every push.
+
 Open `http://127.0.0.1:4317` for the persistent browser app. It starts with an empty cookbook and shares SQLite storage with the MCP server. Features include recipe capture/editing, meal composition, shopping, cooking sessions, pantry suggestions, leftovers, cooking memories, taste profiles, shared tasks, costs, and reviewed photo imports.
 
 For the separate mobile interface:
@@ -45,20 +47,28 @@ The local server stores its cookbook in `.data/kooks.sqlite`; `KOOKS_DB_PATH` se
 
 The browser server binds to loopback by default. Optional trusted-LAN access uses a shared access key; it does not provide individual accounts or public-internet hosting. See [household setup](docs/household-features.md). Publishing this source repository does not deploy a running service.
 
+## Code layout
+
+`mcp/` holds the SQLite store, domain rules and MCP tools; `web/` the browser server and client; `app/` the Capacitor mobile app; `shared/` the unit table and ingredient tokenizer that both parsers build on. `test/` holds the Node unit and integration tests plus the Playwright projects in `test/mobile-e2e` and `test/web-e2e`.
+
 ## Documentation
 
-| Guide | Purpose |
-| --- | --- |
-| [Developer handoff](docs/handoff.md) | Verified status, remaining work, entry points, next steps, and acceptance criteria |
-| [Current decisions](docs/decisions.md) | Selected architecture and unresolved product decisions |
-| [Household features](docs/household-features.md) | All eight additions, local sharing, OCR, and backups |
-| [Native app](docs/native-app.md) | Capacitor setup, storage, testing, and device limitations |
-| [MCP server](docs/mcp-server.md) | Tools, action contracts, and agent configuration |
-| [Research](docs/research.md) | Historical comparisons and technical research |
-| [Project plan](docs/project-plan.md) | Historical phased proposal and acceptance examples |
-| [Product brief](docs/product-brief.md) | Original experience and prototype design |
-| [Prototype review](docs/prototype-review.md) | Historical interaction checks |
-| [Meals, equipment, and assistant](docs/meals-equipment-byk.md) | Detailed design rationale |
-| [AI connections](docs/ai-connections.md) | Historical integration research; recheck before implementation |
+| Guide                                                          | Purpose                                                                            |
+| -------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| [Developer handoff](docs/handoff.md)                           | Verified status, remaining work, entry points, next steps, and acceptance criteria |
+| [Current decisions](docs/decisions.md)                         | Selected architecture and unresolved product decisions                             |
+| [Household features](docs/household-features.md)               | All eight additions, local sharing, OCR, and backups                               |
+| [Native app](docs/native-app.md)                               | Capacitor setup, storage, testing, and device limitations                          |
+| [MCP server](docs/mcp-server.md)                               | Tools, action contracts, and agent configuration                                   |
+| [Research](docs/archive/research.md)                           | Historical comparisons and technical research                                      |
+| [Project plan](docs/archive/project-plan.md)                   | Historical phased proposal and acceptance examples                                 |
+| [Product brief](docs/archive/product-brief.md)                 | Original experience and prototype design                                           |
+| [Prototype review](docs/archive/prototype-review.md)           | Historical interaction checks                                                      |
+| [Meals, equipment, and assistant](docs/meals-equipment-byk.md) | Detailed design rationale                                                          |
+| [AI connections](docs/archive/ai-connections.md)               | Historical integration research; recheck before implementation                     |
 
 The handoff and current implementation guides take precedence over older phase labels. No production hosting, store distribution, or live AI service is configured by this repository.
+
+## License
+
+Kooks is free software under the GNU Affero General Public License, version 3 only. Copyright (C) 2026 Sweatpantslife. See [LICENSE](LICENSE) for the full text. If you modify Kooks and let other people use it over a network, the AGPL requires you to offer them the corresponding source code.

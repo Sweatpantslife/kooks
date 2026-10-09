@@ -1,0 +1,9 @@
+node_modules/
+dist/
+build/
+android/
+ios/
+package-lock.json
+test-results/
+playwright-report/
+.data/

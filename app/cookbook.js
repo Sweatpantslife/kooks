@@ -1,4 +1,22 @@
-import { ingredient, recipes, days, initial } from "./sample-data.js";
+import { recipes, days, initial } from "./sample-data.js";
+import {
+  amount as amountOf,
+  clockText,
+  originalText,
+  scaledText as scaledTextOf,
+  timeLeft,
+} from "./units.js";
+import {
+  parseIngredient as parseIngredientLine,
+  pasteDraft,
+  editDraft,
+} from "./parsing.js";
+import {
+  listItems as listItemsOf,
+  buildReview,
+  applyShoppingReview as applyReview,
+} from "./shopping.js";
+import { equipmentSummary } from "./equipment.js";
 import { clone as structuredClone, randomId } from "./compat.js";
 import {
   createIcons,
@@ -107,70 +125,9 @@ async function boot() {
   function servings(r) {
     return state.servings[r.id] || r.servings || 1;
   }
-  function formatNumber(n) {
-    if (!Number.isFinite(n)) return "";
-    const f = Math.round(n * 8) / 8;
-    if (Math.abs(n - f) < 0.015) {
-      const whole = Math.floor(f);
-      const fractions = ["", "⅛", "¼", "⅜", "½", "⅝", "¾", "⅞"];
-      return (
-        String(whole || "") + fractions[Math.round((f - whole) * 8)] || "0"
-      );
-    }
-    return new Intl.NumberFormat("en", { maximumFractionDigits: 1 }).format(n);
-  }
-  function amount(i, multiplier = 1, units = state.units) {
-    if (i.q === null || i.q === undefined) return i.note || "As needed";
-    let q = i.q * multiplier,
-      u = i.u;
-    if (units === "original" && i.original) {
-      q = i.original.q * multiplier;
-      u = i.original.u;
-    }
-    if (units === "us") {
-      if (u === "g") {
-        q /= 28.349523125;
-        u = "oz";
-      } else if (u === "kg") {
-        q = (q * 1000) / 28.349523125;
-        u = "oz";
-      } else if (u === "ml") {
-        if (q >= 60) {
-          q /= 240;
-          u = "cup";
-        } else if (q >= 15) {
-          q /= 15;
-          u = "tbsp";
-        } else {
-          q /= 5;
-          u = "tsp";
-        }
-      }
-    }
-    if (units === "metric" && u === "g" && q >= 1000) {
-      q /= 1000;
-      u = "kg";
-    } else if (units === "metric" && u === "ml" && q >= 1000) {
-      q /= 1000;
-      u = "L";
-    }
-    if (["cup", "can", "clove"].includes(u) && q !== 1) u += "s";
-    return `${formatNumber(q)}${u ? " " + u : ""}`;
-  }
-  function originalText(r) {
-    return (
-      r.originalText ||
-      `${r.title}\nServes ${r.servings}\n\nIngredients\n${r.ingredients.map((i) => `${amount(i, 1, "original")} ${i.n}${i.note && i.q !== null ? ", " + i.note : ""}`).join("\n")}\n\nMethod\n${r.steps.map((s, i) => `${i + 1}. ${s.text}`).join("\n\n")}`
-    );
-  }
-  function scaledText(text, units = state.units) {
-    return units === "us"
-      ? text.replace(
-          /(\d+)°C/g,
-          (_, c) => `${Math.round((Number(c) * 9) / 5 + 32)}°F`,
-        )
-      : text;
-  }
+  const amount = (i, multiplier = 1, units = state.units) =>
+    amountOf(i, multiplier, units);
+  const scaledText = (text, units = state.units) => scaledTextOf(text, units);
   function save() {
     if (isRestoring) return Promise.resolve(false);
     let data;
@@ -198,23 +155,7 @@ async function boot() {
       },
     );
   }
-  function listItems() {
-    const map = new Map();
-    Object.entries(state.contributions).forEach(([source, c]) =>
-      c.items.forEach((i) => {
-        const key = `${i.k}|${i.u}|${i.note || ""}|${i.q === null ? "text" : "number"}`;
-        const found = map.get(key);
-        if (found) {
-          if (i.q !== null) found.q += i.q;
-          if (!found.sources.includes(c.title)) found.sources.push(c.title);
-        } else map.set(key, { ...i, key, sources: [c.title], source });
-      }),
-    );
-    state.manual.forEach((i) =>
-      map.set(i.key, { ...i, sources: ["Added by you"] }),
-    );
-    return Array.from(map.values());
-  }
+  const listItems = () => listItemsOf(state);
   function icons() {
     createIcons({
       icons: {
@@ -319,34 +260,11 @@ async function boot() {
     }));
   }
   function equipmentView(components, heading = "Required tools") {
-    const rows = new Map(),
-      unknown = [];
-    components.forEach((c) => {
-      const r = c.snapshot || recipe(c.recipeId);
-      if (!r.equipment?.length) unknown.push(r.title);
-      (r.equipment || []).forEach((name) => {
-        const key = name.toLowerCase().trim();
-        if (!rows.has(key)) rows.set(key, { name, uses: [] });
-        if (!rows.get(key).uses.includes(r.title))
-          rows.get(key).uses.push(r.title);
-      });
-    });
-    const ovens = components
-      .map((c) => c.snapshot || recipe(c.recipeId))
-      .filter((r) => (r.equipment || []).some((t) => /oven/i.test(t)))
-      .map((r) => ({
-        title: r.title,
-        temps: [
-          ...new Set(
-            r.steps.flatMap((s) =>
-              [...s.text.matchAll(/(\d+)°C/g)].map((m) => m[1]),
-            ),
-          ),
-        ],
-      }))
-      .filter((r) => r.temps.length);
-    const conflict = new Set(ovens.flatMap((r) => r.temps)).size > 1;
-    return `<section class="k-equipment"><h3>${esc(heading)}</h3>${[...rows.values()].map((t) => `<div class="k-tool-row"><span>${esc(t.name)}${components.length > 1 ? `<div class="k-tool-uses">${esc(t.uses.join(" · "))}</div>` : ""}</span>${icon("utensils")}</div>`).join("")}${unknown.length ? `<p class="k-note">Tools not specified: ${esc(unknown.join(", "))}.</p>` : ""}${components.length > 1 && rows.size ? '<p class="k-note">Shared tools may need to be reused between dishes. Check sizes and availability before starting.</p>' : ""}${conflict ? `<div class="k-notice" style="margin-top:15px"><strong>Check the oven plan.</strong><br>${ovens.map((r) => esc(r.title) + ": " + r.temps.map((t) => esc(scaledText(t + "°C"))).join(", ")).join("<br>")}<br>With one oven, these dishes need a reviewed cooking order.</div>` : ""}</section>`;
+    const { rows, unknown, ovens, conflict } = equipmentSummary(
+      components,
+      recipe,
+    );
+    return `<section class="k-equipment"><h3>${esc(heading)}</h3>${rows.map((t) => `<div class="k-tool-row"><span>${esc(t.name)}${components.length > 1 ? `<div class="k-tool-uses">${esc(t.uses.join(" · "))}</div>` : ""}</span>${icon("utensils")}</div>`).join("")}${unknown.length ? `<p class="k-note">Tools not specified: ${esc(unknown.join(", "))}.</p>` : ""}${components.length > 1 && rows.length ? '<p class="k-note">Shared tools may need to be reused between dishes. Check sizes and availability before starting.</p>' : ""}${conflict ? `<div class="k-notice" style="margin-top:15px"><strong>Check the oven plan.</strong><br>${ovens.map((r) => esc(r.title) + ": " + r.temps.map((t) => esc(scaledText(t + "°C"))).join(", ")).join("<br>")}<br>With one oven, these dishes need a reviewed cooking order.</div>` : ""}</section>`;
   }
   function mealsView() {
     return `${resumeBanner()}<div class="k-heading"><div><div class="k-kicker">Meals & prep</div><h1>A whole meal, together.</h1><p class="k-muted k-small">Bring your favorite dishes to the same table.</p></div>${button(icon("plus") + "Create a meal", "new-meal", "", "k-primary")}</div><div class="k-meal-list">${state.meals.map((m) => `<article class="k-meal-card"><div class="k-kicker">${m.components.length} dish${m.components.length === 1 ? "" : "es"}</div><h2>${esc(m.title)}</h2><p class="k-small k-muted">${esc(m.components.map((c) => recipe(c.recipeId).title).join(" + "))}</p><div class="k-row" style="margin-top:17px">${button("Open meal" + icon("arrow-right"), "open-meal", `data-id="${esc(m.id)}"`)}<span class="k-small k-muted">${esc(mealPortionsLabel(m))}</span></div></article>`).join("")}</div><div class="k-actions">${button(icon("sparkles") + "Explore AI meal planning", "byk-compose", "", "k-quiet")}</div>`;
@@ -519,51 +437,14 @@ async function boot() {
     review = {
       returnView: options.returnView || state.view,
       replaceGroup: options.replaceGroup || null,
-      entries: entries.map((e) => {
-        const r = recipe(e.recipeId),
-          mult = r.servings ? e.servings / r.servings : 1;
-        return {
-          source: e.source,
-          title: r.title + (e.context ? " · " + e.context : ""),
-          servings: e.servings,
-          yieldKnown: !!r.servings,
-          items: r.ingredients.map((i) => ({
-            ...i,
-            q: i.q === null ? null : i.q * mult,
-            original: null,
-          })),
-        };
-      }),
+      entries: buildReview(entries, recipe),
       excluded: new Set(),
     };
     state.view = "review";
     render();
   }
   function applyShoppingReview() {
-    const before = new Map(listItems().map((item) => [item.key, item.q]));
-    if (review.replaceGroup) {
-      Object.keys(state.contributions)
-        .filter((key) => key.startsWith(review.replaceGroup + ":"))
-        .forEach((key) => delete state.contributions[key]);
-    }
-    review.entries.forEach((e, ei) => {
-      const items = e.items.filter(
-        (i, ii) => !review.excluded.has(ei + "-" + ii),
-      );
-      if (items.length)
-        state.contributions[e.source] = { title: e.title, items };
-      else delete state.contributions[e.source];
-    });
-    state.bought = Object.fromEntries(
-      listItems()
-        .filter(
-          (item) =>
-            state.bought[item.key] &&
-            before.has(item.key) &&
-            before.get(item.key) === item.q,
-        )
-        .map((item) => [item.key, true]),
-    );
+    Object.assign(state, applyReview(state, review));
     state.view = "shop";
     noteMessage =
       "Your list is ready. Matching ingredients have been combined.";
@@ -649,13 +530,6 @@ async function boot() {
       )
       .join("")}</div>`;
   }
-  function timeLeft(t) {
-    return t.pausedMs !== null ? t.pausedMs : Math.max(0, t.endAt - Date.now());
-  }
-  function clockText(ms) {
-    const s = Math.ceil(ms / 1000);
-    return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
-  }
   function timerView(t) {
     return `<div class="k-timer"><div><div class="k-small">${esc(t.label)}</div><span class="k-timer-time" data-timer="${esc(t.id)}">${timeLeft(t) === 0 ? "Ready" : clockText(timeLeft(t))}</span></div>${button(icon(t.pausedMs === null ? "pause" : "play"), "toggle-timer", `data-id="${esc(t.id)}" aria-label="${t.pausedMs === null ? "Pause" : "Resume"} ${esc(t.label)} timer"`, "k-quiet k-icon")}${button(icon("x"), "remove-timer", `data-id="${esc(t.id)}" aria-label="Remove ${esc(t.label)} timer"`, "k-quiet k-icon")}</div>`;
   }
@@ -700,153 +574,8 @@ async function boot() {
     }
     return `${button(icon("arrow-left") + "Back", "editor-back", "", "k-quiet k-back")}<div class="k-heading"><div><div class="k-kicker">Your recipe, your way</div><h1>${draft.id ? "Make it your own." : "A quick read-through."}</h1><p class="k-muted k-small">Check the ingredients, servings, and method.</p></div></div><form id="k-editor-form" class="k-stack"><div class="k-editor-meta"><label class="k-field"><span>Recipe name</span><input class="k-input" name="title" value="${esc(draft.title)}" required maxlength="120"></label><label class="k-field"><span>Servings</span><input class="k-input" name="servings" type="number" min="1" max="24" step="1" value="${draft.servings || ""}" placeholder="Unknown"></label></div><div class="k-editor-grid"><label class="k-field"><span>Ingredients · one per line</span><textarea class="k-input" name="ingredients" style="min-height:240px" placeholder="250 g orzo&#10;2 tbsp olive oil" required maxlength="4000">${esc(draft.ingredientsText)}</textarea></label><label class="k-field"><span>Method · one step per paragraph</span><textarea class="k-input" name="steps" style="min-height:240px" placeholder="Warm the olive oil.&#10;&#10;Add the orzo and stir." required maxlength="5000">${esc(draft.stepsText)}</textarea></label></div><p class="k-note">For pasted recipes, cups use 240 mL, tablespoons 15 mL, and teaspoons 5 mL. Check these against your source. Unclear ingredient amounts stay as written. Add a serving count when you know it to enable scaling.</p><div class="k-row"><button type="button" data-local-submit class="k-button k-primary cursor-interaction">${icon("check")} Save recipe</button>${button("Cancel", "editor-back", "", "k-quiet")}</div><p class="k-form-error" id="k-editor-error" role="alert"></p></form>`;
   }
-  function parseIngredient(line) {
-    const raw = line.trim().replace(/^[-•]\s*/, "");
-    const expanded = raw
-      .replace(
-        /[½¼¾⅓⅔⅛⅜⅝⅞]/g,
-        (c) =>
-          " " +
-          {
-            "½": "1/2",
-            "¼": "1/4",
-            "¾": "3/4",
-            "⅓": "1/3",
-            "⅔": "2/3",
-            "⅛": "1/8",
-            "⅜": "3/8",
-            "⅝": "5/8",
-            "⅞": "7/8",
-          }[c],
-      )
-      .trim();
-    const m = expanded.match(
-      /^(\d+\s+\d+\/\d+|\d+\/\d+|\d+(?:[.,]\d+)?)\s+(.+)$/,
-    );
-    if (!m)
-      return ingredient(
-        "text-" + raw.toLowerCase(),
-        raw,
-        null,
-        "",
-        "Other",
-        "As written",
-      );
-    let q = m[1].split(/\s+/).reduce((n, p) => {
-      if (p.includes("/")) {
-        const [a, b] = p.split("/").map(Number);
-        return n + (b ? a / b : NaN);
-      }
-      return n + Number(p.replace(",", "."));
-    }, 0);
-    if (!Number.isFinite(q) || q <= 0)
-      return ingredient(
-        "text-" + raw.toLowerCase(),
-        raw,
-        null,
-        "",
-        "Other",
-        "As written",
-      );
-    const originalQuantity = q;
-    let rest = m[2],
-      u = "";
-    const unit = rest.match(
-      /^(grams?|g|kilograms?|kg|millilit(?:er|re)s?|ml|lit(?:er|re)s?|l|tbsp|tablespoons?|tsp|teaspoons?|cups?|oz|ounces?|cloves?|cans?)\s+(.+)$/i,
-    );
-    if (unit) {
-      const token = unit[1].toLowerCase();
-      rest = unit[2];
-      if (/^(g|grams?)$/.test(token)) u = "g";
-      else if (/^(kg|kilograms?)$/.test(token)) {
-        u = "g";
-        q *= 1000;
-      } else if (/^(ml|millilit)/.test(token)) u = "ml";
-      else if (/^(l|lit(?:er|re)s?)$/.test(token)) {
-        u = "ml";
-        q *= 1000;
-      } else if (/^(tbsp|tablespoon)/.test(token)) {
-        u = "ml";
-        q *= 15;
-      } else if (/^(tsp|teaspoon)/.test(token)) {
-        u = "ml";
-        q *= 5;
-      } else if (/^cups?$/.test(token)) {
-        u = "ml";
-        q *= 240;
-      } else if (/^(oz|ounce)/.test(token)) {
-        u = "g";
-        q *= 28.349523125;
-      } else u = token.replace(/s$/, "");
-    }
-    const parts = rest.split(/,\s*/);
-    const name = parts.shift().trim();
-    const note = parts.join(", ");
-    const known = recipes
-      .flatMap((r) => r.ingredients)
-      .find((i) => i.n.toLowerCase() === name.toLowerCase());
-    const result = ingredient(
-      known?.k || name.toLowerCase().replace(/\s+/g, "-"),
-      name,
-      q,
-      u,
-      known?.group || "Other",
-      note,
-    );
-    result.original = { q: originalQuantity, u: unit ? unit[1] : "" };
-    result.raw = raw;
-    return result;
-  }
-  function pasteDraft(text) {
-    const lines = text.split(/\r?\n/).map((x) => x.trim());
-    const title = lines.find(Boolean) || "";
-    const yieldMatch = text.match(/serv(?:es|ings?)\s*:?\s*(\d+)/i);
-    const ingredientAt = lines.findIndex((l) => /^ingredients?\s*:?$/i.test(l));
-    const methodAt = lines.findIndex((l) =>
-      /^(method|directions|instructions|steps)\s*:?$/i.test(l),
-    );
-    let ingredientLines = [],
-      steps = [];
-    if (ingredientAt >= 0) {
-      ingredientLines = lines
-        .slice(ingredientAt + 1, methodAt > ingredientAt ? methodAt : undefined)
-        .filter(Boolean);
-    }
-    if (methodAt >= 0) steps = lines.slice(methodAt + 1).filter(Boolean);
-    if (ingredientAt < 0) {
-      for (const l of lines.slice(lines.indexOf(title) + 1)) {
-        if (!l || /^serv(?:es|ings?)/i.test(l)) continue;
-        if (/^\d+[.)]\s/.test(l)) steps.push(l);
-        else if (/^[-•]?\s*[\d½¼¾⅓⅔⅛]/.test(l)) ingredientLines.push(l);
-        else steps.push(l);
-      }
-    }
-    return {
-      id: null,
-      title,
-      servings: yieldMatch ? Number(yieldMatch[1]) : null,
-      ingredientsText: ingredientLines.join("\n"),
-      stepsText: steps.map((s) => s.replace(/^\d+[.)]\s*/, "")).join("\n\n"),
-      originalText: text,
-    };
-  }
-  function editDraft(r) {
-    return {
-      id: r.id,
-      title: r.title,
-      servings: r.servings,
-      ingredientsText: r.ingredients
-        .map(
-          (i) =>
-            i.raw ||
-            `${i.q === null ? "" : formatNumber(i.q) + " " + (i.u ? i.u + " " : "")}${i.n}${i.note && i.q !== null ? ", " + i.note : ""}`,
-        )
-        .join("\n"),
-      stepsText: r.steps.map((s) => s.text).join("\n\n"),
-      equipmentText: (r.equipment || []).join("\n"),
-      originalText: originalText(r),
-    };
-  }
+  const knownIngredients = recipes.flatMap((r) => r.ingredients);
+  const parseIngredient = (line) => parseIngredientLine(line, knownIngredients);
   function render() {
     root.classList.toggle("k-phone", design.preview === "Phone");
     root.classList.toggle("k-compact", design.density === "Compact");
@@ -1496,7 +1225,7 @@ async function boot() {
 
   function settingsView() {
     return `${button(icon("arrow-left") + "Recipes", "nav", 'data-view="library"', "k-quiet k-back")}
-   <div class="k-heading"><div><div class="k-kicker">Make yourself at home</div><h1>Your kitchen settings.</h1><p class="k-muted">Kooks for ${platform === "ios" ? "iOS" : platform === "android" ? "Android" : "the web"} · 0.2.0</p></div></div>
+   <div class="k-heading"><div><div class="k-kicker">Make yourself at home</div><h1>Your kitchen settings.</h1><p class="k-muted">Kooks for ${platform === "ios" ? "iOS" : platform === "android" ? "Android" : "the web"} · ${__KOOKS_VERSION__}</p></div></div>
    <div class="k-settings-grid"><section class="k-ingredients"><h2>Your cookbook</h2><p class="k-note" data-storage-label>${storageStatus === "error" ? "Not saved — please retry" : storageStatus === "saving" ? "Saving…" : "Saved on this device"}</p><p class="k-small" style="margin-top:15px">Recipes, meals, shopping, and cooking progress stay on this device. Export a backup to keep a copy or move to another device. Household sync and the desktop MCP cookbook are separate.</p>
    <div class="k-actions">${button("Export backup", "export-backup", "", "k-primary")}${button("Restore backup", "restore-backup")}${storageStatus === "error" ? button("Retry saving", "retry-save") : ""}</div>
    <input type="file" id="k-restore-file" accept=".json,application/json" hidden>

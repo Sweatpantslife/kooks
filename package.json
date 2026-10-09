@@ -2,6 +2,7 @@
   "name": "kooks-mcp",
   "version": "0.2.0",
   "private": true,
+  "license": "AGPL-3.0-only",
   "description": "Local MCP tools for the Kooks household cooking workflow",
   "type": "module",
   "engines": {
@@ -22,10 +23,14 @@
     "cap:run:android": "npm run cap:sync && cap run android",
     "build:android": "npm run cap:sync && node scripts/native-build.mjs android",
     "build:ios": "npm run cap:sync && node scripts/native-build.mjs ios",
-    "test:mobile": "node --test test/mobile.test.js",
-    "test:mobile:e2e": "playwright test",
+    "test:mobile": "node --test test/mobile.test.js test/mobile-logic.test.js",
+    "test:mobile:e2e": "playwright test --project mobile",
     "native:doctor": "node scripts/native-build.mjs doctor",
-    "native:assets": "node scripts/native-assets.mjs"
+    "native:assets": "node scripts/native-assets.mjs",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test:e2e": "playwright test",
+    "test:web:e2e": "playwright test --project web"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.2",
