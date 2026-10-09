@@ -1,34 +1,79 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import http from "node:http";
 import { Store } from "../mcp/store.js";
 import { createWebServer } from "../web/server.js";
 import { embedOrigins } from "../shared/links.js";
-import http from "node:http";
+import { createAuthenticator } from "./helpers/authenticator.js";
 
-async function setup(t, accessToken = "", options = {}) {
+const DAY = 24 * 60 * 60 * 1000;
+const member = "cook@example.test";
+// Captures sign-in emails instead of sending them.
+function mailbox() {
+  const box = {
+    sent: [],
+    broken: false,
+    description: "to the test mailbox",
+    async send(message) {
+      if (box.broken) throw new Error("SMTP is down");
+      box.sent.push(message);
+    },
+  };
+  return box;
+}
+const tokenIn = (message) =>
+  message.text.match(/#\/signin\/([A-Za-z0-9_-]+)/)[1];
+const sessionCookie = (response) =>
+  (response.cookie ?? "").split(";")[0] || null;
+
+async function setup(t, options = {}) {
   const store = new Store(":memory:");
-  const server = createWebServer({ store, accessToken, ...options });
+  const server = createWebServer({ store, ...options });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   t.after(async () => {
     await new Promise((resolve) => server.close(resolve));
+    server.auth?.close();
     store.close();
   });
   const origin = `http://127.0.0.1:${server.address().port}`;
+  // Plain http so tests can set Host and Origin the way a proxy would.
+  const call = (path, { method = "GET", input, headers = {} } = {}) =>
+    new Promise((resolve, reject) => {
+      const req = http.request(
+        `${origin}${path}`,
+        {
+          method,
+          headers: {
+            "Content-Type": "application/json",
+            Origin: origin,
+            ...headers,
+          },
+        },
+        (response) => {
+          const chunks = [];
+          response.on("data", (chunk) => chunks.push(chunk));
+          response.on("end", () =>
+            resolve({
+              status: response.statusCode,
+              cookie: response.headers["set-cookie"]?.[0] ?? null,
+              json: () =>
+                JSON.parse(Buffer.concat(chunks).toString() || "null"),
+            }),
+          );
+        },
+      );
+      req.on("error", reject);
+      req.end(input === undefined ? undefined : JSON.stringify(input));
+    });
   return {
     origin,
-    post(path, input, extra = {}) {
-      return fetch(`${origin}${path}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Origin: origin,
-          ...extra,
-        },
-        body: JSON.stringify(input),
-      });
-    },
+    server,
+    get: (path, headers) => call(path, { headers }),
+    post: (path, input, headers) =>
+      call(path, { method: "POST", input, headers }),
   };
 }
+
 test("browser API shares persistent actions, reports revisions and rejects stale writes and cross-site posts", async (t) => {
   const { origin, post } = await setup(t);
   const page = await fetch(origin);
@@ -54,6 +99,12 @@ test("browser API shares persistent actions, reports revisions and rejects stale
   assert.match(await shared.text(), /export function describeLink/);
   assert.equal((await fetch(`${origin}/shared/quantities.js`)).status, 404);
   const initial = await (await fetch(`${origin}/api/state`)).json();
+  assert.equal(initial.sharing, false);
+  assert.equal(initial.account, null);
+  // A kitchen on this computer alone has no sign-in at all.
+  const disabled = await post("/api/auth/link", { email: member });
+  assert.equal(disabled.status, 404);
+  assert.equal((await disabled.json()).error, "SIGN_IN_DISABLED");
   const response = await post("/api/tools/recipe_save", {
     request_id: "http-create",
     recipe: { title: "Shared rice", servings: 2 },
@@ -98,149 +149,345 @@ test("browser API shares persistent actions, reports revisions and rejects stale
   const final = await (await fetch(`${origin}/api/state`)).json();
   assert.equal(final.records.recipe.length, 1);
 });
-test("HTTPS proxy hosting accepts only its configured origin and uses secure sessions", async (t) => {
-  const token = "a-long-household-access-key-for-tests";
+
+test("HTTPS hosting signs members in with emailed links and passkeys behind its configured origin", async (t) => {
   const publicOrigin = "https://kooks.example";
-  const { origin } = await setup(t, token, {
+  const box = mailbox();
+  const { origin, get, post } = await setup(t, {
     host: "0.0.0.0",
     publicOrigin,
+    members: [member],
+    mailer: box,
   });
-  // Use HTTP directly: fetch normalizes Host instead of simulating the proxy.
-  const request = (path, method = "GET", input, headers = {}) =>
-    new Promise((resolve, reject) => {
-      const req = http.request(
-        `${origin}${path}`,
-        {
-          method,
-          headers: { "Content-Type": "application/json", ...headers },
-        },
-        (response) => {
-          const chunks = [];
-          response.on("data", (chunk) => chunks.push(chunk));
-          response.on("end", () =>
-            resolve({
-              status: response.statusCode,
-              headers: new Headers(response.headers),
-              json: () => JSON.parse(Buffer.concat(chunks).toString()),
-            }),
-          );
-        },
-      );
-      req.on("error", reject);
-      req.end(input === undefined ? undefined : JSON.stringify(input));
-    });
-  const post = (path, input, headers) => request(path, "POST", input, headers);
+  const headers = { Host: "kooks.example", Origin: publicOrigin };
   assert.equal((await fetch(`${origin}/healthz`)).status, 200);
   assert.equal((await fetch(`${origin}/api/state`)).status, 403);
-  const headers = { Host: "kooks.example", Origin: publicOrigin };
+  for (const Origin of ["https://outside.example", "http://kooks.example"])
+    assert.equal(
+      (await post("/api/auth/link", { email: member }, { ...headers, Origin }))
+        .status,
+      403,
+    );
+  // Strangers get the same answer as members, and no email.
   assert.equal(
-    (
-      await post(
-        "/api/login",
-        { token },
-        { ...headers, Origin: "https://outside.example" },
-      )
-    ).status,
-    403,
-  );
-  assert.equal(
-    (
-      await post(
-        "/api/login",
-        { token },
-        {
-          ...headers,
-          Origin: "http://kooks.example",
-          "X-Forwarded-Proto": "https",
-        },
-      )
-    ).status,
-    403,
-  );
-  assert.equal(
-    (await post("/api/login", { token: "wrong" }, headers)).status,
-    401,
-  );
-  const login = await post("/api/login", { token }, headers);
-  assert.equal(login.status, 200);
-  const cookie = login.headers.get("set-cookie");
-  assert.match(cookie, /; Secure/);
-  assert.match(cookie, /HttpOnly/);
-  assert.equal(
-    (await request("/api/state", "GET", undefined, { Host: "kooks.example" }))
+    (await post("/api/auth/link", { email: "stranger@example.test" }, headers))
       .status,
+    200,
+  );
+  assert.equal(box.sent.length, 0);
+  assert.equal(
+    (
+      await post(
+        "/api/auth/link",
+        { email: ` ${member.toUpperCase()} ` },
+        headers,
+      )
+    ).status,
+    200,
+  );
+  assert.equal(box.sent.length, 1);
+  assert.equal(box.sent[0].to, member);
+  assert.match(
+    box.sent[0].text,
+    /https:\/\/kooks\.example\/#\/signin\/[A-Za-z0-9_-]{43}/,
+  );
+  const token = tokenIn(box.sent[0]);
+  const wrong = await post(
+    "/api/auth/link/confirm",
+    { token: "nonsense" },
+    headers,
+  );
+  assert.equal(wrong.status, 400);
+  assert.equal((await wrong.json()).error, "LINK_INVALID");
+  const login = await post("/api/auth/link/confirm", { token }, headers);
+  assert.equal(login.status, 200);
+  assert.deepEqual((await login.json()).account, {
+    email: member,
+    method: "email",
+  });
+  assert.match(
+    login.cookie,
+    /^kooks_session=[a-f0-9]{64}; HttpOnly; SameSite=Strict; Path=\/; Max-Age=2592000; Secure$/,
+  );
+  const cookie = sessionCookie(login);
+  // A link works once.
+  assert.equal(
+    (await post("/api/auth/link/confirm", { token }, headers)).status,
+    400,
+  );
+  assert.equal(
+    (await get("/api/state", { Host: "kooks.example" })).status,
     401,
   );
+  const state = await (
+    await get("/api/state", { Host: "kooks.example", Cookie: cookie })
+  ).json();
+  assert.equal(state.sharing, true);
+  assert.deepEqual(state.account, { email: member, method: "email" });
   const saved = await post(
     "/api/tools/recipe_save",
     {
       request_id: "https-recipe",
       recipe: { title: "HTTPS rice", servings: 2 },
     },
-    { ...headers, Cookie: cookie.split(";")[0] },
+    { ...headers, Cookie: cookie },
   );
   assert.equal(saved.status, 200);
-  const state = await (
-    await request("/api/state", "GET", undefined, {
-      Host: "kooks.example",
-      Cookie: cookie.split(";")[0],
-    })
+  // Add a passkey for the configured site, then use it after signing out.
+  const signedIn = { ...headers, Cookie: cookie };
+  const { options } = await (
+    await post("/api/auth/passkey/register/options", {}, signedIn)
   ).json();
-  assert.equal(state.records.recipe[0].data.title, "HTTPS rice");
+  assert.equal(options.rp.id, "kooks.example");
+  assert.equal(options.user.name, member);
+  assert.equal(options.authenticatorSelection.userVerification, "required");
+  const passkey = createAuthenticator({
+    rpId: "kooks.example",
+    origin: publicOrigin,
+  });
+  const registered = await post(
+    "/api/auth/passkey/register",
+    {
+      credential: passkey.attest({ challenge: options.challenge }),
+      name: "  Kitchen   phone\n",
+    },
+    signedIn,
+  );
+  assert.equal(registered.status, 200);
+  assert.equal((await registered.json()).passkey.name, "Kitchen phone");
+  const list = await (await get("/api/auth/passkeys", signedIn)).json();
+  assert.equal(list.passkeys.length, 1);
+  assert.equal(list.passkeys[0].id, passkey.id);
+  const out = await post("/api/auth/signout", {}, signedIn);
+  assert.equal(out.status, 200);
+  assert.match(out.cookie, /^kooks_session=; .*Max-Age=0; Secure$/);
+  assert.equal((await get("/api/state", signedIn)).status, 401);
+  const challenge = (
+    await (await post("/api/auth/passkey/options", {}, headers)).json()
+  ).options;
+  assert.equal(challenge.rpId, "kooks.example");
+  assert.deepEqual(challenge.allowCredentials, []);
+  const assertion = passkey.assert({
+    challenge: challenge.challenge,
+    userHandle: options.user.id,
+  });
+  const withPasskey = await post(
+    "/api/auth/passkey/signin",
+    { credential: assertion },
+    headers,
+  );
+  assert.equal(withPasskey.status, 200);
+  assert.deepEqual((await withPasskey.json()).account, {
+    email: member,
+    method: "passkey",
+  });
+  const again = await get("/api/state", {
+    Host: "kooks.example",
+    Cookie: sessionCookie(withPasskey),
+  });
+  assert.equal(again.status, 200);
+  assert.equal((await again.json()).account.method, "passkey");
+  // A challenge answers once; a replay is refused.
+  const replay = await post(
+    "/api/auth/passkey/signin",
+    { credential: assertion },
+    headers,
+  );
+  assert.equal(replay.status, 400);
+  assert.equal((await replay.json()).error, "PASSKEY_EXPIRED");
+  const other = (
+    await (await post("/api/auth/passkey/options", {}, headers)).json()
+  ).options;
+  const foreign = await post(
+    "/api/auth/passkey/signin",
+    {
+      credential: passkey.assert({
+        challenge: other.challenge,
+        userHandle: "AAAA",
+      }),
+    },
+    headers,
+  );
+  assert.equal(foreign.status, 401);
+  assert.equal((await foreign.json()).error, "PASSKEY_INVALID");
 });
 
-test("hosted mode refuses insecure origins and missing access protection", () => {
+test("hosted and shared modes refuse insecure origins and missing household configuration", () => {
   const store = new Store(":memory:");
+  const box = mailbox();
   try {
     for (const publicOrigin of [
       "http://kooks.example",
       "https://kooks.example/path",
       "https://user:pass@kooks.example",
-    ]) {
+    ])
       assert.throws(
-        () => createWebServer({ store, publicOrigin }),
+        () =>
+          createWebServer({
+            store,
+            publicOrigin,
+            members: [member],
+            mailer: box,
+          }),
         /HTTPS origin/,
       );
-    }
     assert.throws(
-      () => createWebServer({ store, publicOrigin: "https://kooks.example" }),
-      /KOOKS_ACCESS_TOKEN/,
+      () =>
+        createWebServer({
+          store,
+          publicOrigin: "https://kooks.example",
+          mailer: box,
+        }),
+      /KOOKS_HOUSEHOLD_EMAILS/,
+    );
+    assert.throws(
+      () => createWebServer({ store, host: "0.0.0.0", mailer: box }),
+      /KOOKS_HOUSEHOLD_EMAILS/,
+    );
+    assert.throws(
+      () => createWebServer({ store, host: "0.0.0.0", members: [member] }),
+      /KOOKS_SMTP_HOST/,
     );
   } finally {
     store.close();
   }
 });
-test("optional household access key protects records and issues a scoped browser session", async (t) => {
-  const { origin, post } = await setup(
-    t,
-    "a-long-household-access-key-for-tests",
+
+test("household addresses turn sign-in on, links expire, sessions slide and leaving ends access", async (t) => {
+  const box = mailbox();
+  const household = new Set([member, "second@example.test"]);
+  let clock = Date.now();
+  const { origin, get, post } = await setup(t, {
+    members: household,
+    mailer: box,
+    authOptions: { now: () => clock, linkLifetime: 1000 },
+  });
+  assert.equal((await fetch(origin)).status, 200);
+  const locked = await get("/api/state");
+  assert.equal(locked.status, 401);
+  assert.equal((await locked.json()).error, "SIGN_IN");
+  assert.equal(
+    (await post("/api/auth/link", { email: "not an address" })).status,
+    400,
   );
-  assert.equal((await fetch(`${origin}/api/state`)).status, 401);
-  assert.equal((await post("/api/login", { token: "wrong" })).status, 401);
-  const login = await post("/api/login", {
-    token: "a-long-household-access-key-for-tests",
+  assert.equal((await post("/api/auth/link", { email: member })).status, 200);
+  assert.match(box.sent[0].text, new RegExp(`${origin}/#/signin/`));
+  clock += 1001;
+  assert.equal(
+    (await post("/api/auth/link/confirm", { token: tokenIn(box.sent[0]) }))
+      .status,
+    400,
+  );
+  assert.equal((await post("/api/auth/link", { email: member })).status, 200);
+  const login = await post("/api/auth/link/confirm", {
+    token: tokenIn(box.sent[1]),
   });
   assert.equal(login.status, 200);
-  const cookie = login.headers.get("set-cookie");
-  assert.match(cookie, /HttpOnly/);
-  assert.match(cookie, /SameSite=Strict/);
+  assert.match(login.cookie, /SameSite=Strict; Path=\/; Max-Age=2592000$/);
+  const cookie = sessionCookie(login);
+  assert.equal((await get("/api/state", { Cookie: cookie })).status, 200);
+  // Use within a day keeps the session quiet; later use extends it.
+  clock += 2 * DAY;
+  const renewed = await get("/api/state", { Cookie: cookie });
+  assert.equal(renewed.status, 200);
+  assert.equal(sessionCookie(renewed), cookie);
+  assert.match(renewed.cookie, /Max-Age=2592000/);
+  clock += 31 * DAY;
+  assert.equal((await get("/api/state", { Cookie: cookie })).status, 401);
+  assert.equal((await post("/api/auth/link", { email: member })).status, 200);
+  const fresh = sessionCookie(
+    await post("/api/auth/link/confirm", { token: tokenIn(box.sent[2]) }),
+  );
+  assert.equal((await get("/api/state", { Cookie: fresh })).status, 200);
+  // Passkeys can be removed, and a removed passkey no longer signs in.
+  const { options } = await (
+    await post("/api/auth/passkey/register/options", {}, { Cookie: fresh })
+  ).json();
+  const passkey = createAuthenticator({ rpId: "127.0.0.1", origin });
+  const stranger = createAuthenticator({
+    rpId: "kooks.example",
+    origin: "https://kooks.example",
+  });
+  const elsewhere = await post(
+    "/api/auth/passkey/register",
+    { credential: stranger.attest({ challenge: options.challenge }) },
+    { Cookie: fresh },
+  );
+  assert.equal(elsewhere.status, 400);
+  assert.equal((await elsewhere.json()).error, "PASSKEY_INVALID");
+  const retry = (
+    await (
+      await post("/api/auth/passkey/register/options", {}, { Cookie: fresh })
+    ).json()
+  ).options;
   assert.equal(
     (
-      await fetch(`${origin}/api/state`, {
-        headers: { Cookie: cookie.split(";")[0] },
-      })
+      await post(
+        "/api/auth/passkey/register",
+        { credential: passkey.attest({ challenge: retry.challenge }) },
+        { Cookie: fresh },
+      )
     ).status,
     200,
   );
-  const isolated = new Store(":memory:");
-  try {
-    assert.throws(
-      () => createWebServer({ store: isolated, host: "0.0.0.0" }),
-      /access_token/i,
+  assert.equal(
+    (
+      await post(
+        "/api/auth/passkey/remove",
+        { id: passkey.id },
+        { Cookie: fresh },
+      )
+    ).status,
+    200,
+  );
+  assert.equal(
+    (
+      await post(
+        "/api/auth/passkey/remove",
+        { id: passkey.id },
+        { Cookie: fresh },
+      )
+    ).status,
+    404,
+  );
+  const challenge = (await (await post("/api/auth/passkey/options", {})).json())
+    .options;
+  const unknown = await post("/api/auth/passkey/signin", {
+    credential: passkey.assert({ challenge: challenge.challenge }),
+  });
+  assert.equal(unknown.status, 401);
+  assert.equal((await unknown.json()).error, "PASSKEY_UNKNOWN");
+  // Mail trouble is reported to members rather than swallowed.
+  box.broken = true;
+  const failed = await post("/api/auth/link", { email: member });
+  assert.equal(failed.status, 502);
+  assert.equal((await failed.json()).error, "MAIL_FAILED");
+  box.broken = false;
+  // Leaving the household ends the session on its next request.
+  household.delete(member);
+  assert.equal((await get("/api/state", { Cookie: fresh })).status, 401);
+  assert.equal((await post("/api/auth/link", { email: member })).status, 200);
+  assert.equal(box.sent.length, 3);
+});
+
+test("sign-in requests are throttled per address", async (t) => {
+  const box = mailbox();
+  const { post } = await setup(t, { members: [member], mailer: box });
+  for (let i = 0; i < 5; i++)
+    assert.equal((await post("/api/auth/link", { email: member })).status, 200);
+  const throttled = await post("/api/auth/link", { email: member });
+  assert.equal(throttled.status, 429);
+  assert.equal((await throttled.json()).error, "RATE_LIMITED");
+  assert.equal(box.sent.length, 5);
+  for (let i = 0; i < 20; i++)
+    assert.equal(
+      (await post("/api/auth/link/confirm", { token: "x" })).status,
+      400,
     );
-  } finally {
-    isolated.close();
-  }
+  assert.equal(
+    (await post("/api/auth/link/confirm", { token: "x" })).status,
+    429,
+  );
 });
 
 test("ebooks are served with their names for the in-app reader and for download", async (t) => {
