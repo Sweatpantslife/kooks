@@ -123,6 +123,7 @@ const session = z.object({
 });
 const stateSchema = z.object({
   view: z.enum([
+    "today",
     "library",
     "detail",
     "shop",
@@ -164,6 +165,9 @@ const backupSchema = z.object({
     layout: z.enum(["Cards", "Rows"]),
     density: z.enum(["Comfortable", "Compact"]),
     preview: z.literal("Responsive"),
+    // Added with the shared design system; older backups default to the
+    // system theme.
+    theme: z.enum(["system", "light", "dark"]).default("system"),
   }),
 });
 
@@ -172,6 +176,7 @@ export const defaultDesign = {
   layout: "Cards",
   density: "Comfortable",
   preview: "Responsive",
+  theme: "system",
 };
 export const newCookbook = () => ({
   format: "kooks-mobile",

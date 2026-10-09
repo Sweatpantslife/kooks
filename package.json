@@ -27,6 +27,7 @@
     "test:mobile:e2e": "playwright test --project mobile",
     "native:doctor": "node scripts/native-build.mjs doctor",
     "native:assets": "node scripts/native-assets.mjs",
+    "icons": "node scripts/icons.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test:e2e": "playwright test",
@@ -42,13 +43,13 @@
     "@capacitor/local-notifications": "^8.3.1",
     "@capacitor/share": "^8.0.2",
     "@modelcontextprotocol/server": "2.0.0",
-    "lucide": "^1.47.0",
     "zod": "4.6.5"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.5.2",
     "@modelcontextprotocol/client": "2.0.0",
     "@playwright/test": "^1.63.0",
+    "lucide": "^1.47.0",
     "prettier": "^3.9.8",
     "sharp": "^0.35.4",
     "vite": "^8.3.0"

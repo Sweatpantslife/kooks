@@ -46,7 +46,7 @@ async function signInByLink(page, email) {
   const link = latestLink();
   await page.goto(link);
   await expect(
-    page.getByRole("heading", { name: "What sounds good today?" }),
+    page.getByRole("heading", { level: 1, name: "Today" }),
   ).toBeVisible();
   return link;
 }
@@ -83,7 +83,7 @@ test("a member signs in by email link, adds a passkey and returns with one tap",
   await page.goto(link);
   await expect(page.getByText(/expired or was already used/)).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "What sounds good today?" }),
+    page.getByRole("heading", { level: 1, name: "Today" }),
   ).toBeVisible();
   // One tap next time: the prompt registers a passkey on this device.
   await page.getByRole("button", { name: "Add a passkey" }).click();
@@ -95,7 +95,7 @@ test("a member signs in by email link, adds a passkey and returns with one tap",
   await expect(
     page.getByRole("heading", { name: "Signed in as cook@example.test" }),
   ).toBeVisible();
-  const passkeys = page.locator(".list-row");
+  const passkeys = page.locator(".list-item");
   await expect(passkeys).toHaveCount(1);
   await expect(passkeys).toContainText("Added");
   await page.getByRole("button", { name: "Sign out" }).click();
@@ -105,7 +105,7 @@ test("a member signs in by email link, adds a passkey and returns with one tap",
   await expect(page.getByRole("link", { name: "Sign-in" })).toHaveCount(0);
   await page.getByRole("button", { name: "Sign in with a passkey" }).click();
   await expect(
-    page.getByRole("heading", { name: "What sounds good today?" }),
+    page.getByRole("heading", { level: 1, name: "Today" }),
   ).toBeVisible();
   await expect(page.getByText("Welcome back.")).toBeVisible();
   await expect(page.locator(".passkey-prompt")).toHaveCount(0);
@@ -143,13 +143,13 @@ test("a browser that suggests the saved passkey signs the member in without a ta
   // The sign-in screen suggests the passkey; picking it is the whole sign-in.
   await expect(page.getByText("Welcome back.")).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "What sounds good today?" }),
+    page.getByRole("heading", { level: 1, name: "Today" }),
   ).toBeVisible();
   await page.getByRole("link", { name: "Sign-in" }).click();
   await expect(
     page.getByRole("heading", { name: "Signed in as baker@example.test" }),
   ).toBeVisible();
-  await expect(page.locator(".list-row")).toContainText("Last used");
+  await expect(page.locator(".list-item")).toContainText("Last used");
   await page.getByRole("button", { name: /^Remove passkey/ }).click();
   await expect(page.getByText("No passkeys yet.")).toBeVisible();
   await page.getByRole("button", { name: "Sign out" }).click();

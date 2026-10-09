@@ -4,6 +4,7 @@ import {
   formatLinkLines,
   parseLinkLines,
 } from "/shared/links.js";
+import { icon } from "/shared/icons.js";
 import {
   courseLabel,
   courses,
@@ -19,6 +20,7 @@ import {
   taxonomy,
 } from "/shared/taxonomy.js";
 
+// ---------- Values ----------
 const $ = (selector) => document.querySelector(selector);
 const esc = (value) =>
   String(value ?? "").replace(
@@ -49,6 +51,8 @@ const monday = (date) =>
   addDays(date, -((new Date(`${date}T12:00:00Z`).getUTCDay() + 6) % 7));
 const num = (value) =>
   value == null ? "—" : Number(value.toFixed(3)).toLocaleString();
+const plural = (n, word, words = `${word}s`) =>
+  `${num(n)} ${n === 1 ? word : words}`;
 const amount = (ingredient) =>
   ingredient.quantity === null
     ? "As written"
@@ -65,57 +69,31 @@ const lineList = (value) =>
     .split(/\n/)
     .map((v) => v.trim())
     .filter(Boolean);
-const dateLabel = (date) =>
-  new Date(`${date}T12:00:00`).toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-  });
-const paths = {
-  leaf: '<path d="M20 3C11 2 3 6 4 13c1 6 9 7 13 2 3-4 3-8 3-12Z"/><path d="M3 22 15 9M9 16l-1-5m4 2 5 1"/>',
-  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l2 2m10 10 2 2M5 19l2-2M17 7l2-2"/>',
-  book: '<path d="M12 5v16M3 3c4-1 7 0 9 2 2-2 5-3 9-2v16c-4-1-7 0-9 2-2-2-5-3-9-2Z"/>',
-  meal: '<path d="M4 3v7c0 3 6 3 6 0V3M7 3v19M19 3c-4 3-5 8-1 9h2V3h-1Zm1 9v10"/>',
-  basket:
-    '<path d="m3 10 2 11h14l2-11ZM2 10h20M6 10l4-7m8 7-4-7M9 14v3m6-3v3"/>',
-  jar: '<path d="M7 2h10v4H7zM7 6c0 3-3 3-3 6v8c0 2 16 2 16 0v-8c0-3-3-3-3-6M4 12h16M4 18h16"/>',
-  box: '<path d="m3 7 9-4 9 4-9 4-9-4Zm0 0v12l9 3 9-3V7M12 11v11M7 5l9 4"/>',
-  people:
-    '<circle cx="9" cy="7" r="3"/><path d="M2 21v-3c0-6 14-6 14 0v3m0-17a3 3 0 0 1 0 6m3 5c3 1 3 4 3 6"/>',
-  coin: '<circle cx="12" cy="12" r="9"/><path d="M16 8c-7-4-10 4-4 4s3 8-4 4m4-11v14"/>',
-  flame:
-    '<path d="M13 2c2 7 7 8 7 14 0 9-16 9-16 0 0-4 3-6 4-8 0 5 3 5 3 2l2-8Z"/>',
-  plus: '<path d="M12 5v14M5 12h14"/>',
-  arrow: '<path d="M4 12h16m-6-6 6 6-6 6"/>',
-  back: '<path d="M20 12H4m6-6-6 6 6 6"/>',
-  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
-  check: '<path d="m4 12 5 5L20 6"/>',
-  edit: '<path d="m14 4 6 6M4 20l5-1L21 7c2-2-2-6-4-4L5 15l-1 5Z"/>',
-  close: '<path d="m6 6 12 12M6 18 18 6"/>',
-  photo:
-    '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8" cy="8" r="1.5"/><path d="m3 17 6-6 4 4 3-3 5 5"/>',
-  heart: '<path d="M12 21 3 12c-6-7 4-13 9-6 5-7 15-1 9 6l-9 9Z"/>',
-  pan: '<path d="M3 10c0 12 13 12 13 0H3Zm13 2h6M7 2v4m5-4v4"/>',
-  calendar:
-    '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 2v6m10-6v6M3 11h18"/>',
-  play: '<path d="M7 4v16l13-8Z"/>',
-  key: '<circle cx="8" cy="16" r="4"/><path d="m11 13 10-10M16 8l2 2m1-5 2 2"/>',
-  mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
-  bulb: '<path d="M9 18h6m-5 3h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1V17h6v-.2c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2Z"/>',
-  shelf:
-    '<path d="M3 21h18M4 21V7h4v14M10 21V4h4v17M15.5 21 17 8l3.6.8L19 21"/>',
-  download: '<path d="M12 3v12m-5-5 5 5 5-5M4 19h16"/>',
+const localDate = (date, options) =>
+  new Date(`${date}T12:00:00`).toLocaleDateString(undefined, options);
+const dateLabel = (date) => localDate(date, { month: "short", day: "numeric" });
+const weekdayLabel = (date) => localDate(date, { weekday: "long" });
+const longDate = (date) =>
+  localDate(date, { weekday: "long", day: "numeric", month: "long" });
+const money = (value, code = currency) => {
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency: code,
+    }).format(value);
+  } catch {
+    return `${code} ${Number(value).toFixed(2)}`;
+  }
 };
-const icon = (name) =>
-  `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${paths[name] ?? paths.leaf}</svg>`;
-const link = (label, route, primary = false, ico = "") =>
-  `<a class="button ${primary ? "primary" : ""}" href="#/${route}">${ico ? icon(ico) : ""}${esc(label)}</a>`;
-// The way back from a page that opens from another one: the list of its
-// section or the record it belongs to, never browser history, so a reload or
-// a shared address shows the same control.
-const backLink = (label, route) =>
-  `<a class="button back" href="#/${route}">${icon("back")}${esc(label)}</a>`;
+
+// ---------- Markup ----------
+const link = (label, route, { primary = false, cls = "", ico = "" } = {}) =>
+  `<a class="btn ${primary ? "btn-primary" : ""} ${cls}" href="#/${route}">${ico ? icon(ico) : ""}${esc(label)}</a>`;
 const button = (label, action, attrs = "", cls = "", ico = "") =>
-  `<button type="button" class="button ${cls}" data-action="${action}" ${attrs}>${ico ? icon(ico) : ""}${esc(label)}</button>`;
+  `<button type="button" class="btn ${cls}" data-action="${action}" ${attrs}>${ico ? icon(ico) : ""}${label ? esc(label) : ""}</button>`;
+// A pressable filter chip; the count is decoration, not part of its name.
+const chip = (label, action, attrs = "", pressed = false, count = null) =>
+  `<button type="button" class="chip" data-action="${action}" aria-pressed="${pressed}" ${attrs}>${esc(label)}${count == null ? "" : `<span class="count" aria-hidden="true">${count}</span>`}</button>`;
 const hidden = (name, value) =>
   `<input type="hidden" name="${name}" value="${esc(value)}">`;
 const help = (text) => (text ? `<span class="help">${esc(text)}</span>` : "");
@@ -126,16 +104,35 @@ const area = (label, name, value = "", extra = "", hint = "") =>
 const select = (label, name, options, value = "", extra = "") =>
   `<label class="field"><span>${esc(label)}</span><select name="${name}" ${extra}>${options.map(([v, l]) => `<option value="${esc(v)}" ${String(v) === String(value) ? "selected" : ""}>${esc(l)}</option>`).join("")}</select></label>`;
 const check = (label, name, value = "on", checked = false, extra = "") =>
-  `<label class="check"><input type="checkbox" name="${name}" value="${esc(value)}" ${checked ? "checked" : ""} ${extra}>${esc(label)}</label>`;
-const submit = (label) =>
-  `<div class="error-message" role="alert" data-error></div><button class="button primary" type="submit">${esc(label)}</button>`;
-const empty = (title, text, action = "") =>
-  `<div class="panel empty">${icon("leaf")}<h2>${esc(title)}</h2><p>${esc(text)}</p>${action}</div>`;
-const heading = (kicker, title, text = "", actions = "") =>
-  `<header class="heading"><div><div class="eyebrow">${esc(kicker)}</div><h1>${esc(title)}</h1>${text ? `<p>${esc(text)}</p>` : ""}</div>${actions ? `<div class="actions">${actions}</div>` : ""}</header>`;
-// A pressable filter chip; the count is decoration, not part of its name.
-const chip = (label, action, attrs = "", pressed = false, count = null) =>
-  `<button type="button" class="chip" data-action="${action}" aria-pressed="${pressed}" ${attrs}>${esc(label)}${count == null ? "" : `<span class="count" aria-hidden="true">${count}</span>`}</button>`;
+  `<label class="check"><input type="checkbox" name="${name}" value="${esc(value)}" ${checked ? "checked" : ""} ${extra}><span>${esc(label)}</span></label>`;
+const errorSlot = () => '<div class="error" role="alert" data-error></div>';
+const submit = (label, ico = "") =>
+  `<button class="btn btn-primary" type="submit">${ico ? icon(ico) : ""}${esc(label)}</button>`;
+const emptyState = (title, text = "", action = "", ico = "leaf") =>
+  `<div class="empty">${icon(ico)}<h2>${esc(title)}</h2>${text ? `<p>${esc(text)}</p>` : ""}${action ? `<div class="actions">${action}</div>` : ""}</div>`;
+const callout = (body, { kind = "", ico = "info" } = {}) =>
+  `<div class="callout ${kind}">${icon(ico)}<div class="grow">${body}</div></div>`;
+const tag = (label, kind = "") =>
+  `<span class="tag ${kind}">${esc(label)}</span>`;
+function pageHeader({
+  title,
+  subtitle = "",
+  eyebrow = "",
+  actions = "",
+  back = null,
+}) {
+  return `<header class="page-header"><div>${back ? `<a class="back" href="#/${back.route}">${icon("chevron-left")}${esc(back.label)}</a>` : ""}${eyebrow ? `<div class="eyebrow">${esc(eyebrow)}</div>` : ""}<h1 class="page-title">${esc(title)}</h1>${subtitle ? `<p class="page-subtitle">${esc(subtitle)}</p>` : ""}</div>${actions ? `<div class="page-actions">${actions}</div>` : ""}</header>`;
+}
+function segmented(items, active, label) {
+  return `<nav class="segmented" aria-label="${esc(label)}">${items.map(([key, text, route]) => `<a href="#/${route}" ${key === active ? 'aria-current="page"' : ""}>${esc(text)}</a>`).join("")}</nav>`;
+}
+function disclosure(
+  summary,
+  body,
+  { open = false, quiet = false, attrs = "" } = {},
+) {
+  return `<details class="disclosure ${quiet ? "quiet" : ""}" ${open ? "open" : ""} ${attrs}><summary>${summary}</summary><div class="disclosure-body stack">${body}</div></details>`;
+}
 const spiceOptions = [
   ["", "Not recorded"],
   [0, "No heat"],
@@ -149,9 +146,38 @@ const cleanupOptions = [
   ["medium", "Medium"],
   ["high", "High"],
 ];
+const NAV = [
+  ["today", "house", "Today"],
+  ["recipes", "book-open", "Recipes"],
+  ["plan", "calendar-days", "Plan"],
+  ["shop", "shopping-basket", "Shop"],
+  ["cook", "flame", "Cook"],
+];
+const PLAN_TABS = [
+  ["week", "Week", "plan"],
+  ["meals", "Meals", "plan/meals"],
+  ["leftovers", "Leftovers", "plan/leftovers"],
+];
+const SHOP_TABS = [
+  ["list", "List", "shop"],
+  ["pantry", "Pantry", "shop/pantry"],
+];
+const SETTINGS_TABS = [
+  ["household", "Household", "settings/household"],
+  ["prices", "Prices & budget", "settings/prices"],
+  ["backup", "Backup", "settings/backup"],
+  ["preferences", "Preferences", "settings/preferences"],
+];
+// Recipes, and the know-how, ideas and books around them, share one section.
+const RECIPE_TABS = [
+  ["recipes", "Recipes", "recipes"],
+  ["techniques", "Techniques", "techniques"],
+  ["inspiration", "Ideas", "inspiration"],
+  ["library", "Books", "library"],
+];
 // The Recipes page filters: one course or cuisine, every chosen diet label
-// and tag, favorites only, and recipes with a recorded total time of at most
-// 30 minutes.
+// and tag, favorites only, recipes with a recorded total time of at most 30
+// minutes, and drafts waiting for review.
 const noLibraryFilters = () => ({
   course: "",
   cuisine: "",
@@ -159,7 +185,10 @@ const noLibraryFilters = () => ({
   tags: [],
   favorites: false,
   quick: false,
+  drafts: false,
 });
+
+// ---------- State ----------
 let db = {},
   revision = "",
   busy = 0,
@@ -169,9 +198,13 @@ let db = {},
   filters = {},
   library = noLibraryFilters(),
   searches = {},
+  captureMethod = "paste",
   week = monday(today()),
-  toastTimeout;
+  toastTimeout,
+  wakeLock = null,
+  wantsWakeLock = false;
 let currency = localStorage.getItem("kooks.currency") ?? "USD";
+let theme = localStorage.getItem("kooks.theme") ?? "system";
 let account = null,
   signin = { step: "start", email: "", error: "" },
   conditional = null;
@@ -187,10 +220,11 @@ const base64url = (buffer) =>
     .replace(/\//g, "_")
     .replace(/=+$/, "");
 const pendingWrites = new Map(),
-  portions = new Map();
+  portions = new Map(),
+  exclusions = new Map();
+let review = null;
 const records = (kind) => db[kind] ?? [];
 const record = (kind, id) => records(kind).find((r) => r.id === id);
-const route = () => location.hash.slice(2).split("/").filter(Boolean);
 const person = (id) => record("member", id)?.data.name ?? "Unassigned";
 const optionsFor = (kind) =>
   records(kind).map((r) => [r.id, r.data.title ?? r.data.name]);
@@ -202,6 +236,8 @@ const sourceFrom = (value) => {
   const [kind, id] = value.split(":");
   return { kind, id };
 };
+const activeSessions = () =>
+  records("session").filter((s) => s.data.status === "active");
 const cookbookTaxonomy = () => taxonomy(records("recipe").map((r) => r.data));
 // Cuisines for the editor's suggestions: the household's own first, then the
 // usual ones it has not used yet.
@@ -212,9 +248,9 @@ const cuisineOptions = (inUse) => {
     ...suggestedCuisines.filter((name) => !seen.has(labelKey(name))),
   ];
 };
-// A recipe's course, cuisine, diet labels and tags as chips; pressing one
-// narrows the cookbook to that value.
-function facetChips(d, { course = false, cls = "chips small-chips" } = {}) {
+// A recipe's course, cuisine, diet labels and tags as small chips; pressing
+// one narrows the cookbook to that value.
+function facetChips(d, { course = false, cls = "chips chips-sm" } = {}) {
   const items = [
     ...(course && d.course
       ? [["course", d.course, courseLabel(d.course)]]
@@ -226,17 +262,28 @@ function facetChips(d, { course = false, cls = "chips small-chips" } = {}) {
   if (!items.length) return "";
   return `<div class="${cls}">${items.map(([facet, value, label]) => `<button type="button" class="facet-chip ${facet}" data-action="library-facet" data-mode="add" data-facet="${facet}" data-value="${esc(value)}" aria-label="Show ${esc(label)} recipes">${esc(label)}</button>`).join("")}</div>`;
 }
-const money = (value, code = currency) => {
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency: code,
-    }).format(value);
-  } catch {
-    return `${code} ${Number(value).toFixed(2)}`;
-  }
+// A live search box for one list; typing filters that list in place.
+const searchBar = (scope, label, placeholder) =>
+  `<label class="search grow"><span class="sr-only">${esc(label)}</span>${icon("search")}<input type="search" data-search="${scope}" placeholder="${esc(placeholder)}" value="${esc(searches[scope] ?? "")}" autocomplete="off"></label>`;
+const matching = (scope, parts) => {
+  const q = (searches[scope] ?? "").trim().toLowerCase();
+  return !q || parts.join(" ").toLowerCase().includes(q);
 };
+const paragraphs = (text) =>
+  String(text ?? "")
+    .split(/\n\s*\n/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+function linksFrom(text) {
+  const links = parseLinkLines(text);
+  if (links.invalid.length)
+    throw new Error(
+      `Each link needs a web address such as https://example.com: ${links.invalid.join("; ")}`,
+    );
+  return links.links;
+}
 
+// ---------- Server ----------
 async function api(name, input = {}) {
   const response = await fetch(`/api/tools/${encodeURIComponent(name)}`, {
     method: "POST",
@@ -262,13 +309,12 @@ async function write(name, input) {
 }
 function toast(message, error = false, undo = false) {
   const el = $("#toast");
-  el.hidden = false;
-  el.className = `toast ${error ? "error" : ""}`;
-  el.innerHTML = `<span>${esc(message)}</span>${undo && lastAction ? '<button data-action="undo">Undo</button>' : ""}<button data-action="dismiss-toast" aria-label="Dismiss message">×</button>`;
+  el.className = `toast ${error ? "toast-error" : ""}`;
+  el.innerHTML = `<span>${esc(message)}</span>${undo && lastAction ? '<button type="button" data-action="undo">Undo</button>' : ""}<button type="button" data-action="dismiss-toast" aria-label="Dismiss message">${icon("x", { className: "icon-sm" })}</button>`;
   clearTimeout(toastTimeout);
   toastTimeout = setTimeout(
     () => {
-      el.hidden = true;
+      el.textContent = "";
     },
     error ? 20000 : 7000,
   );
@@ -297,7 +343,7 @@ async function loadState({ polling = false } = {}) {
     if (notice) {
       notice.hidden = false;
       notice.textContent = dirty
-        ? "Someone updated the kitchen. Your draft is kept here; save checks for conflicting changes."
+        ? "Someone updated the kitchen. Your draft is kept here; saving checks for conflicting changes."
         : playing.closest(".reader")
           ? "Someone updated the kitchen. Your book stays open; the page refreshes when you move on."
           : "Someone updated the kitchen. Your video keeps playing; the page refreshes when you move on.";
@@ -320,144 +366,214 @@ async function afterSave(message, target) {
   else await render();
   toast(message, false, true);
 }
+function applyTheme() {
+  if (theme === "system") delete document.documentElement.dataset.theme;
+  else document.documentElement.dataset.theme = theme;
+}
+// Keeps the screen on while a cooking session is open, where supported.
+async function manageWakeLock(wanted) {
+  wantsWakeLock = wanted;
+  try {
+    if (wanted && !wakeLock && navigator.wakeLock && !document.hidden) {
+      wakeLock = await navigator.wakeLock.request("screen");
+      wakeLock.addEventListener("release", () => {
+        wakeLock = null;
+      });
+    } else if (!wanted && wakeLock) {
+      await wakeLock.release();
+      wakeLock = null;
+    }
+  } catch {
+    wakeLock = null;
+  }
+}
 
-function shell(content, active) {
-  const nav = [
-    ["today", "sun", "Today"],
-    ["recipes", "book", "Recipes"],
-    ["inspiration", "bulb", "Inspiration"],
-    ["library", "shelf", "Library"],
-    ["plan", "calendar", "Meals & plan"],
-    ["pantry", "jar", "Pantry"],
-    ["leftovers", "box", "Leftovers"],
-    ["household", "people", "Household"],
-    ["spending", "coin", "Spending"],
-    ["shop", "basket", "Shopping"],
-    ["cooking", "flame", "Cooking"],
-    ...(account ? [["account", "key", "Sign-in"]] : []),
-  ];
-  const activeCount = records("session").filter(
-    (s) => s.data.status === "active",
-  ).length;
+// ---------- Shell ----------
+function shell({ content, active }) {
+  const cooking = activeSessions().length;
+  const nav = () =>
+    NAV.map(
+      ([key, ico, label]) =>
+        `<a class="nav-item" href="#/${key}" ${key === active ? 'aria-current="page"' : ""}>${icon(ico)}<span>${label}</span>${key === "cook" && cooking ? `<span class="badge">${cooking}<span class="sr-only"> active</span></span>` : ""}</a>`,
+    ).join("");
+  const settingsCurrent = active === "settings" ? 'aria-current="page"' : "";
   // After an email link, offer the one-tap way in, once per browser.
   const prompt =
     account?.method === "email" &&
     passkeysSupported() &&
     !localStorage.getItem("kooks.passkey")
-      ? `<div class="callout passkey-prompt"><span>${icon("key")}Make next time one tap: add a passkey to this device and sign in with your fingerprint, face or screen lock.</span><span class="row">${button("Add a passkey", "passkey-add", "", "primary small-button")}${button("Not now", "passkey-later", "", "quiet small-button")}</span></div>`
+      ? `<div class="callout passkey-prompt">${icon("key-round")}<div class="grow">Make next time one tap: add a passkey to this device and sign in with your fingerprint, face or screen lock.</div><div class="actions">${button("Add a passkey", "passkey-add", "", "btn-primary btn-sm")}${button("Not now", "passkey-later", "", "btn-quiet btn-sm")}</div></div>`
       : "";
-  return `<div class="topbar"><a class="brand" href="#/today">${icon("leaf")}kooks</a><div class="topright"><span class="household">${icon("people")}${records("member").length ? `${records("member").length} at your table` : "Your household kitchen"}</span>${link("Add recipe", "capture", true, "plus")}</div></div><div class="sync-note" hidden></div><div class="shell"><nav class="sidebar" aria-label="Main navigation">${nav.map(([key, ico, label]) => `<a class="nav" href="#/${key}" ${key === active ? 'aria-current="page"' : ""}>${icon(ico)}${label}${key === "cooking" && activeCount ? `<span class="badge">${activeCount}</span>` : ""}</a>`).join("")}<div class="sidebar-foot"><p>Good food.<br>In good company.</p><div class="small muted">${records("recipe").length} recipes, all yours.</div>${button("Export cookbook", "export", "", "quiet small-button")}</div></nav><main id="main" class="content" tabindex="-1">${prompt}${content}</main></div>`;
+  return `<div class="app"><nav class="sidebar" aria-label="Main"><a class="brand" href="#/today">${icon("cooking-pot")}kooks</a><a class="btn btn-primary" href="#/recipes/add">${icon("plus")}Add recipe</a>${nav()}<div class="sidebar-foot">${account ? `<a class="nav-item" href="#/account" ${active === "account" ? 'aria-current="page"' : ""}>${icon("key-round")}<span>Sign-in</span></a>` : ""}<a class="nav-item" href="#/settings/household" ${settingsCurrent}>${icon("settings")}<span>Settings</span></a><div class="small">${plural(records("recipe").length, "recipe")} · ${sharing ? "Shared household server" : "This computer only"}</div><a class="source-link" href="https://github.com/Sweatpantslife/kooks">Kooks source code (AGPL-3.0)</a></div></nav><header class="topbar"><a class="brand" href="#/today">${icon("cooking-pot")}kooks</a><div class="topbar-actions"><a class="btn btn-quiet btn-icon" href="#/recipes/add" aria-label="Add recipe">${icon("plus")}</a><a class="btn btn-quiet btn-icon" href="#/settings/household" aria-label="Settings" ${settingsCurrent}>${icon("settings")}</a></div></header><div class="sync-note" role="status" hidden></div><main id="main" class="main" tabindex="-1"><div class="page">${prompt}${content}</div></main><nav class="tabbar" aria-label="Main">${nav()}</nav></div>`;
 }
+
+// ---------- Shared pieces ----------
 function effort(r) {
   const d = r.data ?? r;
-  return `<div class="meta"><span>${icon("clock")}${d.active_minutes == null ? "Hands-on time unset" : `${d.active_minutes} min hands-on`}</span>${d.total_minutes != null ? `<span>${d.total_minutes} min total</span>` : ""}${d.pan_count != null ? `<span>${icon("pan")}${d.pan_count} pan${d.pan_count === 1 ? "" : "s"}</span>` : ""}</div>`;
+  return `<div class="meta"><span>${icon("clock")}${d.active_minutes == null ? "Hands-on time not set" : `${d.active_minutes} min hands-on`}</span>${d.total_minutes != null ? `<span>${d.total_minutes} min total</span>` : ""}${d.pan_count != null ? `<span>${icon("cooking-pot")}${plural(d.pan_count, "pan")}</span>` : ""}</div>`;
+}
+function suggestionDetails(s) {
+  const preferences = [
+    ...s.preferences.likes,
+    ...s.preferences.unknown,
+    ...s.preferences.conflicts,
+  ];
+  return `<div class="stack-sm"><div class="chips">${s.use_soon.map((n) => tag(`Use soon · ${n}`, "tag-warm")).join("")}${s.missing.length ? tag(`${s.missing.length} shopping gap${s.missing.length === 1 ? "" : "s"}`, "tag-neutral") : tag("All ingredients on hand")}</div>${s.missing.length ? `<p>Missing: ${esc(s.missing.map((i) => `${i.name} (${amount(i)})`).join(", "))}</p>` : ""}${s.check_quantities.length ? `<p>Check amounts: ${esc(s.check_quantities.map((i) => i.name).join(", "))}.</p>` : ""}${preferences.length ? `<p>${esc(preferences.join(" · "))}</p>` : ""}</div>`;
 }
 function recipeCard(r, suggestion = null) {
   const d = r.data;
-  return `<article class="card"><div class="row between"><span class="tag">${esc(courseLabel(d.course) ?? "Your collection")}</span>${button(d.favorite ? "♥" : "♡", "favorite", `data-id="${r.id}" aria-label="${d.favorite ? "Unfavorite" : "Favorite"} ${esc(d.title)}"`, "quiet small-button")}</div><h2><a class="title" href="#/recipes/${r.id}">${esc(d.title)}</a></h2>${effort(r)}${facetChips(d)}${d.preferred ? '<span class="small muted">Your preferred version</span>' : ""}${suggestion ? `<div class="stack"><div class="chips">${suggestion.use_soon.map((n) => `<span class="tag warm">Use soon · ${esc(n)}</span>`).join("")}${suggestion.missing.length ? `<span class="tag neutral">${suggestion.missing.length} shopping gap${suggestion.missing.length === 1 ? "" : "s"}</span>` : '<span class="tag">All ingredients on hand</span>'}</div>${suggestion.missing.length ? `<p>Missing: ${esc(suggestion.missing.map((i) => `${i.name} (${amount(i)})`).join(", "))}</p>` : ""}${suggestion.check_quantities.length ? `<p>Check amounts: ${esc(suggestion.check_quantities.map((i) => i.name).join(", "))}.</p>` : ""}${suggestion.preferences.likes.length ? `<p>${esc(suggestion.preferences.likes.join(" · "))}</p>` : ""}${suggestion.preferences.unknown.length ? `<p>${esc(suggestion.preferences.unknown.join(" · "))}</p>` : ""}${suggestion.preferences.conflicts.length ? `<p>${esc(suggestion.preferences.conflicts.join(" · "))}</p>` : ""}</div>` : ""}<div class="card-end"><span class="small muted">${d.servings == null ? "Yield not set" : `${num(suggestion?.servings ?? d.servings)} portions`}</span>${link("Open recipe", `recipes/${r.id}`, false, "arrow")}</div></article>`;
+  return `<article class="card"><div class="row between"><span class="tag">${esc(courseLabel(d.course) ?? "Your collection")}</span>${button("", "favorite", `data-id="${r.id}" aria-label="${d.favorite ? "Remove from favorites" : "Add to favorites"}: ${esc(d.title)}" aria-pressed="${Boolean(d.favorite)}"`, `btn-quiet btn-icon btn-sm favorite ${d.favorite ? "is-favorite" : ""}`, "heart")}</div><h2 class="card-title"><a href="#/recipes/${r.id}">${esc(d.title)}</a></h2>${effort(r)}${facetChips(d)}${d.preferred ? '<span class="small muted">Your preferred version</span>' : ""}${suggestion ? suggestionDetails(suggestion) : ""}<div class="card-end"><span class="small muted">${d.servings == null ? "Yield not set" : `${num(suggestion?.servings ?? d.servings)} portions`}</span><a class="btn btn-sm btn-quiet" href="#/recipes/${r.id}">Open${icon("chevron-right")}</a></div></article>`;
+}
+function planRow(p) {
+  return `<div class="list-item"><div class="list-body"><strong>${esc(p.data.title)}</strong><p>${esc(p.data.slot)} · ${p.data.dishes.map((d) => `${esc(d.title)} · ${d.servings == null ? "original" : num(d.servings)} portions`).join(" + ")}</p></div><div class="list-actions">${button("Cook", "cook", `data-kind="plan" data-id="${p.id}"`, "btn-sm", "flame")}${link("Shop", `shop/review/plan/${p.id}`, { cls: "btn-sm", ico: "shopping-basket" })}${button("Remove", "archive", `data-kind="plan" data-id="${p.id}" aria-label="Remove ${esc(p.data.title)} from the plan"`, "btn-sm btn-quiet")}</div></div>`;
+}
+function leftoverRow(a) {
+  return `<div class="list-item"><div class="list-body"><div class="row row-sm">${tag("Already cooked")}<strong>${esc(a.batch.data.title)}</strong></div><p>${num(a.portions)} portions · ${esc(a.slot)}${a.status === "eaten" ? " · Eaten" : ""}</p></div><div class="list-actions">${link("Open batch", `plan/leftovers/${a.batch.id}`, { cls: "btn-sm" })}</div></div>`;
+}
+function dayEntries(date) {
+  return {
+    planned: records("plan").filter((p) => p.data.date === date),
+    leftovers: records("batch").flatMap((b) =>
+      b.data.allocations
+        .filter((a) => a.date === date)
+        .map((a) => ({ ...a, batch: b })),
+    ),
+  };
+}
+// Links and videos of a recipe. A recognised video shows a play button that
+// loads the provider's player only when pressed; everything else is a link.
+function linksSection(data, heading = "Links and videos") {
+  const items = displayLinks(data);
+  if (!items.length) return "";
+  return `<section class="links"><h3>${esc(heading)}</h3>${items.map(linkView).join("")}</section>`;
+}
+function linkView(item) {
+  const info = describeLink(item.url);
+  if (!info) return "";
+  const title = item.title || (info.embed ? `${info.label} video` : item.url);
+  const line = `<p class="small"><a href="${esc(item.url)}" target="_blank" rel="noreferrer">${esc(title)}</a> <span class="muted">· ${esc(info.site)}</span></p>`;
+  if (!info.embed) return line;
+  return `<div class="link-item"><div class="embed" data-shape="${info.embed.shape}" data-src="${esc(info.embed.autoplay_src)}" data-title="${esc(title)}">${button(`Play on ${info.label}`, "embed-load", `aria-label="${esc(item.title ? `Play ${item.title} on ${info.label}` : `Play on ${info.label}`)}"`, "embed-load", "play")}<small>Loads the video from ${esc(info.label)} when you press play.</small></div>${line}</div>`;
+}
+function linkLine(links) {
+  if (!links?.length) return "";
+  return `<p class="small">Links and videos: ${links.map((l) => `<a href="${esc(l.url)}" target="_blank" rel="noreferrer">${esc(l.title || describeLink(l.url)?.site || l.url)}</a>`).join(" · ")}</p>`;
+}
+function loadEmbed(box, src = box?.dataset.src) {
+  if (!box) return;
+  box.dataset.loaded = "true";
+  box.innerHTML = `<iframe src="${esc(src)}" title="${esc(box.dataset.title)}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
 }
 
+// ---------- Today ----------
 async function todayPage() {
-  const result = await api("recipe_suggest", { ...filters, limit: 30 });
+  const filtering = Object.keys(filters).length > 0;
+  const result = await api("recipe_suggest", {
+    ...filters,
+    limit: filtering ? 30 : 12,
+  });
+  const date = today();
+  const active = activeSessions();
   const useSoon = records("pantry").filter(
     (p) => p.data.use_soon && p.data.available,
   );
-  const active = records("session").filter((s) => s.data.status === "active");
-  return `${heading("Your everyday kitchen", "What sounds good today?", "A good dinner starts with what you already have.")}${active.map((s) => `<div class="callout row between"><span>${icon("flame")}On the stove · ${esc(s.data.title)}</span>${link("Keep cooking", `cooking/${s.id}`)}</div>`).join("")}<section class="hero"><div><div class="eyebrow">Make a little more of what’s there</div><h2>A fridge full of possibilities.</h2><p>${
-    useSoon.length
-      ? `Start with ${esc(
-          useSoon
-            .map((p) => p.data.name)
-            .slice(0, 3)
-            .join(", "),
-        )}. We’ll find a place for them at the table.`
-      : "Tell us what’s in your pantry, who’s eating, and how much time you have."
-  }</p><div class="spacer">${link("Check your pantry", "pantry", false, "jar")}</div></div><div class="hero-art" aria-hidden="true"><div class="plate">${icon("leaf")}</div></div></section><form data-form="suggest" class="panel filters"><div class="row between"><h3>Find your next dinner</h3><span class="small muted">From your own cookbook</span></div>${field("Any other ingredients on hand?", "available", (filters.available_ingredients ?? []).join(", "), "text", 'placeholder="e.g. zucchini, chickpeas"')}<div class="filter-grid">${field("Hands-on minutes, at most", "active", filters.max_active_minutes ?? "", "number", 'min="0" max="10080" placeholder="Any"')}${field("Total minutes, at most", "total", filters.max_total_minutes ?? "", "number", 'min="0" max="10080" placeholder="Any"')}${select(
-    "Pans, at most",
-    "pans",
+  const drafts = records("import").filter((r) => r.data.status === "draft");
+  const dayPanel = (label, d) => {
+    const { planned, leftovers } = dayEntries(d);
+    return `<section class="panel"><div class="section-header tight"><h2>${label}</h2><span class="small">${weekdayLabel(d)}</span></div>${planned.length || leftovers.length ? `<div class="list">${planned.map(planRow).join("")}${leftovers.map(leftoverRow).join("")}</div>` : `<p class="small muted">Nothing planned yet. <a href="#/plan">Open the week</a>.</p>`}</section>`;
+  };
+  const members = records("member");
+  const advancedOpen =
     [
-      ["", "Any number"],
-      [0, "No cooking pans"],
-      [1, "One pan"],
-      [2, "Two pans"],
-    ],
-    filters.max_pans ?? "",
-  )}${select(
-    "Cleanup",
-    "cleanup",
-    [
-      ["", "Any effort"],
-      ["low", "Low"],
-      ["medium", "Medium"],
-      ["high", "High"],
-    ],
-    filters.cleanup ?? "",
-  )}</div><div class="row">${field("Portions to make", "servings", filters.servings ?? "", "number", 'min="0.01" max="10000" step="any" placeholder="Recipe yield"')}${check("Skip ingredients people dislike", "avoid", "on", filters.avoid_dislikes !== false)}</div>${
-    records("member").length
-      ? `<div><div class="small muted">Who’s eating?</div><div class="chips spacer">${records(
-          "member",
-        )
-          .map((m) =>
-            check(
-              m.data.name,
-              "members",
-              m.id,
-              (filters.member_ids ?? []).includes(m.id),
-            ),
-          )
-          .join("")}</div></div>`
-      : `<p class="small muted">${link("Add the people at your table", "household")}</p>`
-  }${suggestFacets()}<div class="row">${submit("Find dinner")}${button("Clear filters", "clear-filters", "", "quiet")}</div></form><div class="section-heading"><h2>${Object.keys(filters).length ? "A few good possibilities" : "From your kitchen"}</h2><span class="small muted">${result.total} recipe${result.total === 1 ? "" : "s"}</span></div>${result.skipped.effort_unknown ? `<p class="callout warning">${result.skipped.effort_unknown} recipes need effort details before they can match these filters.</p>` : ""}${result.skipped.missing_yield ? `<p class="callout warning">${result.skipped.missing_yield} recipes need a serving count before they can be scaled.</p>` : ""}${result.skipped.preferences ? `<p class="small muted">${result.skipped.preferences} recipes excluded by the selected taste preferences.</p>` : ""}${result.results.length ? `<div class="grid">${result.results.map((r) => recipeCard(r.record, r)).join("")}</div>` : records("recipe").length ? empty("Nothing fits just yet.", "Try allowing a little more time or choosing different eaters.", button("Clear filters", "clear-filters")) : empty("Your first recipe belongs here.", "Paste a recipe from your messages, photograph a favorite, or write one yourself.", link("Add your first recipe", "capture", true))}<p class="small muted spacer">Pantry names and preparation must match recipe ingredients. Checklist entries mean you have the ingredient; check amounts before cooking.</p>`;
-}
-
-// Course, cuisine, diet and tag choices for the dinner finder, from what the
-// cookbook actually contains.
-function suggestFacets() {
+      "max_active_minutes",
+      "max_total_minutes",
+      "max_pans",
+      "cleanup",
+      "servings",
+    ].some((key) => filters[key] !== undefined) ||
+    Boolean(filters.diets?.length || filters.tags?.length);
   const vocabulary = cookbookTaxonomy();
-  if (
-    !vocabulary.courses.length &&
-    !vocabulary.cuisines.length &&
-    !vocabulary.diets.length &&
-    !vocabulary.tags.length
-  )
-    return "";
-  return `<div class="stack"><div class="form-grid">${select("Course", "course", [["", "Any course"], ...vocabulary.courses.map((c) => [c.key, c.label])], filters.course ?? "")}${select("Cuisine", "cuisine", [["", "Any cuisine"], ...vocabulary.cuisines.map((c) => [c.name, c.name])], filters.cuisine ?? "")}</div>${vocabulary.diets.length ? `<div><div class="small muted">Diet labels</div><div class="chips spacer-small">${vocabulary.diets.map((d) => check(d.label, "diets", d.key, (filters.diets ?? []).includes(d.key))).join("")}</div></div>` : ""}${vocabulary.tags.length ? `<div><div class="small muted">Tags</div><div class="chips spacer-small">${vocabulary.tags.map((t) => check(t.name, "tags", t.name, (filters.tags ?? []).includes(t.name))).join("")}</div></div>` : ""}</div>`;
+  const facetSelects =
+    vocabulary.courses.length || vocabulary.cuisines.length
+      ? `<div class="form-grid">${select("Course", "course", [["", "Any course"], ...vocabulary.courses.map((c) => [c.key, c.label])], filters.course ?? "")}${select("Cuisine", "cuisine", [["", "Any cuisine"], ...vocabulary.cuisines.map((c) => [c.name, c.name])], filters.cuisine ?? "")}</div>`
+      : "";
+  const facetChecks = (label, name, entries, keyOf, labelOf, chosen) =>
+    entries.length
+      ? `<div class="stack-sm"><span class="label">${label}</span><div class="chips">${entries.map((e) => `<label class="chip-input"><input type="checkbox" name="${name}" value="${esc(keyOf(e))}" ${chosen.includes(keyOf(e)) ? "checked" : ""}><span>${esc(labelOf(e))}</span></label>`).join("")}</div></div>`
+      : "";
+  const content = `${pageHeader({ title: "Today", subtitle: `${longDate(date)}. What sounds good today?` })}${active.map((s) => callout(`<strong>On the stove:</strong> ${esc(s.data.title)}`, { ico: "flame" }).replace("</div></div>", `</div>${link("Continue", `cook/${s.id}`, { primary: true, cls: "btn-sm" })}</div>`)).join("")}${drafts.length ? callout(`<strong>${plural(drafts.length, "draft")} waiting for a read-through:</strong> ${drafts.map((r) => `<a href="#/imports/${r.id}">${esc(r.data.title)}</a>`).join(", ")}`, { kind: "callout-warning", ico: "file-text" }) : ""}<div class="grid-2 spacer">${dayPanel("Today", date)}${dayPanel("Tomorrow", addDays(date, 1))}</div>${useSoon.length ? `<div class="spacer">${callout(`<strong>Use soon:</strong> ${esc(useSoon.map((p) => p.data.name).join(", "))}. <a href="#/shop/pantry">Open the pantry</a>`, { kind: "callout-warning", ico: "refrigerator" })}</div>` : ""}<section class="section"><div class="section-header"><h2>Find dinner</h2><span class="small">From your own cookbook</span></div><form data-form="suggest" class="panel stack"><div class="suggest-row">${field("Ingredients on hand, separated by commas", "available", (filters.available_ingredients ?? []).join(", "), "text", 'placeholder="zucchini, chickpeas"')}${submit("Find dinner", "search")}</div>${facetSelects}${
+    members.length
+      ? `<div class="stack-sm"><span class="label">Who’s eating?</span><div class="chips">${members.map((m) => `<label class="chip-input"><input type="checkbox" name="members" value="${m.id}" ${(filters.member_ids ?? []).includes(m.id) ? "checked" : ""}><span>${esc(m.data.name)}</span></label>`).join("")}<a class="chip" href="#/settings/household">${icon("users")}Manage people</a></div></div>`
+      : `<p class="small muted"><a href="#/settings/household">Add the people at your table</a> to match dinner to their tastes.</p>`
+  }${disclosure(
+    "More filters",
+    `<div class="form-grid-4 form-grid">${field("Hands-on minutes, at most", "active", filters.max_active_minutes ?? "", "number", 'min="0" max="10080" placeholder="Any"')}${field("Total minutes, at most", "total", filters.max_total_minutes ?? "", "number", 'min="0" max="10080" placeholder="Any"')}${select(
+      "Pans, at most",
+      "pans",
+      [
+        ["", "Any number"],
+        [0, "No cooking pans"],
+        [1, "One pan"],
+        [2, "Two pans"],
+      ],
+      filters.max_pans ?? "",
+    )}${select(
+      "Cleanup",
+      "cleanup",
+      [
+        ["", "Any effort"],
+        ["low", "Low"],
+        ["medium", "Medium"],
+        ["high", "High"],
+      ],
+      filters.cleanup ?? "",
+    )}</div><div class="row">${field("Portions to make", "servings", filters.servings ?? "", "number", 'min="0.01" max="10000" step="any" placeholder="Recipe yield"')}${check("Skip ingredients people dislike", "avoid", "on", filters.avoid_dislikes !== false)}</div>${facetChecks(
+      "Diet labels",
+      "diets",
+      vocabulary.diets,
+      (d) => d.key,
+      (d) => d.label,
+      filters.diets ?? [],
+    )}${facetChecks(
+      "Tags",
+      "tags",
+      vocabulary.tags,
+      (t) => t.name,
+      (t) => t.name,
+      filters.tags ?? [],
+    )}`,
+    { open: advancedOpen, quiet: true },
+  )}${filtering ? `<div>${button("Clear filters", "clear-filters", "", "btn-quiet btn-sm", "x")}</div>` : ""}</form>${result.skipped.effort_unknown ? `<p class="callout callout-warning spacer">${plural(result.skipped.effort_unknown, "recipe")} need effort details before they can match these filters.</p>` : ""}${result.skipped.missing_yield ? `<p class="callout callout-warning spacer">${plural(result.skipped.missing_yield, "recipe")} need a serving count before they can be scaled.</p>` : ""}${result.skipped.preferences ? `<p class="small muted spacer">${plural(result.skipped.preferences, "recipe")} excluded by the selected tastes.</p>` : ""}<div class="section-header spacer"><h2 class="h-plain">${filtering ? "Matches" : "Suggestions"}</h2><span class="small">${plural(result.total, "recipe")}${!filtering && result.total > result.results.length ? ` · <a href="#/recipes">See all</a>` : ""}</span></div>${
+    result.results.length
+      ? `<div class="grid grid-3">${result.results.map((r) => recipeCard(r.record, r)).join("")}</div>`
+      : records("recipe").length
+        ? emptyState(
+            "Nothing fits just yet.",
+            "Allow a little more time, or choose different eaters.",
+            button("Clear filters", "clear-filters"),
+          )
+        : emptyState(
+            "Your first recipe belongs here.",
+            "Paste a recipe from your messages, photograph a favorite, or write one yourself.",
+            link("Add your first recipe", "recipes/add", { primary: true }),
+            "book-open",
+          )
+  }<p class="small muted spacer">Pantry names must match recipe ingredients. A checklist entry means you have the ingredient; check amounts before cooking.</p></section>`;
+  return { title: "Today", active: "today", content };
 }
 
+// ---------- Recipes ----------
 function libraryPage() {
-  const all = records("recipe");
-  const vocabulary = taxonomy(all.map((r) => r.data));
-  const term = (searches.recipes ?? "").toLowerCase();
-  const found = all.filter(
-    (r) =>
-      (!term ||
-        [
-          r.data.title,
-          r.data.notes,
-          ...r.data.ingredients.map((i) => i.name),
-          facetText(r.data),
-        ]
-          .join(" ")
-          .toLowerCase()
-          .includes(term)) &&
-      (!library.favorites || r.data.favorite) &&
-      (!library.quick ||
-        (r.data.total_minutes != null && r.data.total_minutes <= 30)) &&
-      matchesFacets(r.data, library),
+  const all = [...records("recipe")].sort((a, b) =>
+    a.data.title.localeCompare(b.data.title),
   );
-  const active = library.favorites || library.quick || hasFacetFilters(library);
-  // A filter on something never recorded cannot show those recipes; say so
-  // instead of letting them disappear quietly.
-  const unseen = [
-    ["a course", library.course && all.filter((r) => !r.data.course).length],
-    ["a cuisine", library.cuisine && all.filter((r) => !r.data.cuisine).length],
-    [
-      "a total time",
-      library.quick && all.filter((r) => r.data.total_minutes == null).length,
-    ],
-  ]
-    .filter(([, n]) => n)
-    .map(([what, n]) => `${n} without ${what} recorded`);
+  const drafts = records("import").filter((r) => r.data.status === "draft");
+  const vocabulary = taxonomy(all.map((r) => r.data));
+  const active =
+    library.favorites ||
+    library.quick ||
+    library.drafts ||
+    hasFacetFilters(library);
   const facetRow = (label, items) =>
     items.length
       ? `<div class="facet-row"><span class="facet-label">${esc(label)}</span>${items.join("")}</div>`
@@ -488,8 +604,45 @@ function libraryPage() {
           ...options(facet, entries, nameOf, labelOf),
         ]
       : [];
-  const drafts = records("import").filter((r) => r.data.status === "draft");
-  return `${heading("Your everyday cookbook", "Your kitchen, collected.", "Old favorites, small discoveries, and your own little adjustments.")}${drafts.length ? `<div class="callout"><h3>Ready for a read-through</h3><div class="row spacer">${drafts.map((r) => link(r.data.title, `imports/${r.id}`)).join("")}</div></div>` : ""}${searchBar("recipes", "Find a recipe or ingredient", "Find a recipe, ingredient, cuisine or tag…")}<div class="facets" aria-label="Recipe filters">${facetRow("Show", [chip("Favorites", "library-toggle", 'data-key="favorites"', library.favorites), chip("30 minutes or less", "library-toggle", 'data-key="quick"', library.quick), ...(active ? [button("Clear filters", "library-clear", "", "quiet small-button")] : [])])}${facetRow(
+  const content = `${pageHeader({ title: "Recipes", subtitle: all.length ? `${plural(all.length, "recipe")} in your cookbook. Old favorites, small discoveries, and your own adjustments.` : "Your cookbook is empty. Start with something you already love to cook.", actions: link("Add recipe", "recipes/add", { primary: true, ico: "plus" }) })}${segmented(RECIPE_TABS, "recipes", "Recipes sections")}<div class="toolbar">${searchBar("recipes", "Find a recipe, ingredient, cuisine or tag", "Find a recipe, ingredient, cuisine or tag…")}</div><div class="facets" aria-label="Recipe filters">${facetRow(
+    "Show",
+    [
+      chip(
+        "Favorites",
+        "library-toggle",
+        'data-key="favorites"',
+        library.favorites,
+      ),
+      chip(
+        "30 minutes or less",
+        "library-toggle",
+        'data-key="quick"',
+        library.quick,
+      ),
+      ...(drafts.length
+        ? [
+            chip(
+              "Needs review",
+              "library-toggle",
+              'data-key="drafts"',
+              library.drafts,
+              drafts.length,
+            ),
+          ]
+        : []),
+      ...(active
+        ? [
+            button(
+              "Clear filters",
+              "library-clear",
+              "",
+              "btn-quiet btn-sm",
+              "x",
+            ),
+          ]
+        : []),
+    ],
+  )}${facetRow(
     "Course",
     single(
       "course",
@@ -521,36 +674,85 @@ function libraryPage() {
       (t) => t.name,
       (t) => t.name,
     ),
-  )}</div><div class="section-heading"><h2>${active || term ? "What matches" : "Everything you’ve kept"}</h2><span class="small muted">${found.length} of ${all.length} recipe${all.length === 1 ? "" : "s"}</span></div>${unseen.length ? `<p class="small muted">Not shown: ${esc(unseen.join(" · "))}. Add the missing details from each recipe’s editor.</p>` : ""}${found.length ? `<div class="grid three">${found.map((r) => recipeCard(r)).join("")}</div>` : empty(term || active ? "No recipes match." : "A cookbook waiting to happen.", term || active ? "Try another ingredient, name or filter." : "Start with something you already love to cook.", term || active ? button("Clear filters", "library-clear") : link("Add a recipe", "capture", true))}`;
+  )}</div><div id="list-results">${libraryResults()}</div>`;
+  return { title: "Recipes", active: "recipes", content };
 }
-
-async function recipePage(id) {
-  const r = record("recipe", id);
-  if (!r)
-    return empty(
-      "Recipe not found.",
-      "It may have been archived.",
-      link("Your recipes", "recipes"),
+function libraryResults() {
+  const all = [...records("recipe")].sort((a, b) =>
+    a.data.title.localeCompare(b.data.title),
+  );
+  const drafts = records("import").filter((r) => r.data.status === "draft");
+  if (library.drafts)
+    return drafts.length
+      ? `<div class="grid grid-3">${drafts.map((r) => `<article class="card">${tag("Draft", "tag-warm")}<h2 class="card-title"><a href="#/imports/${r.id}">${esc(r.data.title)}</a></h2><p>Check the extracted text against the original, then save it.</p><div class="card-end"><span class="small muted">${dateLabel(r.created_at.slice(0, 10))}</span>${link("Review", `imports/${r.id}`, { cls: "btn-sm" })}</div></article>`).join("")}</div>`
+      : emptyState("Nothing is waiting for review.");
+  const term = (searches.recipes ?? "").trim().toLowerCase();
+  const found = all.filter(
+    (r) =>
+      (!term ||
+        [
+          r.data.title,
+          r.data.notes,
+          ...r.data.ingredients.map((i) => i.name),
+          facetText(r.data),
+        ]
+          .join(" ")
+          .toLowerCase()
+          .includes(term)) &&
+      (!library.favorites || r.data.favorite) &&
+      (!library.quick ||
+        (r.data.total_minutes != null && r.data.total_minutes <= 30)) &&
+      matchesFacets(r.data, library),
+  );
+  const active = library.favorites || library.quick || hasFacetFilters(library);
+  // A filter on something never recorded cannot show those recipes; say so
+  // instead of letting them disappear quietly.
+  const unseen = [
+    ["a course", library.course && all.filter((r) => !r.data.course).length],
+    ["a cuisine", library.cuisine && all.filter((r) => !r.data.cuisine).length],
+    [
+      "a total time",
+      library.quick && all.filter((r) => r.data.total_minutes == null).length,
+    ],
+  ]
+    .filter(([, n]) => n)
+    .map(([what, n]) => `${n} without ${what} recorded`);
+  const header = all.length
+    ? `<div class="section-header"><h2 class="h-plain">${active || term ? "What matches" : "Everything you’ve kept"}</h2><span class="small">${found.length} of ${plural(all.length, "recipe")}</span></div>${unseen.length ? `<p class="small muted">Not shown: ${esc(unseen.join(" · "))}. Add the missing details from each recipe’s editor.</p>` : ""}`
+    : "";
+  if (!found.length)
+    return (
+      header +
+      (all.length
+        ? emptyState(
+            "No recipes match.",
+            "Try another ingredient, name or filter, or show everything.",
+            button("Clear filters", "library-clear"),
+            "search",
+          )
+        : emptyState(
+            "Your cookbook is empty.",
+            "Paste a recipe from your messages, photograph a favorite, or write one yourself.",
+            link("Add your first recipe", "recipes/add", { primary: true }),
+            "book-open",
+          ))
     );
-  const source = {
-    kind: "recipe",
-    id,
-    ...(portions.has(id) ? { servings: portions.get(id) } : {}),
-  };
-  const [scaled, memory, cost] = await Promise.all([
-    api("recipe_scale", {
-      id,
-      ...(source.servings ? { servings: source.servings } : {}),
-    }),
-    api("recipe_memory", { id }),
-    api("cost_estimate", { source, currency, as_of: today() }),
-  ]);
-  const d = scaled.recipe;
-  return `${backLink("Recipes", "recipes")}${heading(r.data.original_recipe_id ? "Your own variation" : "From your cookbook", r.data.title, "", link("Edit recipe", `edit/${id}`, false, "edit"))}${effort(r)}${facetChips(r.data, { course: true, cls: "chips spacer-small" })}<div class="actions spacer">${button("Start cooking", "cook", `data-kind="recipe" data-id="${id}"`, "primary", "flame")}${link("Review groceries", `review/recipe/${id}`, false, "basket")}${link("Make a variation", `variant/${memory.original_recipe_id}`, false, "edit")}${link("Record a cooked batch", `new-batch/${id}`, false, "box")}</div>${memory.preferred_recipe && memory.preferred_recipe.id !== id ? `<div class="callout spacer row between"><span>Your preferred version: ${esc(memory.preferred_recipe.data.title)}</span>${link("Open variation", `recipes/${memory.preferred_recipe.id}`)}</div>` : ""}${memory.latest ? `<div class="callout spacer"><div class="eyebrow">Remember for next time</div><p class="preline">${esc(memory.latest.data.next_time || memory.latest.data.changes || memory.latest.data.text)}</p><small>${esc(memory.latest.data.cooked_on ?? memory.latest.created_at.slice(0, 10))}</small></div>` : ""}<div class="recipe-columns spacer"><section class="panel"><h3>Ingredients</h3><form data-form="servings" class="row spacer">${hidden("id", id)}${field("Portions", "servings", d.servings ?? "", "number", `min="0.01" max="10000" step="any" ${r.data.servings === null ? 'disabled placeholder="Unknown"' : "required"}`)}${r.data.servings !== null ? '<button class="button" type="submit">Update</button>' : ""}</form>${d.ingredients.map((i) => `<div class="ingredient"><span>${esc(i.name)}${i.preparation ? `<br><small class="muted">${esc(i.preparation)}</small>` : ""}</span><span class="amount">${esc(amount(i))}</span></div>`).join("") || '<p class="small muted spacer">Ingredients have not been recorded.</p>'}${d.equipment.length ? `<hr class="divider"><h3>What you’ll use</h3><div class="chips spacer">${d.equipment.map((e) => `<span class="tag neutral">${e.quantity > 1 ? e.quantity + " × " : ""}${esc(e.name)}${e.capacity ? ` · ${esc(e.capacity)}` : ""}</span>`).join("")}</div>` : ""}<hr class="divider"><h3>Estimated ingredient cost</h3><p class="spacer">${cost.complete ? `<strong>${money(cost.total)}</strong> <span class="small muted">· ${cost.dishes[0].per_portion == null ? "" : `${money(cost.dishes[0].per_portion)} per portion`}</span>` : `<strong>${money(cost.known_cost)}</strong> <span class="small cost-unknown">known subtotal · incomplete</span>`}</p>${cost.missing_prices.length ? `<p class="small muted">Missing amounts or prices: ${esc(cost.missing_prices.map((l) => l.ingredient.name).join(", "))}.</p>` : ""}${link("Manage prices", "spending")}</section><section><h2>The method</h2><ol class="method spacer">${d.steps.map((s) => `<li>${esc(s.text)}${s.duration_seconds ? `<p class="small muted">${num(s.duration_seconds / 60)} minutes</p>` : ""}</li>`).join("")}</ol>${d.warnings.length ? `<div class="callout warning">${d.warnings.map(esc).join("<br>")}</div>` : ""}${r.data.notes ? `<div class="note"><p>${esc(r.data.notes)}</p></div>` : ""}${linksSection(r.data)}${recipeConnections(id)}<details><summary>Original recipe and sources</summary>${r.data.source_url ? `<a href="${esc(r.data.source_url)}" target="_blank" rel="noreferrer">Original source</a>` : ""}${(r.data.source_image_ids ?? []).map((id) => `<img class="source-image" src="/api/assets/${encodeURIComponent(id)}" alt="Original recipe photo">`).join("")}<pre class="source-text">${esc(r.data.original_text || "No original text was provided.")}</pre></details></section></div><div class="section-heading"><h2>What worked in your kitchen</h2>${link("Add a cooking memory", `memory/${id}`, false, "plus")}</div>${memory.notes.length ? memory.notes.map((n) => `<article class="panel spacer"><div class="row between"><span class="eyebrow">${esc(n.data.cooked_on ?? n.created_at.slice(0, 10))}</span><span>${n.data.rating ? "★".repeat(n.data.rating) : ""}${n.data.cook_again === true ? " · Cook again" : n.data.cook_again === false ? " · Try something else" : ""}</span></div><p class="preline spacer">${esc(n.data.text)}</p>${n.data.changes ? `<p class="small preline spacer"><strong>Changed:</strong> ${esc(n.data.changes)}</p>` : ""}${n.data.next_time ? `<p class="small preline spacer"><strong>Next time:</strong> ${esc(n.data.next_time)}</p>` : ""}</article>`).join("") : '<p class="muted small">Your notes and successful changes will appear here before the next cook.</p>'}${memory.variants.length ? `<div class="section-heading"><h2>Ways you make it</h2></div><div class="chips">${memory.variants.map((v) => link(`${v.data.title}${v.data.preferred ? " · Preferred" : ""}`, `recipes/${v.id}`)).join("")}</div>` : ""}`;
+  return `${header}<div class="grid grid-3">${found.map((r) => recipeCard(r)).join("")}</div>`;
 }
 
-// `seed` is an inspiration record whose title, notes, tags and links start a
-// new recipe; saving links the idea to the recipe it became.
+function capturePage() {
+  const methods = [
+    ["paste", "Paste", "clipboard-paste"],
+    ["photo", "Photo", "camera"],
+    ["write", "Write", "pen-line"],
+  ];
+  const show = (key) => (captureMethod === key ? "" : "hidden");
+  const content = `${pageHeader({ title: "Add a recipe", subtitle: "From a message, a photo, or the way you’ve always made it. The original stays with the recipe.", back: { label: "Recipes", route: "recipes" } })}<div class="segmented" role="group" aria-label="How to add it">${methods.map(([key, label, ico]) => `<button type="button" data-action="capture-method" data-method="${key}" aria-pressed="${captureMethod === key}">${icon(ico)}${label}</button>`).join("")}</div><form data-form="paste" class="panel stack" data-method="paste" ${show("paste")}><h2>Paste a recipe</h2><p class="small muted">Copy it from a message or a website. You’ll review the draft before it is saved.</p>${area("Recipe text", "text", "", 'required rows="11" placeholder="Lemon orzo\nServes 4\n\nIngredients\n250 g orzo\n\nMethod\nCook the orzo…"')}${errorSlot()}<div class="form-footer">${submit("Review pasted recipe", "arrow-right")}</div></form><form data-form="photo" class="panel stack" data-method="photo" ${show("photo")}><h2>From a photo or screenshot</h2><p class="small muted">The text is read on this household’s own computer and never sent to a model provider. You’ll check it beside the original image.</p><label class="upload">${icon("camera")}<strong>Choose a recipe photo</strong><span class="small muted">PNG, JPEG or WebP, up to 8 MB. Clear, upright photos work best.</span><input type="file" name="image" accept="image/png,image/jpeg,image/webp" required></label>${errorSlot()}<div class="form-footer">${submit("Read photo", "arrow-right")}</div></form><section class="panel stack" data-method="write" ${show("write")}><h2>Write it yourself</h2><p class="small muted">You don’t need a source to save something good. Start with a blank recipe.</p><div>${link("Open a blank recipe", "recipes/new", { primary: true, ico: "pen-line" })}</div></section>`;
+  return { title: "Add a recipe", active: "recipes", content };
+}
+
+// `seed` is an idea from the inspiration board whose title, notes, tags and
+// links start a new recipe; saving links the idea to the recipe it became.
 function recipeEditor(id, mode = "edit", seed = null) {
   const draft = mode === "import" ? record("import", id) : null;
   const r = mode === "import" ? null : record("recipe", id);
@@ -570,79 +772,575 @@ function recipeEditor(id, mode = "edit", seed = null) {
     };
   const vocabulary = cookbookTaxonomy();
   if ((id && !r && !draft) || draft?.data.status === "saved")
-    return empty(
-      "This editor is no longer available.",
-      "Open the saved recipe from your cookbook.",
-      link("Recipes", "recipes"),
-    );
+    return {
+      title: "Recipes",
+      active: "recipes",
+      content: emptyState(
+        "This editor is no longer available.",
+        "Open the saved recipe from your cookbook.",
+        link("Recipes", "recipes"),
+      ),
+    };
+  const titles = {
+    import: "Review draft",
+    variant: "New variation",
+    new: "New recipe",
+    edit: "Edit recipe",
+  };
+  const subtitles = {
+    import:
+      "Check the ingredients, amounts and method against the original before saving.",
+    variant:
+      "The original stays in your cookbook. This version gets its own ingredients and method.",
+    new: seed
+      ? "The idea stays on your board, linked to this recipe once it is saved."
+      : "Unknown amounts and timings can stay blank.",
+    edit: "Unknown amounts and timings can stay blank.",
+  };
+  const back =
+    r || mode === "variant"
+      ? { label: r?.data.title ?? "Recipe", route: `recipes/${id}` }
+      : seed
+        ? { label: seed.data.title, route: `inspiration/${seed.id}` }
+        : { label: "Recipes", route: "recipes" };
   const ingredientText = data.ingredients
     .map((i) =>
       `${i.quantity == null ? "" : `${i.quantity} ${i.unit ?? ""} `}${i.name}${i.preparation ? `, ${i.preparation}` : ""}`.trim(),
     )
     .join("\n");
-  const origin = r
-    ? ["Recipe", `recipes/${r.id}`]
-    : seed
-      ? ["Idea", `inspiration/${seed.id}`]
-      : ["Recipes", "recipes"];
-  return `${backLink(...origin)}${heading(mode === "import" ? "A quick read-through" : mode === "variant" ? "Keep what you love. Change what you need." : seed ? "From your inspiration board" : "Your recipe, your way", mode === "import" ? "Check it, then make it yours." : mode === "variant" ? "Make your own variation." : seed ? "Make it your own." : r ? "A little refinement." : "Something worth keeping.", mode === "variant" ? "The original stays in your cookbook. This version gets its own ingredients and method." : seed ? "The idea stays on your board, linked to this recipe once it is saved." : "Unknown amounts and timings can stay blank.")}<div class="${draft ? "review-grid" : ""}"><form data-form="recipe" class="stack" data-mode="${mode}" data-id="${esc(id ?? "")}" data-version="${draft?.version ?? r?.version ?? ""}">${seed ? hidden("inspiration_id", seed.id) : ""}<div class="panel stack"><div class="form-grid">${field("Recipe name", "title", mode === "variant" ? `${data.title} · My version` : data.title, "text", 'required maxlength="500"')}${field("Original yield / portions", "servings", data.servings ?? "", "number", 'min="0.01" max="10000" step="any" placeholder="Unknown"')}</div><div class="form-grid four">${field("Hands-on minutes", "active_minutes", data.active_minutes ?? "", "number", 'min="0" max="10080" placeholder="Unknown"')}${field("Total minutes", "total_minutes", data.total_minutes ?? "", "number", 'min="0" max="10080" placeholder="Unknown"')}${field("Cooking pans", "pan_count", data.pan_count ?? "", "number", 'min="0" max="100" placeholder="Unknown"')}${select("Cleanup effort", "cleanup", cleanupOptions, data.cleanup ?? "")}</div><div class="form-grid">${select("Spice level", "spice_level", spiceOptions, data.spice_level ?? "")}${select("Course", "course", [["", "Not recorded"], ...courses.map((c) => [c.key, c.label])], data.course ?? "")}</div><div class="form-grid">${field("Cuisine", "cuisine", data.cuisine ?? "", "text", 'list="cuisine-options" maxlength="100" placeholder="Italian, Israeli…"', "Your own words; names already in your cookbook are suggested.")}<datalist id="cuisine-options">${cuisineOptions(
+  const effortSet = [
+    data.active_minutes,
+    data.total_minutes,
+    data.pan_count,
+    data.cleanup,
+    data.spice_level,
+  ].some((v) => v != null && v !== "");
+  const extrasSet = Boolean(
+    data.notes || data.source_url || (data.links ?? []).length,
+  );
+  const content = `${pageHeader({ title: titles[mode] ?? "Edit recipe", subtitle: subtitles[mode], back })}<div class="${draft ? "review-grid" : ""}"><form data-form="recipe" class="stack" data-mode="${mode}" data-id="${esc(id ?? "")}" data-version="${draft?.version ?? r?.version ?? ""}">${seed ? hidden("inspiration_id", seed.id) : ""}<section class="panel stack"><h2>Basics</h2><div class="form-grid">${field("Recipe name", "title", mode === "variant" ? `${data.title} · My version` : data.title, "text", 'required maxlength="500"')}${field("Original yield / portions", "servings", data.servings ?? "", "number", 'min="0.01" max="10000" step="any" placeholder="Unknown"')}</div><div class="form-grid">${select("Course", "course", [["", "Not recorded"], ...courses.map((c) => [c.key, c.label])], data.course ?? "")}${field("Cuisine", "cuisine", data.cuisine ?? "", "text", 'list="cuisine-options" maxlength="100" placeholder="Italian, Israeli…"', "Your own words; names already in your cookbook are suggested.")}<datalist id="cuisine-options">${cuisineOptions(
     vocabulary.cuisines,
   )
     .map((name) => `<option value="${esc(name)}"></option>`)
     .join(
       "",
-    )}</datalist>${field("Tags, separated by commas", "tags", formatLabels(data.tags), "text", 'placeholder="Weeknight, Shabbat, kid-friendly"', vocabulary.tags.length ? "Press one of your tags below to add it." : "")}</div>${vocabulary.tags.length ? `<p class="small muted">Your tags: ${vocabulary.tags.map((t) => `<button type="button" class="link-button" data-action="append-tag" data-value="${esc(t.name)}">${esc(t.name)}</button>`).join(" ")}</p>` : ""}<div><div class="small muted">Diet labels · what you know about this recipe, not an allergen check</div><div class="chips spacer-small">${diets.map((d) => check(d.label, "diets", d.key, (data.diets ?? []).includes(d.key))).join("")}</div></div>${area("Ingredients · one per line", "ingredients", ingredientText, 'rows="9" placeholder="250 g orzo\n30 mL olive oil\nSalt to taste"')}${area("Method · separate steps with a blank line", "steps", data.steps.map((s) => s.text).join("\n\n"), 'rows="9"')}${area("Equipment · one per line", "equipment", data.equipment.map((e) => e.name).join("\n"), 'rows="3"')}${area("Recipe notes", "notes", data.notes)}${field("Source link (optional)", "source_url", data.source_url ?? "", "url", "", "Where the recipe came from. A video source plays on the recipe page.")}${area("Links and videos · one per line", "links", formatLinkLines(data.links ?? []), 'rows="3" placeholder="https://youtu.be/… Folding the dough\nexample.com/the-original The written version"', "A web address, then an optional title. YouTube, Vimeo, Facebook, Instagram and TikTok videos play on the recipe page; other links open in a new tab.")}${mode === "variant" ? check("Use this as my preferred version", "preferred", "on", true) : ""}${draft ? check("I checked the ingredients, amounts and method against the original.", "reviewed", "on", false, "required") : ""}<div class="row">${submit(draft ? "Save reviewed recipe" : mode === "variant" ? "Save variation" : "Save recipe")}${link("Cancel", r ? `recipes/${r.id}` : "recipes")}</div></div></form>${draft ? `<aside class="panel source-pane"><h3>Your original</h3>${draft.data.warnings.map((w) => `<p class="small muted">${esc(w)}</p>`).join("")}${draft.data.image_id ? `<img class="source-image spacer" src="/api/assets/${encodeURIComponent(draft.data.image_id)}" alt="Original recipe photo for comparison">` : ""}<details open><summary>Extracted source text</summary><pre class="source-text">${esc(draft.data.original_text)}</pre></details></aside>` : ""}</div>`;
+    )}</datalist></div>${field("Tags, separated by commas", "tags", formatLabels(data.tags ?? []), "text", 'placeholder="Weeknight, Shabbat, kid-friendly"', vocabulary.tags.length ? "Press one of your tags below to add it." : "")}${vocabulary.tags.length ? `<p class="small muted">Your tags: ${vocabulary.tags.map((t) => `<button type="button" class="link-button" data-action="append-tag" data-value="${esc(t.name)}">${esc(t.name)}</button>`).join(" ")}</p>` : ""}<div class="stack-sm"><span class="label">Diet labels</span><div class="chips">${diets.map((d) => `<label class="chip-input"><input type="checkbox" name="diets" value="${d.key}" ${(data.diets ?? []).includes(d.key) ? "checked" : ""}><span>${d.label}</span></label>`).join("")}</div><span class="help">What you know about this recipe, not an allergen check.</span></div></section><section class="panel stack"><h2>Ingredients</h2>${area("Ingredients · one per line", "ingredients", ingredientText, 'rows="9" placeholder="250 g orzo\n30 mL olive oil\nSalt to taste"', "Amount, unit, name, then an optional preparation after a comma. Unclear amounts stay as written.")}</section><section class="panel stack"><h2>Method</h2>${area("Method · separate steps with a blank line", "steps", data.steps.map((s) => s.text).join("\n\n"), 'rows="9"')}</section><section class="panel stack"><h2>Equipment</h2>${area("Equipment · one per line", "equipment", data.equipment.map((e) => e.name).join("\n"), 'rows="3" placeholder="Wide pan\nMeasuring jug"', "Leave blank if the recipe does not specify its tools.")}</section>${disclosure(
+    "Effort and spice",
+    `<div class="form-grid form-grid-4">${field("Hands-on minutes", "active_minutes", data.active_minutes ?? "", "number", 'min="0" max="10080" placeholder="Unknown"')}${field("Total minutes", "total_minutes", data.total_minutes ?? "", "number", 'min="0" max="10080" placeholder="Unknown"')}${field("Cooking pans", "pan_count", data.pan_count ?? "", "number", 'min="0" max="100" placeholder="Unknown"')}${select("Cleanup effort", "cleanup", cleanupOptions, data.cleanup ?? "")}</div>${select("Spice level", "spice_level", spiceOptions, data.spice_level ?? "")}`,
+    { open: effortSet },
+  )}${disclosure(
+    "Notes, source and links",
+    `${area("Recipe notes", "notes", data.notes)}${field("Source link (optional)", "source_url", data.source_url ?? "", "url", "", "Where the recipe came from. A video source plays on the recipe page.")}${area("Links and videos · one per line", "links", formatLinkLines(data.links ?? []), 'rows="3" placeholder="https://youtu.be/… Folding the dough\nexample.com/the-original The written version"', "A web address, then an optional title. YouTube, Vimeo, Facebook, Instagram and TikTok videos play on the recipe page; other links open in a new tab.")}`,
+    { open: extrasSet },
+  )}${mode === "variant" ? `<div class="panel">${check("Use this as my preferred version", "preferred", "on", true)}</div>` : ""}${draft ? `<div class="panel">${check("I checked the ingredients, amounts and method against the original.", "reviewed", "on", false, "required")}</div>` : ""}${errorSlot()}<div class="form-footer">${submit(draft ? "Save reviewed recipe" : mode === "variant" ? "Save variation" : "Save recipe", "check")}${link("Cancel", r ? `recipes/${r.id}` : "recipes", { cls: "btn-quiet" })}</div></form>${draft ? `<aside class="panel source-pane stack-sm"><h2>Your original</h2>${draft.data.warnings.map((w) => `<p class="small muted">${esc(w)}</p>`).join("")}${draft.data.image_id ? `<img class="source-image" src="/api/assets/${encodeURIComponent(draft.data.image_id)}" alt="Original recipe photo for comparison">` : ""}<details open><summary class="small">Extracted source text</summary><pre class="source-text">${esc(draft.data.original_text)}</pre></details></aside>` : ""}</div>`;
+  return { title: titles[mode] ?? "Edit recipe", active: "recipes", content };
 }
 
-// Links and videos of a recipe. A recognised video shows a play button that
-// loads the provider's player only when pressed; everything else is a link.
-function linksSection(data, heading = "Links and videos") {
-  const items = displayLinks(data);
-  if (!items.length) return "";
-  return `<section class="links"><h3>${esc(heading)}</h3>${items.map(linkView).join("")}</section>`;
-}
-function linkView(item) {
-  const info = describeLink(item.url);
-  if (!info) return "";
-  const title = item.title || (info.embed ? `${info.label} video` : item.url);
-  const line = `<p class="small"><a href="${esc(item.url)}" target="_blank" rel="noreferrer">${esc(title)}</a> <span class="muted">· ${esc(info.site)}</span></p>`;
-  if (!info.embed) return line;
-  return `<div class="link-item"><div class="embed" data-shape="${info.embed.shape}" data-src="${esc(info.embed.autoplay_src)}" data-title="${esc(title)}">${button(`Play on ${info.label}`, "embed-load", `aria-label="${esc(item.title ? `Play ${item.title} on ${info.label}` : `Play on ${info.label}`)}"`, "embed-load", "play")}<small>Loads the video from ${esc(info.label)} when you press play.</small></div>${line}</div>`;
-}
-function linkLine(links) {
-  if (!links?.length) return "";
-  return `<p class="small">Links and videos: ${links.map((l) => `<a href="${esc(l.url)}" target="_blank" rel="noreferrer">${esc(l.title || describeLink(l.url)?.site || l.url)}</a>`).join(" · ")}</p>`;
-}
-function loadEmbed(box, src = box?.dataset.src) {
-  if (!box) return;
-  box.dataset.loaded = "true";
-  box.innerHTML = `<iframe src="${esc(src)}" title="${esc(box.dataset.title)}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
+async function recipePage(id) {
+  const r = record("recipe", id);
+  if (!r)
+    return {
+      title: "Recipes",
+      active: "recipes",
+      content: emptyState(
+        "Recipe not found.",
+        "It may have been archived.",
+        link("Your recipes", "recipes"),
+      ),
+    };
+  const source = {
+    kind: "recipe",
+    id,
+    ...(portions.has(id) ? { servings: portions.get(id) } : {}),
+  };
+  const [scaled, memory, cost] = await Promise.all([
+    api("recipe_scale", {
+      id,
+      ...(source.servings ? { servings: source.servings } : {}),
+    }),
+    api("recipe_memory", { id }),
+    api("cost_estimate", { source, currency, as_of: today() }),
+  ]);
+  const d = scaled.recipe;
+  const content = `${pageHeader({ title: r.data.title, eyebrow: r.data.original_recipe_id ? "Your own variation" : (r.data.tags[0] ?? "Recipe"), back: { label: "Recipes", route: "recipes" }, actions: `${button("", "favorite", `data-id="${id}" aria-label="${r.data.favorite ? "Remove from favorites" : "Add to favorites"}" aria-pressed="${Boolean(r.data.favorite)}"`, `btn-quiet btn-icon favorite ${r.data.favorite ? "is-favorite" : ""}`, "heart")}${link("Edit recipe", `recipes/${id}/edit`, { ico: "pencil" })}` })}${effort(r)}${facetChips(r.data, { course: true, cls: "chips chips-sm spacer-sm" })}<div class="actions spacer">${button("Cook", "cook", `data-kind="recipe" data-id="${id}"`, "btn-primary", "flame")}${link("Shop", `shop/review/recipe/${id}`, { ico: "shopping-basket" })}${button("Plan", "toggle", 'data-target="#plan-form" aria-expanded="false" aria-controls="plan-form"', "", "calendar-days")}</div><form id="plan-form" data-form="plan" class="panel stack spacer" hidden>${hidden("source", `recipe:${id}`)}<h2>Add to the plan</h2><div class="form-grid">${field("Date", "date", today(), "date", "required")}${field("Meal", "slot", "Dinner", "text", "required")}</div>${errorSlot()}<div class="form-footer">${submit("Add to plan", "calendar-days")}${button("Cancel", "toggle", 'data-target="#plan-form"', "btn-quiet")}</div></form>${memory.preferred_recipe && memory.preferred_recipe.id !== id ? `<div class="spacer">${callout(`Your preferred version: ${esc(memory.preferred_recipe.data.title)} <a href="#/recipes/${memory.preferred_recipe.id}">Open variation</a>`, { ico: "star" })}</div>` : ""}${memory.latest ? `<div class="spacer">${callout(`<div class="eyebrow">Remember for next time</div><p class="preline">${esc(memory.latest.data.next_time || memory.latest.data.changes || memory.latest.data.text)}</p><small class="muted">${esc(memory.latest.data.cooked_on ?? memory.latest.created_at.slice(0, 10))}</small>`, { kind: "callout-warning", ico: "notebook-pen" })}</div>` : ""}<div class="cols spacer"><section class="panel stack"><div class="row between"><h2>Ingredients</h2><form data-form="servings" class="row row-nowrap servings-form">${hidden("id", id)}${field("Portions", "servings", d.servings ?? "", "number", `min="0.01" max="10000" step="any" ${r.data.servings === null ? 'disabled placeholder="Unknown"' : "required"}`)}${r.data.servings !== null ? '<button class="btn btn-sm self-end" type="submit">Update</button>' : ""}</form></div><div>${d.ingredients.map((i) => `<div class="ingredient"><span>${esc(i.name)}${i.preparation ? `<small>${esc(i.preparation)}</small>` : ""}</span><span class="amount">${esc(amount(i))}</span></div>`).join("") || '<p class="small muted">Ingredients have not been recorded.</p>'}</div>${d.equipment.length ? `<div><h3>What you’ll use</h3><div class="chips spacer-sm">${d.equipment.map((e) => tag(`${e.quantity > 1 ? `${e.quantity} × ` : ""}${e.name}${e.capacity ? ` · ${e.capacity}` : ""}`, "tag-neutral")).join("")}</div></div>` : ""}<div><h3>Estimated ingredient cost</h3><p class="small spacer-xs">${cost.complete ? `<strong>${money(cost.total)}</strong> <span class="muted">· ${cost.dishes[0].per_portion == null ? "" : `${money(cost.dishes[0].per_portion)} per portion`}</span>` : `<strong>${money(cost.known_cost)}</strong> <span class="muted">known subtotal · incomplete</span>`}</p>${cost.missing_prices.length ? `<p class="small muted">Missing amounts or prices: ${esc([...new Set(cost.missing_prices.map((l) => l.ingredient.name))].join(", "))}.</p>` : ""}<a class="small" href="#/settings/prices">Prices</a></div></section><section class="stack"><h2>Method</h2><ol class="method">${d.steps.map((s) => `<li>${esc(s.text)}${s.duration_seconds ? `<small class="muted">${num(s.duration_seconds / 60)} minutes</small>` : ""}</li>`).join("") || '<li class="small muted">No method recorded.</li>'}</ol>${d.warnings.length ? callout(d.warnings.map(esc).join("<br>"), { kind: "callout-warning", ico: "triangle-alert" }) : ""}${r.data.notes ? `<div class="panel panel-soft"><p class="preline">${esc(r.data.notes)}</p></div>` : ""}${linksSection(r.data)}${recipeConnections(id)}<details class="disclosure quiet"><summary>Original recipe and sources</summary><div class="disclosure-body">${r.data.source_url ? `<a href="${esc(r.data.source_url)}" target="_blank" rel="noreferrer">Original source</a>` : ""}${(r.data.source_image_ids ?? []).map((id) => `<img class="source-image" src="/api/assets/${encodeURIComponent(id)}" alt="Original recipe photo">`).join("")}<pre class="source-text">${esc(r.data.original_text || "No original text was provided.")}</pre></div></details></section></div><section class="section"><div class="section-header"><h2>Cooking notes</h2><div class="actions">${link("Add a cooking note", `recipes/${id}/memory`, { cls: "btn-sm", ico: "notebook-pen" })}${link("Make a variation", `recipes/${memory.original_recipe_id}/variant`, { cls: "btn-sm", ico: "copy" })}${link("Record a cooked batch", `plan/leftovers/new/${id}`, { cls: "btn-sm", ico: "package" })}</div></div>${memory.notes.length ? `<div class="grid">${memory.notes.map((n) => `<article class="panel stack-sm"><div class="row between"><span class="eyebrow">${esc(n.data.cooked_on ?? n.created_at.slice(0, 10))}</span><span class="small">${n.data.rating ? "★".repeat(n.data.rating) : ""}${n.data.cook_again === true ? " · Cook again" : n.data.cook_again === false ? " · Try something else" : ""}</span></div><p class="preline">${esc(n.data.text)}</p>${n.data.changes ? `<p class="small preline"><strong>Changed:</strong> ${esc(n.data.changes)}</p>` : ""}${n.data.next_time ? `<p class="small preline"><strong>Next time:</strong> ${esc(n.data.next_time)}</p>` : ""}</article>`).join("")}</div>` : '<p class="small muted">Your notes and successful changes will appear here before the next cook.</p>'}${memory.variants.length ? `<div class="spacer"><h3>Ways you make it</h3><div class="chips spacer-sm">${memory.variants.map((v) => `<a class="chip" href="#/recipes/${v.id}">${esc(v.data.title)}${v.data.preferred ? " · Preferred" : ""}</a>`).join("")}</div></div>` : ""}</section>`;
+  return { title: r.data.title, active: "recipes", content };
 }
 
-// Techniques, inspiration and the shelf: the household's know-how, the ideas
-// it wants to try, and the cookbooks it owns as files. Records live in the
-// same state as recipes; files are assets the server stores and serves.
-const learnNav = (active) =>
-  `<div class="pill-nav"><a href="#/techniques" class="${active === "techniques" ? "active" : ""}">Techniques</a><a href="#/inspiration" class="${active === "inspiration" ? "active" : ""}">Inspiration</a></div>`;
-const searchBar = (scope, label, placeholder) =>
-  `<form data-form="search" class="search-bar">${hidden("scope", scope)}<label class="sr-only" for="search-${scope}">${esc(label)}</label><input class="input" id="search-${scope}" name="query" placeholder="${esc(placeholder)}" value="${esc(searches[scope] ?? "")}"><button class="button" type="submit">Search</button></form>`;
-const matching = (scope, parts) => {
-  const q = (searches[scope] ?? "").trim().toLowerCase();
-  return !q || parts.join(" ").toLowerCase().includes(q);
-};
-const paragraphs = (text) =>
-  String(text ?? "")
-    .split(/\n\s*\n/)
-    .map((s) => s.trim())
-    .filter(Boolean);
-function linksFrom(text) {
-  const links = parseLinkLines(text);
-  if (links.invalid.length)
-    throw new Error(
-      `Each link needs a web address such as https://example.com: ${links.invalid.join("; ")}`,
-    );
-  return links.links;
+function memoryPage(id) {
+  const r = record("recipe", id);
+  if (!r)
+    return {
+      title: "Recipes",
+      active: "recipes",
+      content: emptyState(
+        "Choose a recipe first.",
+        "",
+        link("Recipes", "recipes"),
+      ),
+    };
+  const content = `${pageHeader({ title: "Add a cooking note", subtitle: `What worked, what you changed, and what to remember next time you make ${r.data.title}.`, back: { label: r.data.title, route: `recipes/${id}` } })}<form data-form="memory" class="panel stack">${hidden("recipe_id", id)}${field("Cooked on", "cooked_on", today(), "date", "required")}${area("How did it turn out?", "text", "", 'required placeholder="A keeper. Everyone went back for seconds."')}${area("What did you change?", "changes", "", 'placeholder="Used half the lemon and added fresh dill."')}${area("What should you remember next time?", "next_time", "", 'placeholder="Use the wide pan, and keep the heat low."')}<div class="form-grid">${select(
+    "Your rating",
+    "rating",
+    [
+      ["", "No rating"],
+      [5, "5 · Loved it"],
+      [4, "4 · Very good"],
+      [3, "3 · Good"],
+      [2, "2 · Needs work"],
+      [1, "1 · Not for us"],
+    ],
+  )}${select("Make it again?", "cook_again", [
+    ["", "Not sure yet"],
+    ["yes", "Yes, please"],
+    ["no", "Probably not"],
+  ])}</div>${errorSlot()}<div class="form-footer">${submit("Save cooking note", "check")}${link("Cancel", `recipes/${id}`, { cls: "btn-quiet" })}</div></form>`;
+  return { title: "Add a cooking note", active: "recipes", content };
 }
+
+// ---------- Plan ----------
+async function planWeekPage() {
+  const days = Array.from({ length: 7 }, (_, index) => addDays(week, index));
+  const estimate = await api("cost_week", {
+    week_start: week,
+    currency,
+    as_of: today(),
+  }).catch(() => null);
+  const showCost =
+    estimate && (estimate.budget || estimate.plans.some((p) => p.known_cost));
+  const content = `${pageHeader({ title: "Plan", subtitle: "A freshly cooked meal, a favorite combination, or yesterday’s good idea." })}${segmented(PLAN_TABS, "week", "Plan sections")}<div class="toolbar">${button("", "week", 'data-delta="-7" aria-label="Previous week"', "btn-icon", "chevron-left")}<h2 class="grow toolbar-title">${dateLabel(week)} – ${dateLabel(addDays(week, 6))}</h2>${week !== monday(today()) ? button("This week", "week-today", "", "btn-sm") : ""}${button("", "week", 'data-delta="7" aria-label="Next week"', "btn-icon", "chevron-right")}</div>${
+    showCost
+      ? callout(
+          `<strong>${estimate.complete ? "Planned cost" : "Known cost so far"}: ${money(estimate.known_cost)}</strong>${estimate.budget ? ` · Budget ${money(estimate.budget.data.amount)}${estimate.remaining === null ? "" : estimate.remaining >= 0 ? ` · ${money(estimate.remaining)} left` : ` · ${money(-estimate.remaining)} over`}` : ""} <a href="#/settings/prices">Prices &amp; budget</a>`,
+          { ico: "coins" },
+        )
+      : ""
+  }<div class="week-grid spacer">${days
+    .map((date) => {
+      const { planned, leftovers } = dayEntries(date);
+      const isToday = date === today();
+      return `<section class="day ${isToday ? "today" : ""}"><div class="day-head"><h2 class="day-name">${weekdayLabel(date)}<small>${dateLabel(date)}</small></h2>${isToday ? tag("Today") : ""}</div>${planned.length || leftovers.length ? `<div class="list">${planned.map(planRow).join("")}${leftovers.map(leftoverRow).join("")}</div>` : '<p class="small muted">Nothing planned.</p>'}${disclosure(
+        `${icon("plus", { className: "icon-sm" })}Add to ${weekdayLabel(date)}`,
+        `<form data-form="plan" class="stack">${hidden("date", date)}<div class="form-grid">${select("Recipe or meal", "source", sourceOptions(), "", "required")}${field("Meal", "slot", "Dinner", "text", "required")}</div>${errorSlot()}<div class="form-footer">${submit("Add to this day")}${link("Plan leftovers instead", "plan/leftovers", { cls: "btn-quiet btn-sm" })}</div></form>`,
+        { quiet: true },
+      )}</section>`;
+    })
+    .join("")}</div>`;
+  return { title: "Plan", active: "plan", content };
+}
+
+function mealsPage(editId) {
+  if (editId) return mealForm(editId);
+  const meals = records("meal");
+  const content = `${pageHeader({ title: "Plan", subtitle: "Combinations you’ll want to cook again, with portions for each dish." })}${segmented(PLAN_TABS, "meals", "Plan sections")}${meals.length ? `<div class="toolbar">${link("New meal", "plan/meals/new", { primary: true, ico: "plus" })}</div>` : ""}${
+    meals.length
+      ? `<div class="grid grid-3">${meals
+          .map(
+            (m) =>
+              `<article class="card"><span class="eyebrow">${plural(m.data.dishes.length, "dish", "dishes")} · One meal</span><h2 class="card-title">${esc(m.data.title)}</h2><div class="card-body">${m.data.dishes.map((d) => `<p>${esc(record("recipe", d.recipe_id)?.data.title ?? "Archived recipe")} · ${d.servings ?? "Original"} portions</p>`).join("")}</div>${m.data.notes ? `<p class="preline">${esc(m.data.notes)}</p>` : ""}<div class="card-end"><div class="actions">${button("Cook", "cook", `data-kind="meal" data-id="${m.id}"`, "btn-primary btn-sm", "flame")}${link("Shop", `shop/review/meal/${m.id}`, { cls: "btn-sm", ico: "shopping-basket" })}</div>${link("Edit", `plan/meals/${m.id}`, { cls: "btn-sm btn-quiet", ico: "pencil" })}</div></article>`,
+          )
+          .join("")}</div>`
+      : emptyState(
+          "No meals yet.",
+          "Save a main and a side together, with portions for each dish, and cook or shop them as one.",
+          link("New meal", "plan/meals/new", { primary: true }),
+          "utensils",
+        )
+  }`;
+  return { title: "Plan", active: "plan", content };
+}
+function mealForm(editId) {
+  const editing = editId === "new" ? null : record("meal", editId);
+  if (editId !== "new" && !editing)
+    return {
+      title: "Plan",
+      active: "plan",
+      content: emptyState("Meal not found.", "", link("Meals", "plan/meals")),
+    };
+  const recipes = records("recipe");
+  const content = `${pageHeader({ title: editing ? "Edit meal" : "New meal", subtitle: "Choose the dishes and the portions you want to make.", back: { label: "Meals", route: "plan/meals" } })}<form data-form="meal" class="panel stack" data-id="${editing?.id ?? ""}" data-version="${editing?.version ?? ""}">${field("Meal name", "title", editing?.data.title ?? "", "text", 'required placeholder="Friday dinner"')}<div><h3>Dishes</h3><div class="list">${
+    recipes
+      .map((r) => {
+        const dish = editing?.data.dishes.find((d) => d.recipe_id === r.id);
+        return `<div class="list-item"><div class="list-body">${check(r.data.title, "recipes", r.id, Boolean(dish), 'class="check-lg"')}</div><label class="field w-portions"><span class="sr-only">Portions of ${esc(r.data.title)}</span><input type="number" name="portions-${r.id}" value="${dish?.servings ?? r.data.servings ?? ""}" min="0.01" max="10000" step="any" placeholder="${r.data.servings === null ? "Original" : "Portions"}" ${r.data.servings === null ? "disabled" : ""} aria-label="Portions of ${esc(r.data.title)}"></label></div>`;
+      })
+      .join("") ||
+    `<p class="small muted">Add a recipe first, then combine recipes into a meal.</p>`
+  }</div></div>${area("Meal notes", "notes", editing?.data.notes ?? "", 'rows="2"')}${errorSlot()}<div class="form-footer">${submit("Save meal", "check")}${link("Cancel", "plan/meals", { cls: "btn-quiet" })}</div></form>`;
+  return { title: editing ? "Edit meal" : "New meal", active: "plan", content };
+}
+
+function leftoversPage() {
+  const batches = records("batch");
+  const content = `${pageHeader({ title: "Plan", subtitle: "Cooked portions set aside for later. They appear in the week without adding groceries." })}${segmented(PLAN_TABS, "leftovers", "Plan sections")}${batches.length ? `<div class="toolbar">${link("Record a batch", "plan/leftovers/new", { primary: true, ico: "plus" })}</div>` : ""}${
+    batches.length
+      ? `<div class="grid grid-3">${batches
+          .map(
+            (b) =>
+              `<article class="card"><div class="row between">${tag(b.data.storage)}<small class="muted">Cooked ${dateLabel(b.data.cooked_on)}</small></div><h2 class="card-title"><a href="#/plan/leftovers/${b.id}">${esc(b.data.title)}</a></h2><div class="row"><div class="stat"><span class="number">${num(b.remaining_portions)}</span><small>portions left</small></div><div class="stat"><strong>${num(b.available_portions)}</strong><small>not yet allocated</small></div></div><p>${num(b.reserved_portions)} reserved · ${num(b.eaten_portions)} eaten</p><div class="card-end"><span></span>${link("Allocate portions", `plan/leftovers/${b.id}`, { cls: "btn-sm", ico: "chevron-right" })}</div></article>`,
+          )
+          .join("")}</div>`
+      : emptyState(
+          "No cooked batches yet.",
+          "Record a batch after cooking, then set portions aside for later meals.",
+          link("Record a batch", "plan/leftovers/new", { primary: true }),
+          "package",
+        )
+  }`;
+  return { title: "Plan", active: "plan", content };
+}
+function batchForm(recipeId, sessionId, dishId) {
+  if (!records("recipe").length)
+    return {
+      title: "Plan",
+      active: "plan",
+      content: emptyState(
+        "Save a recipe first.",
+        "Then record how much you cooked.",
+        link("Add recipe", "recipes/add", { primary: true }),
+      ),
+    };
+  const session = record("session", sessionId),
+    dish = session?.data.dishes.find((d) => d.dish_id === dishId);
+  const origin = session
+    ? { label: session.data.title, route: `cook/${sessionId}` }
+    : record("recipe", recipeId)
+      ? {
+          label: record("recipe", recipeId).data.title,
+          route: `recipes/${recipeId}`,
+        }
+      : { label: "Leftovers", route: "plan/leftovers" };
+  const content = `${pageHeader({ title: "Record a batch", subtitle: "Record what you made. Allocate it to meals once it’s saved.", back: origin })}<form data-form="batch" class="panel stack">${session ? `${hidden("session_id", sessionId)}${hidden("dish_id", dishId)}` : ""}${select("Recipe", "recipe_id", optionsFor("recipe"), dish?.recipe_id ?? recipeId ?? records("recipe")[0]?.id, session ? "disabled" : "required")}${session ? hidden("recipe_id", dish.recipe_id) : ""}<div class="form-grid">${field("Portions actually cooked", "portions", dish?.servings ?? record("recipe", recipeId)?.data.servings ?? "", "number", `required min="0.01" max="10000" step="any" ${session ? "readonly" : ""}`)}${field("Cooked on", "cooked_on", today(), "date", "required")}${select(
+    "Stored in",
+    "storage",
+    [
+      ["fridge", "Fridge"],
+      ["freezer", "Freezer"],
+    ],
+  )}</div>${area("Batch notes", "notes", "", 'rows="2" placeholder="Label on the container, or a reheating note."')}${errorSlot()}<div class="form-footer">${submit("Record cooked batch", "check")}${link("Cancel", "plan/leftovers", { cls: "btn-quiet" })}</div></form>`;
+  return { title: "Record a batch", active: "plan", content };
+}
+function batchPage(id) {
+  const b = record("batch", id);
+  if (!b)
+    return {
+      title: "Plan",
+      active: "plan",
+      content: emptyState(
+        "Batch not found.",
+        "",
+        link("Leftovers", "plan/leftovers"),
+      ),
+    };
+  const content = `${pageHeader({ title: b.data.title, eyebrow: "Cooked batch", subtitle: `Cooked ${dateLabel(b.data.cooked_on)} · ${num(b.data.portions)} portions originally · ${b.data.storage}`, back: { label: "Leftovers", route: "plan/leftovers" } })}${callout(`<strong>${num(b.available_portions)}</strong> portions available to allocate · ${num(b.reserved_portions)} reserved · ${num(b.eaten_portions)} eaten`, { ico: "package" })}<div class="grid-2 spacer"><section class="panel stack"><h2>Where it’s going</h2><div class="list">${b.data.allocations.map((a) => `<div class="list-item"><div class="list-body"><strong>${num(a.portions)} portions · ${esc(a.slot)}</strong><p>${a.date ? dateLabel(a.date) : "No date set"} · ${esc(a.storage)} · ${a.status === "eaten" ? "Eaten" : "Reserved"}</p>${a.notes ? `<p>${esc(a.notes)}</p>` : ""}</div><div class="list-actions">${a.status === "reserved" ? button("Eaten", "allocation-eat", `data-id="${id}" data-allocation="${a.id}"`, "btn-sm", "check") : ""}${button("Release", "allocation-release", `data-id="${id}" data-allocation="${a.id}" aria-label="Release ${esc(a.slot)} allocation"`, "btn-quiet btn-sm")}</div></div>`).join("") || '<p class="small muted">No portions allocated yet.</p>'}</div>${b.data.notes ? `<div class="panel panel-soft"><p class="preline">${esc(b.data.notes)}</p></div>` : ""}</section><form data-form="allocation" class="panel stack" data-id="${id}" data-version="${b.version}"><h2>Allocate portions</h2><div class="form-grid">${field("Portions", "portions", "", "number", `required min="0.01" max="${b.available_portions}" step="any"`)}${field("Meal date (optional)", "date", "", "date", `min="${b.data.cooked_on}"`)}${select(
+    "Meal",
+    "slot",
+    [
+      ["Lunch", "Lunch"],
+      ["Dinner", "Dinner"],
+      ["Breakfast", "Breakfast"],
+      ["For later", "For later"],
+    ],
+  )}${select(
+    "Store these portions in",
+    "storage",
+    [
+      ["fridge", "Fridge"],
+      ["freezer", "Freezer"],
+    ],
+    b.data.storage,
+  )}</div>${area("A note for this portion", "notes", "", 'rows="2"')}${check("Already eaten", "eaten")}${errorSlot()}<div class="form-footer">${submit("Allocate portions", "check")}</div><p class="small muted">These portions are already cooked. Planning them adds no groceries.</p></form></div>`;
+  return { title: b.data.title, active: "plan", content };
+}
+
+// ---------- Shop ----------
+function shopListPage(id) {
+  const lists = records("shopping");
+  const list = record("shopping", id) ?? lists[0];
+  const open = list ? list.items.filter((i) => !i.checked) : [];
+  const done = list ? list.items.filter((i) => i.checked) : [];
+  const itemRow = (i) =>
+    `<div class="list-item ${i.checked ? "done" : ""}"><label class="check check-lg"><input type="checkbox" data-change="shopping-check" data-id="${list.id}" data-item="${i.id}" ${i.checked ? "checked" : ""} aria-label="Bought ${esc(i.name)}"></label><div class="list-body"><strong>${esc(i.name)}</strong><p>${esc([...new Set(i.contributions.map((c) => c.recipe_title).filter(Boolean))].join(", ") || "Everyday item")}</p></div><span class="quantity">${esc(amount(i))}</span></div>`;
+  const content = `${pageHeader({ title: "Shop", subtitle: list ? (list.items.length ? `${plural(open.length, "item")} left to pick up.` : "Nothing on the list yet. Shop a recipe, or add the everyday things you need.") : "Create a list, then shop a recipe, a meal or a planned day." })}${segmented(SHOP_TABS, "list", "Shop sections")}${
+    list
+      ? `${lists.length > 1 ? `<div class="chips list-switcher">${lists.map((l) => `<a class="chip" href="#/shop/list/${l.id}" ${l.id === list.id ? 'aria-current="page"' : ""}>${esc(l.data.title)}</a>`).join("")}</div>` : ""}<section class="panel stack"><form data-form="shopping-item" class="inline-add" data-id="${list.id}" data-version="${list.version}">${field("Add an everyday item", "name", "", "text", 'required placeholder="Coffee"')}${errorSlot()}${submit("Add item", "plus")}</form><div class="list">${open.map(itemRow).join("") || (done.length ? '<p class="small muted">Everything is in the basket.</p>' : '<p class="small muted">Open a recipe, meal or planned day and press Shop to add its ingredients.</p>')}</div>${done.length ? disclosure(`In the basket · ${done.length}`, `<div class="list">${done.map(itemRow).join("")}</div>`, { quiet: true, open: true }) : ""}${list.data.sources.length ? disclosure(`Recipes on this list · ${list.data.sources.length}`, `<div class="list">${list.data.sources.map((s) => `<div class="list-item"><span class="list-body">${esc(s.title)}</span>${button("Remove", "shopping-remove", `data-id="${list.id}" data-source="${esc(s.source_key)}" aria-label="Remove ${esc(s.title)} from this list"`, "btn-quiet btn-sm")}</div>`).join("")}</div>`, { quiet: true }) : ""}</section>`
+      : `<form data-form="shopping-create" class="panel stack"><h2>Create a shopping list</h2>${field("List name", "title", "Groceries", "text", "required")}${errorSlot()}<div class="form-footer">${submit("Create shopping list", "plus")}</div></form>`
+  }`;
+  return { title: "Shop", active: "shop", content };
+}
+
+function pantryPage() {
+  const pantry = [...records("pantry")].sort(
+    (a, b) =>
+      Number(b.data.use_soon) - Number(a.data.use_soon) ||
+      a.data.name.localeCompare(b.data.name),
+  );
+  const content = `${pageHeader({ title: "Shop", subtitle: "What you have at home. Today uses it to suggest dinner and to spot what’s missing." })}${segmented(SHOP_TABS, "pantry", "Shop sections")}${pantry.length ? `<div class="toolbar">${link("Add ingredient", "shop/pantry/new", { primary: true, ico: "plus" })}${link("Find dinner with it", "today", { ico: "search" })}</div>` : ""}${
+    pantry.length
+      ? `<section class="panel"><div class="list">${pantry.map((p) => `<div class="list-item"><label class="check check-lg"><input type="checkbox" data-change="pantry-available" data-id="${p.id}" ${p.data.available ? "checked" : ""} aria-label="Have ${esc(p.data.name)}"></label><div class="list-body"><strong>${esc(p.data.name)}</strong>${p.data.preparation ? `<small> · ${esc(p.data.preparation)}</small>` : ""}<p>${p.data.quantity == null ? "Amount not recorded" : esc(amount(p.data))}${!p.data.available ? " · Not on hand" : ""}</p></div><div class="list-actions">${button(p.data.use_soon ? "Use soon ✓" : "Use soon", "pantry-soon", `data-id="${p.id}" aria-pressed="${p.data.use_soon}"`, `btn-sm ${p.data.use_soon ? "" : "btn-quiet"}`)}${link("Edit", `shop/pantry/${p.id}`, { cls: "btn-sm btn-quiet" })}</div></div>`).join("")}</div></section>`
+      : emptyState(
+          "Your pantry is empty.",
+          "Start with the ingredients you’d like to use this week. A simple checklist is enough; amounts are optional.",
+          link("Add ingredient", "shop/pantry/new", { primary: true }),
+          "refrigerator",
+        )
+  }`;
+  return { title: "Shop", active: "shop", content };
+}
+function pantryForm(id) {
+  const editing = id === "new" ? null : record("pantry", id);
+  if (id !== "new" && !editing)
+    return {
+      title: "Shop",
+      active: "shop",
+      content: emptyState(
+        "Ingredient not found.",
+        "",
+        link("Pantry", "shop/pantry"),
+      ),
+    };
+  const d = editing?.data ?? {};
+  const content = `${pageHeader({ title: editing ? "Edit ingredient" : "Add ingredient", subtitle: "Names and preparation should match the way your recipes write them.", back: { label: "Pantry", route: "shop/pantry" } })}<form data-form="pantry" class="panel stack" data-id="${editing?.id ?? ""}" data-version="${editing?.version ?? ""}">${field("Ingredient name", "name", d.name ?? "", "text", 'required placeholder="Zucchini"')}${field("Preparation / form", "preparation", d.preparation ?? "", "text", 'placeholder="Match the recipe, e.g. drained"')}<div class="form-grid">${field("Amount (optional)", "quantity", d.quantity ?? "", "number", 'min="0" max="1000000000" step="any" placeholder="Unknown"')}${field("Unit", "unit", d.unit ?? "", "text", 'placeholder="g, mL, each…"')}</div>${check("I have this ingredient", "available", "on", d.available !== false)}${check("Use this soon", "use_soon", "on", d.use_soon ?? false)}${area("A note", "notes", d.notes ?? "", 'rows="2"')}${errorSlot()}<div class="form-footer">${submit(editing ? "Save ingredient" : "Add to pantry", "check")}${link("Cancel", "shop/pantry", { cls: "btn-quiet" })}</div></form>`;
+  return {
+    title: editing ? "Edit ingredient" : "Add ingredient",
+    active: "shop",
+    content,
+  };
+}
+
+async function reviewPage(kind, id) {
+  const source = {
+    kind,
+    id,
+    ...(kind === "recipe" && portions.has(id)
+      ? { servings: portions.get(id) }
+      : {}),
+  };
+  const origin =
+    kind === "recipe" && record("recipe", id)
+      ? { label: record("recipe", id).data.title, route: `recipes/${id}` }
+      : kind === "meal"
+        ? { label: "Meals", route: "plan/meals" }
+        : kind === "plan"
+          ? { label: "Plan", route: "plan" }
+          : { label: "Shop", route: "shop" };
+  const list = records("shopping")[0];
+  if (!list)
+    return {
+      title: "Shop",
+      active: "shop",
+      content: `${pageHeader({ title: "Start a shopping list", subtitle: "Create a list before shopping this recipe or meal.", back: origin })}<form data-form="shopping-create" class="panel stack">${field("List name", "title", "Groceries", "text", "required")}${errorSlot()}<div class="form-footer">${submit("Create shopping list", "plus")}</div></form>`,
+    };
+  const key = `${kind}:${id}`,
+    excluded = exclusions.get(key) ?? [];
+  const input = {
+    id: list.id,
+    source,
+    source_key: key,
+    exclude_ingredients: excluded,
+  };
+  const preview = await api("shopping_preview", input);
+  review = { input, preview };
+  const content = `${pageHeader({ title: `Shop for ${preview.source.title}`, subtitle: "Untick what you already have, then add the rest to your list. Repeating this for the same source updates it instead of adding it twice.", back: origin })}<div class="grid-2"><form data-form="shopping-review" class="panel stack"><h2>Ingredients to buy</h2>${preview.source.dishes.map((d) => `<section class="stack-sm"><h3>${esc(d.title)}</h3><div class="list">${d.ingredients.map((i, index) => `<div class="list-item">${check(`${i.name} · ${amount(i)}`, "ingredients", `${d.dish_id}:${index}`, !excluded.includes(`${d.dish_id}:${index}`))}</div>`).join("")}</div></section>`).join("")}${errorSlot()}<div class="form-footer">${submit("Update preview")}</div></form><section class="panel stack"><h2>Changes to your list</h2><p class="small muted">${preview.diff.added.length} new · ${preview.diff.changed.length} changed · ${preview.diff.removed.length} removed</p><div>${preview.items.map((i) => `<div class="ingredient"><span>${esc(i.name)}</span><span class="amount">${esc(amount(i))}</span></div>`).join("") || '<p class="small muted">No ingredients remain on this list.</p>'}</div>${button("Add to shopping list", "shopping-apply", "", "btn-primary", "shopping-basket")}<p class="small muted" id="review-hint">Repeating this action updates this occurrence without adding it twice.</p>${preview.equipment.requirements.length ? disclosure("Required equipment", preview.equipment.requirements.map((e) => `<p class="small">${esc(e.name)} · ${e.available_quantity === null ? "availability unknown" : `${e.available_quantity} available`}</p>${e.conflicts.map((c) => `<p class="small muted">${esc(c)}</p>`).join("")}`).join(""), { quiet: true }) : ""}</section></div>`;
+  return { title: `Shop for ${preview.source.title}`, active: "shop", content };
+}
+
+// ---------- Cook ----------
+function cookPage() {
+  const sessions = [...records("session")].sort((a, b) =>
+    b.updated_at.localeCompare(a.updated_at),
+  );
+  const active = sessions.filter((s) => s.data.status === "active");
+  const finished = sessions
+    .filter((s) => s.data.status !== "active")
+    .slice(0, 6);
+  const content = `${pageHeader({ title: "Cook", subtitle: "Follow each dish, share the preparation, and keep the timers in view." })}${
+    active.length
+      ? `<div class="grid grid-3">${active.map((s) => `<article class="card">${tag("On the stove", "tag-warm")}<h2 class="card-title"><a href="#/cook/${s.id}">${esc(s.data.title)}</a></h2><p>${plural(s.data.dishes.length, "dish", "dishes")} · ${s.data.progress.reduce((n, p) => n + p.completed_steps.length, 0)} of ${s.data.dishes.reduce((n, d) => n + d.steps.length, 0)} steps done</p><div class="card-end"><span class="small muted">Started ${dateLabel(s.created_at.slice(0, 10))}</span>${link("Continue", `cook/${s.id}`, { primary: true, cls: "btn-sm", ico: "flame" })}</div></article>`).join("")}</div>`
+      : emptyState(
+          "Nothing on the stove.",
+          "Open a recipe, a meal or a planned day and press Cook to start.",
+          `${link("Pick a recipe", "recipes", { primary: true })}${link("Open this week", "plan")}`,
+          "flame",
+        )
+  }${finished.length ? `<section class="section"><div class="section-header"><h2>Recently finished</h2></div><div class="panel"><div class="list">${finished.map((s) => `<div class="list-item"><div class="list-body"><strong>${esc(s.data.title)}</strong><p>${plural(s.data.dishes.length, "dish", "dishes")} · ${dateLabel(s.created_at.slice(0, 10))}</p></div>${link("Notes & leftovers", `cook/${s.id}`, { cls: "btn-sm" })}</div>`).join("")}</div></div></section>` : ""}`;
+  return { title: "Cook", active: "cook", content };
+}
+function sessionPage(id) {
+  const s = record("session", id);
+  if (!s)
+    return {
+      title: "Cook",
+      active: "cook",
+      content: emptyState("Session not found.", "", link("Cook", "cook")),
+    };
+  const d = s.data;
+  if (d.status === "finished") {
+    const content = `${pageHeader({ title: d.title, eyebrow: "Finished", subtitle: "Nice work. Save what you learned and set leftovers aside.", back: { label: "Cook", route: "cook" } })}<div class="grid grid-3">${d.dishes
+      .map((dish) => {
+        const batch = records("batch").find(
+          (b) =>
+            b.data.session_id === id && b.data.dish.dish_id === dish.dish_id,
+        );
+        return `<article class="card"><h2 class="card-title">${esc(dish.title)}</h2><p>${dish.servings ?? "Original"} portions cooked</p><div class="actions">${link("Remember what worked", `recipes/${dish.recipe_id}/memory`, { cls: "btn-sm", ico: "notebook-pen" })}${batch ? link("Open cooked batch", `plan/leftovers/${batch.id}`, { cls: "btn-sm", ico: "package" }) : dish.servings ? link("Record leftovers", `plan/leftovers/new/${dish.recipe_id}/${id}/${dish.dish_id}`, { cls: "btn-sm", ico: "package" }) : '<p class="small muted">The cooked yield was unknown; record a batch from Leftovers once the recipe yield is set.</p>'}</div></article>`;
+      })
+      .join(
+        "",
+      )}</div>${d.notes ? `<div class="panel panel-soft spacer"><p class="preline">${esc(d.notes)}</p></div>` : ""}`;
+    return { title: d.title, active: "cook", content };
+  }
+  const ownerOptions = [["", "Unassigned"], ...optionsFor("member")];
+  const dishOptions = [
+    ["", "Whole meal"],
+    ...d.dishes.map((dish) => [dish.dish_id, dish.title]),
+  ];
+  const content = `${pageHeader({ title: d.title, eyebrow: "Cooking", subtitle: sharing ? "Progress, tasks and timers are shared with everyone connected to this kitchen." : "Progress, tasks and timers are saved as you go.", back: { label: "Cook", route: "cook" } })}<div class="dishes ${d.dishes.length > 1 ? "many" : ""}">${d.dishes
+    .map((dish) => {
+      const p = d.progress.find((p) => p.dish_id === dish.dish_id);
+      const current = dish.steps[p.current_step];
+      const memory = records("note")
+        .filter((n) => n.data.recipe_id === dish.recipe_id)
+        .sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
+      return `<section class="panel stack"><div class="row between"><h2>${esc(dish.title)}</h2>${tag(`${dish.servings ?? "Original"} portions`)}</div>${memory ? callout(`<p class="preline">${esc(memory.data.next_time || memory.data.changes || memory.data.text)}</p><small class="muted">Your last cooking note</small>`, { kind: "callout-warning", ico: "notebook-pen" }) : ""}<div class="stack-sm"><span class="eyebrow">${p.completed_steps.length} of ${dish.steps.length} steps complete</span><progress class="progress" max="${Math.max(1, dish.steps.length)}" value="${p.completed_steps.length}" aria-label="Progress for ${esc(dish.title)}"></progress></div>${current ? `<div><div class="eyebrow">Step ${p.current_step + 1}</div><p class="step-current preline">${esc(current.text)}</p></div><div class="actions">${button("Previous step", "step-back", `data-id="${id}" data-dish="${dish.dish_id}" ${p.current_step === 0 ? "disabled" : ""}`, "", "chevron-left")}${button(p.current_step === dish.steps.length - 1 ? "Mark step done" : "Done, next step", "step-next", `data-id="${id}" data-dish="${dish.dish_id}"`, "btn-primary", "check")}</div>` : '<p class="small muted">This dish has no recorded instructions.</p>'}${linkLine(dish.links)}${disclosure("Ingredients and all steps", `<div>${dish.ingredients.map((i) => `<div class="ingredient"><span>${esc(i.name)}</span><span class="amount">${esc(amount(i))}</span></div>`).join("")}</div><ol class="method method-compact">${dish.steps.map((step, index) => `<li>${esc(step.text)} ${button(`Go to step ${index + 1}`, "step-jump", `data-id="${id}" data-dish="${dish.dish_id}" data-step="${index}"`, "btn-quiet btn-sm")}</li>`).join("")}</ol>`, { quiet: true })}</section>`;
+    })
+    .join(
+      "",
+    )}</div><div class="grid-2 spacer"><section class="panel stack"><div class="section-header tight"><h2>Tasks</h2><span class="small">Many hands, one meal</span></div><div>${(d.tasks ?? []).map((t) => `<div class="task ${t.completed ? "done" : ""}"><input type="checkbox" data-change="task-complete" data-id="${id}" data-task="${t.id}" ${t.completed ? "checked" : ""} aria-label="Complete ${esc(t.text)}"><div class="task-title"><strong>${esc(t.text)}</strong>${t.dish_id ? `<p class="small muted">${esc(d.dishes.find((dish) => dish.dish_id === t.dish_id)?.title)}</p>` : ""}</div><select data-change="task-owner" data-id="${id}" data-task="${t.id}" aria-label="Assign ${esc(t.text)}">${ownerOptions.map(([v, l]) => `<option value="${v}" ${v === (t.member_id ?? "") ? "selected" : ""}>${esc(l)}</option>`).join("")}</select>${button("", "task-remove", `data-id="${id}" data-task="${t.id}" aria-label="Remove task ${esc(t.text)}"`, "btn-quiet btn-icon btn-sm", "x")}</div>`).join("") || '<p class="small muted">Split the prep into small tasks, then choose who handles each one.</p>'}</div><form data-form="task" class="stack-sm" data-id="${id}" data-version="${s.version}">${field("New task", "text", "", "text", 'required maxlength="500" placeholder="Chop the vegetables"')}<div class="form-grid">${select("For which dish?", "dish_id", dishOptions)}${select("Who’s doing it?", "member_id", ownerOptions)}</div>${errorSlot()}<div>${submit("Add cooking task", "plus")}</div></form></section><section class="panel stack"><div class="section-header tight"><h2>Timers</h2><span class="small">Countdowns stay in view here</span></div><div class="stack-sm">${
+    d.timers
+      .filter((t) => !t.cancelled)
+      .map(
+        (t) =>
+          `<div class="timer" data-timer-row="${t.id}"><div><strong>${esc(t.label)}</strong><br><small class="muted">${t.dish_id ? `${esc(d.dishes.find((d) => d.dish_id === t.dish_id)?.title)} · ` : ""}${esc(person(t.member_id))}</small></div><span class="timer-time" data-deadline="${esc(t.deadline)}">—</span>${button("", "timer-cancel", `data-id="${id}" data-timer="${t.id}" aria-label="Cancel ${esc(t.label)} timer"`, "btn-quiet btn-icon btn-sm", "x")}</div>`,
+      )
+      .join("") || '<p class="small muted">No timers running.</p>'
+  }</div><form data-form="timer" class="stack-sm" data-id="${id}" data-version="${s.version}"><div class="form-grid">${field("Timer name", "label", "", "text", 'required placeholder="Orzo"')}${field("Minutes", "minutes", "", "number", 'required min="0.016667" max="10080" step="any"')}${select("Dish", "dish_id", dishOptions)}${select("Who’s watching it?", "member_id", ownerOptions)}</div>${errorSlot()}<div>${submit("Start timer", "timer")}</div><p class="small muted">Use a device alarm for reliable alerts when the screen is locked.</p></form></section></div><form data-form="finish" class="panel stack spacer" data-id="${id}" data-version="${s.version}"><h2>Ready for the table?</h2>${area("A note about this meal", "notes", "", 'rows="2" placeholder="Crispy top. Next time, a little more lemon."')}${errorSlot()}<div class="form-footer">${submit("Finish cooking", "check")}</div></form>`;
+  return { title: d.title, active: "cook", content, wakeLock: true };
+}
+
+// ---------- Settings ----------
+const settingsTabs = () => [
+  ...SETTINGS_TABS,
+  ...(account ? [["account", "Sign-in", "account"]] : []),
+];
+async function settingsPage(tab, id) {
+  const header = (subtitle) =>
+    `${pageHeader({ title: "Settings", subtitle })}${segmented(settingsTabs(), tab, "Settings sections")}`;
+  if (tab === "account")
+    return {
+      title: "Sign-in",
+      active: "settings",
+      content: account
+        ? `${header("Your sign-in on this device.")}${await accountTab()}`
+        : `${header("")}${emptyState("No sign-in on this computer.", "Kooks is running for this computer only; nobody needs to sign in.", link("Today", "today"))}`,
+    };
+  if (tab === "household") {
+    if (id) return memberForm(id);
+    const members = records("member");
+    return {
+      title: "Settings",
+      active: "settings",
+      content: `${header("The people at your table: their tastes shape dinner suggestions, and they can own cooking tasks and timers.")}${members.length ? `<div class="toolbar">${link("Add person", "settings/household/new", { primary: true, ico: "plus" })}</div>` : ""}${
+        members.length
+          ? `<div class="grid grid-3">${members.map((m) => `<article class="card"><div class="row"><span class="avatar" aria-hidden="true">${esc(m.data.name[0])}</span><div class="grow"><h2 class="card-title card-title-sm">${esc(m.data.name)}</h2><p>${m.data.spice_tolerance == null ? "Spice preference not set" : `Spice: ${spiceOptions.find((o) => o[0] === m.data.spice_tolerance)?.[1]}`}</p></div></div><dl class="kv"><dt>Likes</dt><dd>${esc(m.data.likes.join(", ") || "Not set")}</dd><dt>Dislikes</dt><dd>${esc(m.data.dislikes.join(", ") || "Not set")}</dd></dl>${m.data.notes ? `<p>${esc(m.data.notes)}</p>` : ""}<div class="card-end"><span></span>${link("Edit", `settings/household/${m.id}`, { cls: "btn-sm", ico: "pencil" })}</div></article>`).join("")}</div>`
+          : emptyState(
+              "Who’s coming to dinner?",
+              "Add a person to tailor suggestions and share cooking tasks.",
+              link("Add person", "settings/household/new", { primary: true }),
+              "users",
+            )
+      }<p class="small muted spacer">${sharing ? "Other browsers connected to this household server see the same recipes and cooking progress. " : ""}Profiles record tastes and task owners; they are not accounts or allergen records.</p>`,
+    };
+  }
+  if (tab === "prices") {
+    if (id) return priceForm(id);
+    const estimate = await api("cost_week", {
+      week_start: week,
+      currency,
+      as_of: today(),
+    });
+    const prices = records("price").filter((p) => p.data.currency === currency);
+    return {
+      title: "Settings",
+      active: "settings",
+      content: `${header("Estimates use the prices you confirm and the amounts your recipes need. They describe ingredients used, not checkout totals.")}<form data-form="currency" class="toolbar">${field("Currency", "currency", currency, "text", 'required pattern="[A-Za-z]{3}" maxlength="3" class="w-code"')}${field("Week starting Monday", "week", week, "date", "required")}<button type="submit" class="btn self-end">View week</button></form><div class="grid-2"><section class="panel stack"><div><div class="eyebrow">${estimate.complete ? "Planned cooking cost" : "Known ingredient subtotal"}</div><div class="number spacer-sm">${money(estimate.known_cost)}</div><p class="small muted">${estimate.complete ? `${plural(estimate.plans.length, "planned cooking occurrence")}` : "Incomplete · some prices or quantities are missing"}</p></div>${estimate.budget ? `<p>Weekly budget <strong>${money(estimate.budget.data.amount)}</strong><br><small class="muted">${estimate.remaining === null ? "Add missing prices to calculate what remains." : estimate.remaining >= 0 ? `${money(estimate.remaining)} remaining` : `${money(-estimate.remaining)} over budget`}</small></p>` : ""}${disclosure(`${estimate.budget ? "Change" : "Set"} this week’s budget`, `<form data-form="budget" class="stack-sm" data-id="${estimate.budget?.id ?? ""}" data-version="${estimate.budget?.version ?? ""}">${field(`Budget (${currency})`, "amount", estimate.budget?.data.amount ?? "", "number", 'required min="0" max="1000000000" step="0.01"')}${errorSlot()}<div>${submit("Save weekly budget")}</div></form>`, { quiet: true })}</section><section class="panel stack"><h2>On the menu</h2><div class="list">${estimate.plans.map((p) => `<div class="list-item"><div class="list-body"><strong>${esc(p.title)}</strong><p>${dateLabel(p.date)}${!p.complete ? ` · Missing: ${esc([...new Set(p.missing_prices.map((i) => i.ingredient.name))].join(", "))}` : ""}</p></div><span class="quantity">${money(p.known_cost)}${!p.complete ? '<br><small class="muted">partial</small>' : ""}</span></div>`).join("") || '<p class="small muted">Plan a recipe or meal to see its ingredient cost here.</p>'}</div>${estimate.leftovers.length ? `<p class="small muted">${plural(estimate.leftovers.length, "leftover meal")} already cooked and add no new grocery cost.</p>` : ""}<div>${link("Open the week", "plan", { cls: "btn-sm" })}</div></section></div><section class="section"><div class="section-header"><h2>Confirmed prices · ${esc(currency)}</h2>${link("Add price", "settings/prices/new", { primary: true, cls: "btn-sm", ico: "plus" })}</div><div class="panel table-wrap prices"><table><thead><tr><th>Ingredient</th><th>Package</th><th>Price</th><th>Confirmed</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody>${prices.map((p) => `<tr><td>${esc(p.data.name)}${p.data.preparation ? `<br><small>${esc(p.data.preparation)}</small>` : ""}</td><td>${num(p.data.package_quantity)} ${esc(p.data.unit)}</td><td>${money(p.data.price)}</td><td>${dateLabel(p.data.purchased_on)}<br><small>${p.data.source === "receipt" ? "From a receipt" : "Entered by hand"}</small></td><td>${link("Edit", `settings/prices/${p.id}`, { cls: "btn-sm btn-quiet" })}</td></tr>`).join("") || '<tr><td colspan="5"><span class="small muted">No confirmed prices yet. Add the ones you know.</span></td></tr>'}</tbody></table></div></section>`,
+    };
+  }
+  if (tab === "backup")
+    return {
+      title: "Settings",
+      active: "settings",
+      content: `${header("Keep a portable copy of your cookbook, and see how this kitchen is shared.")}<div class="grid-2"><section class="panel stack"><h2>Backup</h2><p class="small muted">Export everything as one portable Kooks file, including photos, leftovers and prices. Keep it somewhere safe outside this computer.</p><div>${button("Export cookbook", "export", "", "btn-primary", "download")}</div><p class="small muted">Restoring replaces an empty cookbook through the MCP tools; see the household guide.</p></section><section class="panel stack"><h2>Sharing</h2>${callout(sharing ? "<strong>Shared household server.</strong> Everyone with the household key sees the same cookbook, plan and cooking progress." : "<strong>This computer only.</strong> The server accepts connections from this computer. A trusted-network key can share it with the household.", { ico: sharing ? "wifi" : "lock" })}<p class="small muted">One shared household, one key. Person profiles are tastes and task owners, not accounts.</p></section></div>`,
+    };
+  const status = await api("kooks_status").catch(() => null);
+  return {
+    title: "Settings",
+    active: "settings",
+    content: `${header("Make Kooks feel like home.")}<div class="grid-2"><form data-form="preferences" class="panel stack"><h2>Appearance</h2><fieldset class="radio-cards fieldset-plain"><legend class="label">Theme</legend>${[
+      ["system", "Match the system", "monitor"],
+      ["light", "Light", "sun"],
+      ["dark", "Dark", "moon"],
+    ]
+      .map(
+        ([value, label, ico]) =>
+          `<label><input type="radio" name="theme" value="${value}" ${theme === value ? "checked" : ""}>${icon(ico)}${label}</label>`,
+      )
+      .join(
+        "",
+      )}</fieldset>${field("Currency for estimates", "currency", currency, "text", 'required pattern="[A-Za-z]{3}" maxlength="3"', "Three-letter code, for example USD or EUR.")}${errorSlot()}<div class="form-footer">${submit("Save preferences", "check")}</div></form><section class="panel stack"><h2>About</h2><dl class="kv"><dt>Version</dt><dd>${esc(status?.version ?? "—")}</dd><dt>Storage</dt><dd>${esc(status?.storage ?? "local SQLite")}</dd><dt>Licence</dt><dd>GNU AGPL-3.0 · <a href="https://github.com/Sweatpantslife/kooks">Source code</a></dd></dl><p class="small muted">Kooks stores your cookbook on this household’s own computer. Nothing is sent to a model provider unless you connect one yourself.</p></section></div>`,
+  };
+}
+function memberForm(id) {
+  const editing = id === "new" ? null : record("member", id);
+  if (id !== "new" && !editing)
+    return {
+      title: "Settings",
+      active: "settings",
+      content: emptyState(
+        "Person not found.",
+        "",
+        link("Household", "settings/household"),
+      ),
+    };
+  const d = editing?.data ?? {};
+  const content = `${pageHeader({ title: editing ? "Edit person" : "Add person", subtitle: "Tastes match the ingredient names and tags in your cookbook.", back: { label: "Household", route: "settings/household" } })}<form data-form="member" class="panel stack" data-id="${editing?.id ?? ""}" data-version="${editing?.version ?? ""}">${field("Name", "name", d.name ?? "", "text", "required")}${field("Likes · ingredients or tags, separated by commas", "likes", (d.likes ?? []).join(", "), "text", 'placeholder="Chickpeas, pasta"')}${field("Dislikes · separated by commas", "dislikes", (d.dislikes ?? []).join(", "), "text", 'placeholder="Mushrooms, olives"')}${select("Spice tolerance", "spice_tolerance", spiceOptions, d.spice_tolerance ?? "")}${area("Notes", "notes", d.notes ?? "", 'rows="3"')}${errorSlot()}<div class="form-footer">${submit(editing ? "Save person" : "Add person", "check")}${link("Cancel", "settings/household", { cls: "btn-quiet" })}</div></form>`;
+  return {
+    title: editing ? "Edit person" : "Add person",
+    active: "settings",
+    content,
+  };
+}
+function priceForm(id) {
+  const editing = id === "new" ? null : record("price", id);
+  if (id !== "new" && !editing)
+    return {
+      title: "Settings",
+      active: "settings",
+      content: emptyState(
+        "Price not found.",
+        "",
+        link("Prices", "settings/prices"),
+      ),
+    };
+  const d = editing?.data ?? {};
+  const content = `${pageHeader({ title: editing ? "Edit price" : "Add price", subtitle: "A package you actually paid for. Costing uses the latest compatible price on or before the estimate date.", back: { label: "Prices & budget", route: "settings/prices" } })}<form data-form="price" class="panel stack" data-id="${editing?.id ?? ""}" data-version="${editing?.version ?? ""}"><div class="form-grid">${field("Ingredient name", "name", d.name ?? "", "text", "required")}${field("Preparation / form", "preparation", d.preparation ?? "", "text", 'placeholder="Match the recipe if specified"')}</div><div class="form-grid form-grid-4">${field("Package amount", "package_quantity", d.package_quantity ?? "", "number", 'required min="0.01" max="10000" step="any"')}${field("Package unit", "unit", d.unit ?? "", "text", 'placeholder="g, kg, mL, each"')}${field("Package price", "price", d.price ?? "", "number", 'required min="0" max="1000000000" step="0.01"')}${field("Currency", "currency", d.currency ?? currency, "text", 'required pattern="[A-Za-z]{3}" maxlength="3"')}</div><div class="form-grid">${field("Price date", "purchased_on", d.purchased_on ?? today(), "date", "required")}${select(
+    "Price source",
+    "source",
+    [
+      ["manual", "Entered by me"],
+      ["receipt", "Confirmed from a receipt"],
+    ],
+    d.source ?? "manual",
+  )}</div>${area("Store or receipt note", "notes", d.notes ?? "", 'rows="2"')}${errorSlot()}<div class="form-footer">${submit("Save confirmed price", "check")}${link("Cancel", "settings/prices", { cls: "btn-quiet" })}</div></form>`;
+  return {
+    title: editing ? "Edit price" : "Add price",
+    active: "settings",
+    content,
+  };
+}
+
+// ---------- Techniques, ideas and books ----------
+// The household's know-how, the ideas it wants to try, and the cookbooks it
+// owns as files. Records live in the same state as recipes; files are assets
+// the server stores and serves.
 const fileTypes = {
   image: {
     label: "a PNG, JPEG or WebP image",
@@ -694,7 +1392,7 @@ async function photoIds(values) {
   return ids;
 }
 const photoFields = (ids) =>
-  `<div class="field"><span>Photos</span>${ids.length ? `<div class="photos">${ids.map((id) => `<label class="photo-keep"><img class="photo" src="/api/assets/${encodeURIComponent(id)}" alt="" loading="lazy"><span class="check"><input type="checkbox" name="keep_photo" value="${esc(id)}" checked>Keep</span></label>`).join("")}</div>` : ""}<input type="file" name="photos" accept="image/png,image/jpeg,image/webp" multiple>${help("PNG, JPEG or WebP up to 8 MB each. Photos stay on this household server.")}</div>`;
+  `<div class="field"><span>Photos</span>${ids.length ? `<div class="photos">${ids.map((id) => `<label class="photo-keep"><img class="photo" src="/api/assets/${encodeURIComponent(id)}" alt="" loading="lazy"><span class="check"><input type="checkbox" name="keep_photo" value="${esc(id)}" checked><span>Keep</span></span></label>`).join("")}</div>` : ""}<input type="file" name="photos" accept="image/png,image/jpeg,image/webp" multiple>${help("PNG, JPEG or WebP up to 8 MB each. Photos stay on this household server.")}</div>`;
 const photoStrip = (ids) =>
   ids.length
     ? `<div class="photos">${ids.map((id) => `<a href="/api/assets/${encodeURIComponent(id)}" target="_blank" rel="noopener"><img class="photo" src="/api/assets/${encodeURIComponent(id)}" alt="Photo" loading="lazy"></a>`).join("")}</div>`
@@ -704,20 +1402,23 @@ const recipePicker = (selected, label) =>
     ? `<div class="field"><span>${esc(label)}</span>${hidden("recipes_listed", "1")}<div class="chips">${records(
         "recipe",
       )
-        .map((r) =>
-          check(r.data.title, "recipes", r.id, selected.includes(r.id)),
+        .map(
+          (r) =>
+            `<label class="chip-input"><input type="checkbox" name="recipes" value="${r.id}" ${selected.includes(r.id) ? "checked" : ""}><span>${esc(r.data.title)}</span></label>`,
         )
         .join("")}</div></div>`
     : "";
+const recipesHeader = (tab, subtitle, action) =>
+  `${pageHeader({ title: "Recipes", subtitle, actions: action })}${segmented(RECIPE_TABS, tab, "Recipes sections")}`;
 
 function techniqueCard(t) {
   const d = t.data;
   const videos = displayLinks(d).filter(
     (l) => describeLink(l.url)?.embed,
   ).length;
-  return `<article class="card"><div class="row between"><span class="tag">${esc(d.tags[0] ?? "Technique")}</span>${videos ? `<small class="muted">${videos} video${videos === 1 ? "" : "s"}</small>` : ""}</div><h2><a class="title" href="#/techniques/${t.id}">${esc(d.title)}</a></h2>${d.summary ? `<p class="clamp">${esc(d.summary)}</p>` : ""}<div class="card-end"><span class="small muted">${d.steps.length ? `${d.steps.length} step${d.steps.length === 1 ? "" : "s"}` : "Notes"}${d.recipe_ids.length ? ` · ${d.recipe_ids.length} recipe${d.recipe_ids.length === 1 ? "" : "s"}` : ""}</span>${link("Open", `techniques/${t.id}`, false, "arrow")}</div></article>`;
+  return `<article class="card"><div class="row between">${tag(d.tags[0] ?? "Technique")}${videos ? `<small class="muted">${plural(videos, "video")}</small>` : ""}</div><h2 class="card-title"><a href="#/techniques/${t.id}">${esc(d.title)}</a></h2>${d.summary ? `<p class="clamp">${esc(d.summary)}</p>` : ""}<div class="card-end"><span class="small muted">${d.steps.length ? plural(d.steps.length, "step") : "Notes"}${d.recipe_ids.length ? ` · ${plural(d.recipe_ids.length, "recipe")}` : ""}</span><a class="btn btn-sm btn-quiet" href="#/techniques/${t.id}">Open${icon("chevron-right")}</a></div></article>`;
 }
-function techniquesPage() {
+function techniqueResults() {
   const found = [...records("technique")]
     .sort((a, b) => a.data.title.localeCompare(b.data.title))
     .filter((t) =>
@@ -728,24 +1429,55 @@ function techniquesPage() {
         ...t.data.tags,
       ]),
     );
-  return `${heading("Know-how worth keeping", "The way you do things.", "Folding, searing, proofing, plating: the methods behind your recipes, with the videos that taught you.", link("Add a technique", "techniques/new", true, "plus"))}${learnNav("techniques")}${searchBar("techniques", "Find a technique", "Find a technique or tag…")}${found.length ? `<div class="grid three">${found.map(techniqueCard).join("")}</div>` : empty(searches.techniques ? "No techniques found." : "Start with one thing you do well.", searches.techniques ? "Try another word or tag." : "Write down how you make the dough, or keep the video that finally explained it.", link("Add a technique", "techniques/new", true))}`;
+  if (!found.length)
+    return searches.techniques
+      ? emptyState(
+          "No techniques match.",
+          "Try another word or tag.",
+          "",
+          "search",
+        )
+      : emptyState(
+          "Start with one thing you do well.",
+          "Write down how you make the dough, or keep the video that finally explained it.",
+          link("Add technique", "techniques/new", { primary: true }),
+          "chef-hat",
+        );
+  return `<div class="grid grid-3">${found.map(techniqueCard).join("")}</div>`;
+}
+function techniquesPage() {
+  const content = `${recipesHeader("techniques", "The methods behind your recipes, with the videos that taught you.", records("technique").length ? link("Add technique", "techniques/new", { primary: true, ico: "plus" }) : "")}<div class="toolbar">${searchBar("techniques", "Find a technique", "Find a technique or tag…")}</div><div id="list-results">${techniqueResults()}</div>`;
+  return { title: "Techniques", active: "recipes", content };
 }
 function techniquePage(id) {
   const t = record("technique", id);
   if (!t)
-    return empty(
-      "Technique not found.",
-      "It may have been archived.",
-      link("Techniques", "techniques"),
-    );
+    return {
+      title: "Techniques",
+      active: "recipes",
+      content: emptyState(
+        "Technique not found.",
+        "It may have been archived.",
+        link("Techniques", "techniques"),
+      ),
+    };
   const d = t.data;
   const used = d.recipe_ids.map((r) => record("recipe", r)).filter(Boolean);
-  return `${backLink("Techniques", "techniques")}${heading("Worth knowing", d.title, "", `${link("Edit", `techniques/${id}/edit`, false, "edit")}${button("Archive", "archive", `data-kind="technique" data-id="${id}" data-target="techniques"`, "quiet")}`)}${d.tags.length ? `<div class="chips">${d.tags.map((tag) => `<span class="tag">${esc(tag)}</span>`).join("")}</div>` : ""}<div class="learn-columns spacer"><section>${d.summary ? `<p class="preline lead">${esc(d.summary)}</p>` : ""}${d.steps.length ? `<h2 class="spacer">How it’s done</h2><ol class="method spacer">${d.steps.map((s) => `<li>${esc(s.text)}</li>`).join("")}</ol>` : ""}${d.tips ? `<div class="note"><p>${esc(d.tips)}</p><small>Tips and pitfalls</small></div>` : ""}${photoStrip(d.photo_ids)}${linksSection(d, "Watch and read")}</section><aside class="panel"><h3>Recipes that use it</h3>${used.length ? `<div class="chips spacer">${used.map((r) => link(r.data.title, `recipes/${r.id}`)).join("")}</div>` : '<p class="small muted spacer">Link recipes from the editor and this technique appears on their pages.</p>'}</aside></div>`;
+  const content = `${pageHeader({ title: d.title, eyebrow: "Technique", back: { label: "Techniques", route: "techniques" }, actions: `${link("Edit", `techniques/${id}/edit`, { ico: "pencil" })}${button("Archive", "archive", `data-kind="technique" data-id="${id}" data-target="techniques"`, "btn-quiet", "archive")}` })}${d.tags.length ? `<div class="chips">${d.tags.map((label) => tag(label)).join("")}</div>` : ""}<div class="learn-columns spacer"><section class="stack">${d.summary ? `<p class="preline lead">${esc(d.summary)}</p>` : ""}${d.steps.length ? `<div><h2>How it’s done</h2><ol class="method spacer">${d.steps.map((s) => `<li>${esc(s.text)}</li>`).join("")}</ol></div>` : ""}${d.tips ? callout(`<div class="eyebrow">Tips and pitfalls</div><p class="preline">${esc(d.tips)}</p>`, { kind: "callout-warning", ico: "notebook-pen" }) : ""}${photoStrip(d.photo_ids)}${linksSection(d, "Watch and read")}</section><aside class="panel stack-sm"><h3>Recipes that use it</h3>${used.length ? `<div class="chips">${used.map((r) => `<a class="chip" href="#/recipes/${r.id}">${esc(r.data.title)}</a>`).join("")}</div>` : '<p class="small muted">Link recipes from the editor and this technique appears on their pages.</p>'}</aside></div>`;
+  return { title: d.title, active: "recipes", content };
 }
 function techniqueEditor(id) {
   const t = id ? record("technique", id) : null;
   if (id && !t)
-    return empty("Technique not found.", "", link("Techniques", "techniques"));
+    return {
+      title: "Techniques",
+      active: "recipes",
+      content: emptyState(
+        "Technique not found.",
+        "",
+        link("Techniques", "techniques"),
+      ),
+    };
   const d = t?.data ?? {
     title: "",
     summary: "",
@@ -756,23 +1488,28 @@ function techniqueEditor(id) {
     photo_ids: [],
     recipe_ids: [],
   };
-  return `${backLink(t ? "Technique" : "Techniques", t ? `techniques/${t.id}` : "techniques")}${heading("Keep the know-how", t ? "A little refinement." : "Something worth learning.", "A method you want to remember. Add the videos that taught you and the recipes it belongs to.")}<form data-form="technique" class="panel stack" data-id="${t?.id ?? ""}" data-version="${t?.version ?? ""}">${field("Technique name", "title", d.title, "text", 'required maxlength="500" placeholder="Reverse sear"')}${area("In short", "summary", d.summary, 'rows="3" placeholder="Cook low in the oven first, then sear hard for the crust."')}${area("Steps · separate steps with a blank line", "steps", d.steps.map((s) => s.text).join("\n\n"), 'rows="7"')}${area("Tips and pitfalls", "tips", d.tips, 'rows="3"')}${field("Tags, separated by commas", "tags", d.tags.join(", "), "text", 'placeholder="Meat, knife skills"')}${area("Links and videos · one per line", "links", formatLinkLines(d.links), 'rows="3" placeholder="https://youtu.be/… The video that explains it"', "A web address, then an optional title. YouTube, Vimeo, Facebook, Instagram and TikTok videos play on the technique page.")}${photoFields(d.photo_ids)}${recipePicker(d.recipe_ids, "Recipes that use this technique")}<div class="row">${submit(t ? "Save technique" : "Add technique")}${link("Cancel", t ? `techniques/${t.id}` : "techniques")}</div></form>`;
+  const content = `${pageHeader({ title: t ? "Edit technique" : "New technique", subtitle: "A method you want to remember. Add the videos that taught you and the recipes it belongs to.", back: t ? { label: t.data.title, route: `techniques/${t.id}` } : { label: "Techniques", route: "techniques" } })}<form data-form="technique" class="panel stack" data-id="${t?.id ?? ""}" data-version="${t?.version ?? ""}">${field("Technique name", "title", d.title, "text", 'required maxlength="500" placeholder="Reverse sear"')}${area("In short", "summary", d.summary, 'rows="3" placeholder="Cook low in the oven first, then sear hard for the crust."')}${area("Steps · separate steps with a blank line", "steps", d.steps.map((s) => s.text).join("\n\n"), 'rows="7"')}${area("Tips and pitfalls", "tips", d.tips, 'rows="3"')}${field("Tags, separated by commas", "tags", d.tags.join(", "), "text", 'placeholder="Meat, knife skills"')}${area("Links and videos · one per line", "links", formatLinkLines(d.links), 'rows="3" placeholder="https://youtu.be/… The video that explains it"', "A web address, then an optional title. YouTube, Vimeo, Facebook, Instagram and TikTok videos play on the technique page.")}${photoFields(d.photo_ids)}${recipePicker(d.recipe_ids, "Recipes that use this technique")}${errorSlot()}<div class="form-footer">${submit(t ? "Save technique" : "Add technique", "check")}${link("Cancel", t ? `techniques/${t.id}` : "techniques", { cls: "btn-quiet" })}</div></form>`;
+  return {
+    title: t ? "Edit technique" : "New technique",
+    active: "recipes",
+    content,
+  };
 }
 
 const ideaState = (d) =>
   d.recipe_id
     ? ["In the cookbook", ""]
     : d.status === "tried"
-      ? ["Tried it", "neutral"]
-      : ["Want to try", "warm"];
-function inspirationCard(i) {
+      ? ["Tried it", "tag-neutral"]
+      : ["Want to try", "tag-warm"];
+function ideaCard(i) {
   const d = i.data,
     [state, cls] = ideaState(d);
   const first = displayLinks(d)[0],
     info = first ? describeLink(first.url) : null;
-  return `<article class="card"><div class="row between"><span class="tag ${cls}">${state}</span>${d.source ? `<small class="muted">${esc(d.source)}</small>` : ""}</div>${d.photo_ids.length ? `<img class="card-photo" src="/api/assets/${encodeURIComponent(d.photo_ids[0])}" alt="" loading="lazy">` : ""}<h2><a class="title" href="#/inspiration/${i.id}">${esc(d.title)}</a></h2>${d.notes ? `<p class="clamp">${esc(d.notes)}</p>` : ""}${info ? `<p class="small muted">${info.embed ? `${esc(info.label)} video` : esc(info.site)}${first.title ? ` · ${esc(first.title)}` : ""}</p>` : ""}<div class="card-end"><span class="small muted">${esc(d.tags.slice(0, 3).join(" · "))}</span>${link("Open", `inspiration/${i.id}`, false, "arrow")}</div></article>`;
+  return `<article class="card"><div class="row between">${tag(state, cls)}${d.source ? `<small class="muted">${esc(d.source)}</small>` : ""}</div>${d.photo_ids.length ? `<img class="card-photo" src="/api/assets/${encodeURIComponent(d.photo_ids[0])}" alt="" loading="lazy">` : ""}<h2 class="card-title"><a href="#/inspiration/${i.id}">${esc(d.title)}</a></h2>${d.notes ? `<p class="clamp">${esc(d.notes)}</p>` : ""}${info ? `<p class="small muted">${info.embed ? `${esc(info.label)} video` : esc(info.site)}${first.title ? ` · ${esc(first.title)}` : ""}</p>` : ""}<div class="card-end"><span class="small muted">${esc(d.tags.slice(0, 3).join(" · "))}</span><a class="btn btn-sm btn-quiet" href="#/inspiration/${i.id}">Open${icon("chevron-right")}</a></div></article>`;
 }
-function inspirationPage() {
+function ideaResults() {
   const order = (d) => (d.recipe_id ? 2 : d.status === "tried" ? 1 : 0);
   const ideas = [...records("inspiration")]
     .sort(
@@ -788,25 +1525,47 @@ function inspirationPage() {
         ...i.data.tags,
       ]),
     );
-  return `${heading("A little spark", "Ideas worth trying.", "A reel you saved, a dish from a friend’s table, a line in a newsletter. Keep it here until it becomes dinner.", link("Add an idea", "inspiration/new", true, "plus"))}${learnNav("inspiration")}${searchBar("inspiration", "Find an idea", "Find an idea, tag or source…")}${ideas.length ? `<div class="grid three">${ideas.map(inspirationCard).join("")}</div>` : empty(searches.inspiration ? "No ideas found." : "What caught your eye lately?", searches.inspiration ? "Try another word or tag." : "Save the reel, the restaurant dish or the idea from a friend before it slips away.", link("Add an idea", "inspiration/new", true))}`;
+  if (!ideas.length)
+    return searches.inspiration
+      ? emptyState("No ideas match.", "Try another word or tag.", "", "search")
+      : emptyState(
+          "What caught your eye lately?",
+          "Save the reel, the restaurant dish or the idea from a friend before it slips away.",
+          link("Add idea", "inspiration/new", { primary: true }),
+          "sparkles",
+        );
+  return `<div class="grid grid-3">${ideas.map(ideaCard).join("")}</div>`;
+}
+function inspirationPage() {
+  const content = `${recipesHeader("inspiration", "A reel you saved, a dish from a friend’s table, a line in a newsletter. Keep it here until it becomes dinner.", records("inspiration").length ? link("Add idea", "inspiration/new", { primary: true, ico: "plus" }) : "")}<div class="toolbar">${searchBar("inspiration", "Find an idea", "Find an idea, tag or source…")}</div><div id="list-results">${ideaResults()}</div>`;
+  return { title: "Ideas", active: "recipes", content };
 }
 function inspirationDetail(id) {
   const i = record("inspiration", id);
   if (!i)
-    return empty(
-      "Idea not found.",
-      "It may have been archived.",
-      link("Inspiration", "inspiration"),
-    );
+    return {
+      title: "Ideas",
+      active: "recipes",
+      content: emptyState(
+        "Idea not found.",
+        "It may have been archived.",
+        link("Ideas", "inspiration"),
+      ),
+    };
   const d = i.data,
     [state, cls] = ideaState(d);
   const made = d.recipe_id ? record("recipe", d.recipe_id) : null;
-  return `${backLink("Inspiration", "inspiration")}${heading(d.source ? `From ${d.source}` : "An idea to try", d.title, "", `${link("Edit", `inspiration/${id}/edit`, false, "edit")}${button("Archive", "archive", `data-kind="inspiration" data-id="${id}" data-target="inspiration"`, "quiet")}`)}<div class="chips"><span class="tag ${cls}">${state}</span>${d.tags.map((t) => `<span class="tag neutral">${esc(t)}</span>`).join("")}</div><div class="actions spacer">${made ? link(`Open ${made.data.title}`, `recipes/${made.id}`, true, "book") : d.recipe_id ? '<span class="small muted">The recipe it became was archived.</span>' : `${link("Write it up as a recipe", `new-recipe/inspiration/${id}`, true, "edit")}${button(d.status === "tried" ? "Still want to try it" : "We tried it", "idea-status", `data-id="${id}"`, "", "check")}`}</div><div class="learn-columns spacer"><section>${d.notes ? `<p class="preline lead">${esc(d.notes)}</p>` : ""}${photoStrip(d.photo_ids)}${linksSection(d, "Watch and read")}</section><aside class="panel"><h3>What happens next</h3><p class="small muted spacer">Write it up as a recipe when it’s worth keeping; the idea stays linked to the recipe. Mark it tried to remember you gave it a go.</p></aside></div>`;
+  const content = `${pageHeader({ title: d.title, eyebrow: d.source ? `From ${d.source}` : "An idea to try", back: { label: "Ideas", route: "inspiration" }, actions: `${link("Edit", `inspiration/${id}/edit`, { ico: "pencil" })}${button("Archive", "archive", `data-kind="inspiration" data-id="${id}" data-target="inspiration"`, "btn-quiet", "archive")}` })}<div class="chips">${tag(state, cls)}${d.tags.map((t) => tag(t, "tag-neutral")).join("")}</div><div class="actions spacer">${made ? link(`Open ${made.data.title}`, `recipes/${made.id}`, { primary: true, ico: "book-open" }) : d.recipe_id ? '<span class="small muted">The recipe it became was archived.</span>' : `${link("Write it up as a recipe", `recipes/new/inspiration/${id}`, { primary: true, ico: "pen-line" })}${button(d.status === "tried" ? "Still want to try it" : "We tried it", "idea-status", `data-id="${id}"`, "", "check")}`}</div><div class="learn-columns spacer"><section class="stack">${d.notes ? `<p class="preline lead">${esc(d.notes)}</p>` : ""}${photoStrip(d.photo_ids)}${linksSection(d, "Watch and read")}</section><aside class="panel stack-sm"><h3>What happens next</h3><p class="small muted">Write it up as a recipe when it’s worth keeping; the idea stays linked to the recipe. Mark it tried to remember you gave it a go.</p></aside></div>`;
+  return { title: d.title, active: "recipes", content };
 }
 function inspirationEditor(id) {
   const i = id ? record("inspiration", id) : null;
   if (id && !i)
-    return empty("Idea not found.", "", link("Inspiration", "inspiration"));
+    return {
+      title: "Ideas",
+      active: "recipes",
+      content: emptyState("Idea not found.", "", link("Ideas", "inspiration")),
+    };
   const d = i?.data ?? {
     title: "",
     notes: "",
@@ -817,7 +1576,7 @@ function inspirationEditor(id) {
     status: "idea",
     recipe_id: null,
   };
-  return `${backLink(i ? "Idea" : "Inspiration", i ? `inspiration/${i.id}` : "inspiration")}${heading("Catch it while it’s fresh", i ? "A second look." : "What caught your eye?", "A dish, a flavor pairing, a video. Enough to remember why it excited you.")}<form data-form="inspiration" class="panel stack" data-id="${i?.id ?? ""}" data-version="${i?.version ?? ""}"><div class="form-grid">${field("Idea", "title", d.title, "text", 'required maxlength="500" placeholder="Crispy chickpea bowls with tahini"')}${field("Where it came from", "source", d.source, "text", 'maxlength="500" placeholder="Noa’s dinner, a newsletter, a reel"')}</div>${area("Notes", "notes", d.notes, 'rows="4" placeholder="What made it special, and what you’d change."')}${field("Tags, separated by commas", "tags", d.tags.join(", "), "text", 'placeholder="Weeknight, vegetarian"')}${area("Links and videos · one per line", "links", formatLinkLines(d.links), 'rows="3" placeholder="www.instagram.com/reel/… The reel"', "A web address, then an optional title. Instagram, TikTok, YouTube, Vimeo and Facebook videos play on the idea’s page.")}${photoFields(d.photo_ids)}<div class="form-grid">${select(
+  const content = `${pageHeader({ title: i ? "Edit idea" : "New idea", subtitle: "A dish, a flavor pairing, a video. Enough to remember why it excited you.", back: i ? { label: i.data.title, route: `inspiration/${i.id}` } : { label: "Ideas", route: "inspiration" } })}<form data-form="inspiration" class="panel stack" data-id="${i?.id ?? ""}" data-version="${i?.version ?? ""}"><div class="form-grid">${field("Idea", "title", d.title, "text", 'required maxlength="500" placeholder="Crispy chickpea bowls with tahini"')}${field("Where it came from", "source", d.source, "text", 'maxlength="500" placeholder="Noa’s dinner, a newsletter, a reel"')}</div>${area("Notes", "notes", d.notes, 'rows="4" placeholder="What made it special, and what you’d change."')}${field("Tags, separated by commas", "tags", d.tags.join(", "), "text", 'placeholder="Weeknight, vegetarian"')}${area("Links and videos · one per line", "links", formatLinkLines(d.links), 'rows="3" placeholder="www.instagram.com/reel/… The reel"', "A web address, then an optional title. Instagram, TikTok, YouTube, Vimeo and Facebook videos play on the idea’s page.")}${photoFields(d.photo_ids)}<div class="form-grid">${select(
     "Status",
     "status",
     [
@@ -825,7 +1584,8 @@ function inspirationEditor(id) {
       ["tried", "Tried it"],
     ],
     d.status,
-  )}${select("The recipe it became", "recipe_id", [["", "Not written up yet"], ...optionsFor("recipe")], d.recipe_id ?? "")}</div><div class="row">${submit(i ? "Save idea" : "Add idea")}${link("Cancel", i ? `inspiration/${i.id}` : "inspiration")}</div></form>`;
+  )}${select("The recipe it became", "recipe_id", [["", "Not written up yet"], ...optionsFor("recipe")], d.recipe_id ?? "")}</div>${errorSlot()}<div class="form-footer">${submit(i ? "Save idea" : "Add idea", "check")}${link("Cancel", i ? `inspiration/${i.id}` : "inspiration", { cls: "btn-quiet" })}</div></form>`;
+  return { title: i ? "Edit idea" : "New idea", active: "recipes", content };
 }
 
 function bookCover(b) {
@@ -837,9 +1597,9 @@ function bookCover(b) {
 function bookCard(b) {
   const d = b.data,
     file = record("asset", d.file_id);
-  return `<article class="card book"><a class="cover-link" href="#/library/${b.id}" tabindex="-1" aria-hidden="true">${bookCover(b)}</a><h2><a class="title" href="#/library/${b.id}">${esc(d.title)}</a></h2><p>${esc(d.author || "Author not recorded")}</p><div class="card-end"><span class="small muted">${file ? `${fileLabel[file.data.mime_type] ?? "File"} · ${size(file.data.byte_length)}` : "File missing"}${d.bookmarks.length ? ` · ${d.bookmarks.length} bookmark${d.bookmarks.length === 1 ? "" : "s"}` : ""}</span>${link("Open", `library/${b.id}`, false, "arrow")}</div></article>`;
+  return `<article class="card book"><a class="cover-link" href="#/library/${b.id}" tabindex="-1" aria-hidden="true">${bookCover(b)}</a><h2 class="card-title"><a href="#/library/${b.id}">${esc(d.title)}</a></h2><p>${esc(d.author || "Author not recorded")}</p><div class="card-end"><span class="small muted">${file ? `${fileLabel[file.data.mime_type] ?? "File"} · ${size(file.data.byte_length)}` : "File missing"}${d.bookmarks.length ? ` · ${plural(d.bookmarks.length, "bookmark")}` : ""}</span><a class="btn btn-sm btn-quiet" href="#/library/${b.id}">Open${icon("chevron-right")}</a></div></article>`;
 }
-function shelfPage() {
+function bookResults() {
   const books = [...records("book")]
     .sort((a, b) => a.data.title.localeCompare(b.data.title))
     .filter((b) =>
@@ -850,7 +1610,29 @@ function shelfPage() {
         ...b.data.tags,
       ]),
     );
-  return `${heading("Your cooking shelf", "The books you cook from.", "Keep the cookbooks you own as PDF or EPUB files, bookmark the pages you return to, and link the recipes you write up from them.")}${searchBar("library", "Find a book", "Find a book, author or tag…")}${books.length ? `<div class="grid three">${books.map(bookCard).join("")}</div>` : empty(searches.library ? "No books found." : "An empty shelf, for now.", searches.library ? "Try another title, author or tag." : "Add a cookbook you own as a PDF or EPUB. Files stay on this household server.")}<form data-form="book" class="panel stack spacer"><h2>Add a book to the shelf.</h2><label class="upload">${icon("shelf")}<strong>Choose a PDF or EPUB</strong><span class="small muted">Up to 64 MB · stays on this household server</span><input type="file" name="file" accept="application/pdf,application/epub+zip,.pdf,.epub" required></label><div class="form-grid">${field("Title", "title", "", "text", 'required maxlength="500"')}${field("Author", "author", "", "text", 'maxlength="500"')}</div>${field("Tags, separated by commas", "tags", "", "text", 'placeholder="Baking, Middle Eastern"')}${area("Notes", "notes", "", 'rows="2" placeholder="A gift from Noa. The lamb chapter is the one."')}<div class="field"><span>Cover photo (optional)</span><input type="file" name="cover" accept="image/png,image/jpeg,image/webp">${help("PNG, JPEG or WebP up to 8 MB.")}</div><div class="row">${submit("Add to shelf")}</div></form>`;
+  if (!books.length)
+    return searches.library
+      ? emptyState(
+          "No books match.",
+          "Try another title, author or tag.",
+          "",
+          "search",
+        )
+      : emptyState(
+          "An empty shelf, for now.",
+          "Add a cookbook you own as a PDF or EPUB. Files stay on this household server.",
+          link("Add a book", "library/new", { primary: true }),
+          "book-open",
+        );
+  return `<div class="grid grid-3">${books.map(bookCard).join("")}</div>`;
+}
+function shelfPage() {
+  const content = `${recipesHeader("library", "The cookbooks you own as PDF or EPUB files, the pages you return to, and the recipes you write up from them.", records("book").length ? link("Add a book", "library/new", { primary: true, ico: "plus" }) : "")}<div class="toolbar">${searchBar("library", "Find a book", "Find a book, author or tag…")}</div><div id="list-results">${bookResults()}</div>`;
+  return { title: "Books", active: "recipes", content };
+}
+function bookForm() {
+  const content = `${pageHeader({ title: "Add a book", subtitle: "A cookbook you own, as a file. It stays on this household server and goes into your backups.", back: { label: "Books", route: "library" } })}<form data-form="book" class="panel stack"><label class="upload">${icon("upload")}<strong>Choose a PDF or EPUB</strong><span class="small muted">Up to 64 MB. Stays on this household server.</span><input type="file" name="file" accept="application/pdf,application/epub+zip,.pdf,.epub" required></label><div class="form-grid">${field("Title", "title", "", "text", 'required maxlength="500"')}${field("Author", "author", "", "text", 'maxlength="500"')}</div>${field("Tags, separated by commas", "tags", "", "text", 'placeholder="Baking, Middle Eastern"')}${area("Notes", "notes", "", 'rows="2" placeholder="A gift from Noa. The lamb chapter is the one."')}<div class="field"><span>Cover photo (optional)</span><input type="file" name="cover" accept="image/png,image/jpeg,image/webp">${help("PNG, JPEG or WebP up to 8 MB.")}</div>${errorSlot()}<div class="form-footer">${submit("Add to shelf", "check")}${link("Cancel", "library", { cls: "btn-quiet" })}</div></form>`;
+  return { title: "Add a book", active: "recipes", content };
 }
 const fileName = (d, file) =>
   file.data.name ||
@@ -858,22 +1640,27 @@ const fileName = (d, file) =>
 function bookPage(id, editing = false) {
   const b = record("book", id);
   if (!b)
-    return empty(
-      "Book not found.",
-      "It may have been archived.",
-      link("Library", "library"),
-    );
+    return {
+      title: "Books",
+      active: "recipes",
+      content: emptyState(
+        "Book not found.",
+        "It may have been archived.",
+        link("Books", "library"),
+      ),
+    };
   const d = b.data,
     file = record("asset", d.file_id);
   const kind = file ? fileLabel[file.data.mime_type] : null,
     readable = kind === "PDF";
   const href = `/api/assets/${encodeURIComponent(d.file_id)}`;
   const written = d.recipe_ids.map((r) => record("recipe", r)).filter(Boolean);
-  return `${editing ? backLink("Book", `library/${id}`) : backLink("Library", "library")}${heading(d.author ? `By ${d.author}` : "On your shelf", d.title, "", `${link("Edit details", `library/${id}/edit`, false, "edit")}${button("Remove from shelf", "archive", `data-kind="book" data-id="${id}" data-target="library"`, "quiet")}`)}<div class="book-columns"><aside class="stack">${bookCover(b)}<div class="actions">${file ? `<a class="button" href="${href}?download=1" download="${esc(fileName(d, file))}">${icon("download")}Download ${kind} · ${size(file.data.byte_length)}</a>${readable ? `<a class="button" href="${href}" target="_blank" rel="noopener">Open in a new tab</a>` : ""}` : '<p class="small muted">The file for this book is missing.</p>'}</div>${d.tags.length ? `<div class="chips">${d.tags.map((t) => `<span class="tag neutral">${esc(t)}</span>`).join("")}</div>` : ""}${d.notes ? `<div class="note"><p>${esc(d.notes)}</p></div>` : ""}<section class="panel"><h3>Bookmarks</h3>${d.bookmarks.length ? d.bookmarks.map((m, index) => `<div class="list-row"><div class="grow"><strong>${esc(m.label)}</strong>${m.page ? `<p>Page ${m.page}</p>` : ""}</div><div class="actions">${readable && m.page ? button("Read", "reader-page", `data-page="${m.page}" aria-label="Read ${esc(m.label)} on page ${m.page}"`, "small-button", "play") : ""}${button("×", "bookmark-remove", `data-id="${id}" data-index="${index}" aria-label="Remove bookmark ${esc(m.label)}"`, "quiet icon-button")}</div></div>`).join("") : '<p class="small muted">The pages you keep coming back to.</p>'}<form data-form="bookmark" class="stack spacer" data-id="${id}" data-version="${b.version}"><div class="form-grid">${field("What’s there", "label", "", "text", 'required maxlength="500" placeholder="The braise"')}${field("Page", "page", "", "number", 'min="1" max="100000" placeholder="Optional"')}</div><div>${submit("Add bookmark")}</div></form></section>${written.length ? `<section class="panel"><h3>Written up from this book</h3><div class="chips spacer">${written.map((r) => link(r.data.title, `recipes/${r.id}`)).join("")}</div></section>` : ""}</aside><section class="stack">${editing ? bookEditor(b) : readable ? `<div class="embed reader" data-shape="page" data-src="${esc(href)}" data-title="${esc(d.title)}">${button("Read here", "embed-load", `aria-label="Read ${esc(d.title)} here"`, "embed-load", "shelf")}<small>Opens the PDF from this household server on this page.</small></div>` : `<div class="panel"><h3>Read it in your reading app</h3><p class="small muted spacer">${kind ? `${kind} books don’t open in the browser. Download the file and open it in your reader.` : "This book has no readable file."}</p></div>`}</section></div>`;
+  const content = `${pageHeader({ title: editing ? "Edit book" : d.title, eyebrow: editing ? "" : d.author ? `By ${d.author}` : "On your shelf", back: editing ? { label: d.title, route: `library/${id}` } : { label: "Books", route: "library" }, actions: editing ? "" : `${link("Edit details", `library/${id}/edit`, { ico: "pencil" })}${button("Remove from shelf", "archive", `data-kind="book" data-id="${id}" data-target="library"`, "btn-quiet", "archive")}` })}<div class="book-columns"><aside class="stack">${bookCover(b)}<div class="actions">${file ? `<a class="btn" href="${href}?download=1" download="${esc(fileName(d, file))}">${icon("download")}Download ${kind} · ${size(file.data.byte_length)}</a>${readable ? `<a class="btn" href="${href}" target="_blank" rel="noopener">${icon("external-link")}Open in a new tab</a>` : ""}` : '<p class="small muted">The file for this book is missing.</p>'}</div>${d.tags.length ? `<div class="chips">${d.tags.map((t) => tag(t, "tag-neutral")).join("")}</div>` : ""}${d.notes ? `<div class="panel panel-soft"><p class="preline">${esc(d.notes)}</p></div>` : ""}<section class="panel stack-sm"><h3>Bookmarks</h3><div class="list">${d.bookmarks.map((m, index) => `<div class="list-item"><div class="list-body"><strong>${esc(m.label)}</strong>${m.page ? `<p>Page ${m.page}</p>` : ""}</div><div class="list-actions">${readable && m.page ? button("Read", "reader-page", `data-page="${m.page}" aria-label="Read ${esc(m.label)} on page ${m.page}"`, "btn-sm", "play") : ""}${button("", "bookmark-remove", `data-id="${id}" data-index="${index}" aria-label="Remove bookmark ${esc(m.label)}"`, "btn-quiet btn-icon btn-sm", "x")}</div></div>`).join("") || '<p class="small muted">The pages you keep coming back to.</p>'}</div><form data-form="bookmark" class="stack-sm" data-id="${id}" data-version="${b.version}"><div class="form-grid">${field("What’s there", "label", "", "text", 'required maxlength="500" placeholder="The braise"')}${field("Page", "page", "", "number", 'min="1" max="100000" placeholder="Optional"')}</div>${errorSlot()}<div>${submit("Add bookmark", "plus")}</div></form></section>${written.length ? `<section class="panel stack-sm"><h3>Written up from this book</h3><div class="chips">${written.map((r) => `<a class="chip" href="#/recipes/${r.id}">${esc(r.data.title)}</a>`).join("")}</div></section>` : ""}</aside><section class="stack">${editing ? bookEditor(b) : readable ? `<div class="embed reader" data-shape="page" data-src="${esc(href)}" data-title="${esc(d.title)}">${button("Read here", "embed-load", `aria-label="Read ${esc(d.title)} here"`, "embed-load", "book-open")}<small>Opens the PDF from this household server on this page.</small></div>` : `<div class="panel"><h3>Read it in your reading app</h3><p class="small muted spacer-sm">${kind ? `${kind} books don’t open in the browser. Download the file and open it in your reader.` : "This book has no readable file."}</p></div>`}</section></div>`;
+  return { title: editing ? "Edit book" : d.title, active: "recipes", content };
 }
 function bookEditor(b) {
   const d = b.data;
-  return `<form data-form="book" class="panel stack" data-id="${b.id}" data-version="${b.version}"><h2>Edit the details.</h2><div class="form-grid">${field("Title", "title", d.title, "text", 'required maxlength="500"')}${field("Author", "author", d.author, "text", 'maxlength="500"')}</div>${field("Tags, separated by commas", "tags", d.tags.join(", "), "text")}${area("Notes", "notes", d.notes, 'rows="3"')}<div class="field"><span>${d.cover_id ? "Replace the cover" : "Cover photo (optional)"}</span><input type="file" name="cover" accept="image/png,image/jpeg,image/webp">${help("PNG, JPEG or WebP up to 8 MB.")}</div>${d.cover_id ? check("Remove the current cover", "remove_cover") : ""}${recipePicker(d.recipe_ids, "Recipes written up from this book")}<div class="row">${submit("Save book")}${link("Cancel", `library/${b.id}`)}</div></form>`;
+  return `<form data-form="book" class="panel stack" data-id="${b.id}" data-version="${b.version}"><h2>Details</h2><div class="form-grid">${field("Title", "title", d.title, "text", 'required maxlength="500"')}${field("Author", "author", d.author, "text", 'maxlength="500"')}</div>${field("Tags, separated by commas", "tags", d.tags.join(", "), "text")}${area("Notes", "notes", d.notes, 'rows="3"')}<div class="field"><span>${d.cover_id ? "Replace the cover" : "Cover photo (optional)"}</span><input type="file" name="cover" accept="image/png,image/jpeg,image/webp">${help("PNG, JPEG or WebP up to 8 MB.")}</div>${d.cover_id ? check("Remove the current cover", "remove_cover") : ""}${recipePicker(d.recipe_ids, "Recipes written up from this book")}${errorSlot()}<div class="form-footer">${submit("Save book", "check")}${link("Cancel", `library/${b.id}`, { cls: "btn-quiet" })}</div></form>`;
 }
 
 // What a recipe is connected to beyond its own page: the techniques it uses,
@@ -884,299 +1671,36 @@ function recipeConnections(id) {
       "Techniques",
       records("technique")
         .filter((t) => t.data.recipe_ids.includes(id))
-        .map((t) => link(t.data.title, `techniques/${t.id}`, false, "pan")),
+        .map(
+          (t) =>
+            `<a class="chip" href="#/techniques/${t.id}">${icon("chef-hat")}${esc(t.data.title)}</a>`,
+        ),
     ],
     [
       "From your shelf",
       records("book")
         .filter((b) => b.data.recipe_ids.includes(id))
-        .map((b) => link(b.data.title, `library/${b.id}`, false, "shelf")),
+        .map(
+          (b) =>
+            `<a class="chip" href="#/library/${b.id}">${icon("book-open")}${esc(b.data.title)}</a>`,
+        ),
     ],
     [
       "Inspired by",
       records("inspiration")
         .filter((i) => i.data.recipe_id === id)
-        .map((i) => link(i.data.title, `inspiration/${i.id}`, false, "bulb")),
+        .map(
+          (i) =>
+            `<a class="chip" href="#/inspiration/${i.id}">${icon("sparkles")}${esc(i.data.title)}</a>`,
+        ),
     ],
   ].filter(([, items]) => items.length);
   return groups.length
-    ? `<section class="connections spacer">${groups.map(([title, items]) => `<div><div class="eyebrow">${title}</div><div class="chips">${items.join("")}</div></div>`).join("")}</section>`
+    ? `<section class="connections">${groups.map(([title, items]) => `<div class="stack-sm"><div class="eyebrow">${title}</div><div class="chips">${items.join("")}</div></div>`).join("")}</section>`
     : "";
 }
 
-function capturePage() {
-  return `${backLink("Recipes", "recipes")}${heading("Keep the good ones", "Every recipe starts somewhere.", "From a message, a handwritten card, or the way you’ve always made it.")}<div class="grid"><form data-form="paste" class="panel stack"><div class="eyebrow">From your messages</div><h2>Paste a recipe.</h2><p class="small muted">Keep the original text and turn it into an editable draft.</p>${area("Recipe text", "text", "", 'required rows="11" placeholder="Lemon orzo\nServes 4\n\nIngredients\n250 g orzo\n\nMethod\nCook the orzo…"')}${submit("Review pasted recipe")}</form><form data-form="photo" class="panel stack"><div class="eyebrow">From a photo or screenshot</div><h2>A picture worth keeping.</h2><p class="small muted">Read the text on your device’s local server, then check it beside the original image.</p><label class="upload">${icon("photo")}<strong>Choose a recipe photo</strong><span class="small muted">PNG, JPEG or WebP · up to 8 MB</span><input type="file" name="image" accept="image/png,image/jpeg,image/webp" required></label><p class="small muted">Clear, upright photos work best. Handwriting may need corrections.</p>${submit("Read photo")}</form></div><div class="panel spacer row between"><div><h3>It’s your own recipe?</h3><p class="small muted">You don’t need a source to save something good.</p></div>${link("Write it myself", "new-recipe", false, "edit")}</div>`;
-}
-
-function memoryPage(id) {
-  const r = record("recipe", id);
-  if (!r)
-    return empty("Choose a recipe first.", "", link("Recipes", "recipes"));
-  return `${backLink("Recipe", `recipes/${id}`)}${heading("A note for your future self", "Remember the good bits.", r.data.title)}<form data-form="memory" class="panel stack">${hidden("recipe_id", id)}${field("Cooked on", "cooked_on", today(), "date", "required")}${area("How did it turn out?", "text", "", 'required placeholder="A keeper. Everyone went back for seconds."')}${area("What did you change?", "changes", "", 'placeholder="Used half the lemon and added fresh dill."')}${area("What should you remember next time?", "next_time", "", 'placeholder="Use the wide pan, and keep the heat low."')}<div class="form-grid">${select(
-    "Your rating",
-    "rating",
-    [
-      ["", "No rating"],
-      [5, "5 · Loved it"],
-      [4, "4 · Very good"],
-      [3, "3 · Good"],
-      [2, "2 · Needs work"],
-      [1, "1 · Not for us"],
-    ],
-  )}${select("Make it again?", "cook_again", [
-    ["", "Not sure yet"],
-    ["yes", "Yes, please"],
-    ["no", "Probably not"],
-  ])}</div><div class="row">${submit("Save cooking memory")}${link("Back to recipe", `recipes/${id}`)}</div></form>`;
-}
-
-function pantryPage(editId) {
-  const editing = record("pantry", editId),
-    d = editing?.data ?? {};
-  const pantry = [...records("pantry")].sort(
-    (a, b) =>
-      Number(b.data.use_soon) - Number(a.data.use_soon) ||
-      a.data.name.localeCompare(b.data.name),
-  );
-  return `${heading("A little less waste", "Good things on hand.", "Keep a simple checklist, or add amounts when you know them.", link("Find something to cook", "today", false, "arrow"))}<div class="grid"><section class="panel"><h2>In your pantry</h2>${pantry.length ? pantry.map((p) => `<div class="list-row"><label class="check"><input type="checkbox" data-change="pantry-available" data-id="${p.id}" ${p.data.available ? "checked" : ""} aria-label="Have ${esc(p.data.name)}"></label><div class="grow"><strong>${esc(p.data.name)}</strong>${p.data.preparation ? `<small> · ${esc(p.data.preparation)}</small>` : ""}<p>${p.data.quantity == null ? "Check quantity" : esc(amount(p.data))}${!p.data.available ? " · Not on hand" : ""}</p></div><div class="actions">${button(p.data.use_soon ? "Use soon ✓" : "Use soon", "pantry-soon", `data-id="${p.id}" aria-pressed="${p.data.use_soon}"`, `small-button ${p.data.use_soon ? "warm" : "quiet"}`)}${link("Edit", `pantry/${p.id}`)}</div></div>`).join("") : '<p class="muted small spacer">Start with the ingredients you’d like to use this week.</p>'}</section><form data-form="pantry" class="panel stack" data-id="${editing?.id ?? ""}" data-version="${editing?.version ?? ""}"><h2>${editing ? "Update an ingredient." : "What’s in the kitchen?"}</h2>${field("Ingredient name", "name", d.name ?? "", "text", 'required placeholder="Zucchini"')}${field("Preparation / form", "preparation", d.preparation ?? "", "text", 'placeholder="Match the recipe, e.g. drained"')}<div class="form-grid">${field("Amount (optional)", "quantity", d.quantity ?? "", "number", 'min="0" max="1000000000" step="any" placeholder="Unknown"')}${field("Unit", "unit", d.unit ?? "", "text", 'placeholder="g, mL, each…"')}</div>${check("I have this ingredient", "available", "on", d.available !== false)}${check("Use this soon", "use_soon", "on", d.use_soon ?? false)}${area("A note", "notes", d.notes ?? "", 'rows="2"')}<div class="row">${submit(editing ? "Update ingredient" : "Add to pantry")}${editing ? link("Cancel", "pantry") : ""}</div></form></div>`;
-}
-
-function householdPage(editId) {
-  const editing = record("member", editId),
-    d = editing?.data ?? {};
-  return `${heading("The people around your table", "Good food is personal.", "Keep track of everyone’s tastes, then choose who’s eating when you find dinner.")}<div class="grid"><section class="stack">${
-    records("member")
-      .map(
-        (m) =>
-          `<article class="panel"><div class="row"><div class="avatar">${esc(m.data.name[0])}</div><div class="grow"><h3>${esc(m.data.name)}</h3><p class="small muted">${m.data.spice_tolerance == null ? "Spice preference not set" : spiceOptions.find((o) => o[0] === m.data.spice_tolerance)?.[1]}</p></div>${link("Edit", `household/${m.id}`)}</div><hr class="divider"><p class="small"><strong>Likes:</strong> ${esc(m.data.likes.join(", ") || "Not set")}</p><p class="small spacer"><strong>Dislikes:</strong> ${esc(m.data.dislikes.join(", ") || "Not set")}</p>${m.data.notes ? `<p class="small muted spacer">${esc(m.data.notes)}</p>` : ""}</article>`,
-      )
-      .join("") ||
-    empty(
-      "Who’s coming to dinner?",
-      "Add a person to tailor meal suggestions and share cooking tasks.",
-    )
-  }</section><form data-form="member" class="panel stack" data-id="${editing?.id ?? ""}" data-version="${editing?.version ?? ""}"><h2>${editing ? "A change of taste." : "Make room at the table."}</h2>${field("Name", "name", d.name ?? "", "text", "required")}${field("Likes · ingredients or tags, separated by commas", "likes", (d.likes ?? []).join(", "), "text", 'placeholder="Chickpeas, pasta"')}${field("Dislikes · separated by commas", "dislikes", (d.dislikes ?? []).join(", "), "text", 'placeholder="Mushrooms, olives"')}${select("Spice tolerance", "spice_tolerance", spiceOptions, d.spice_tolerance ?? "")}${area("Notes", "notes", d.notes ?? "", 'rows="3"')}<p class="small muted">Preferences match the ingredient names and tags in your cookbook.</p><div class="row">${submit(editing ? "Save preferences" : "Add household member")}${editing ? link("Cancel", "household") : ""}</div></form></div>${sharing ? '<p class="small muted spacer">Other browsers connected to this household server see the same recipes and cooking progress.</p>' : ""}`;
-}
-
-function leftoversPage() {
-  return `${heading("Cook once. Enjoy again.", "Something good for later.", "Keep track of cooked portions, tomorrow’s lunch, and the little things in your freezer.", link("Record a batch", "new-batch", true, "plus"))}${
-    records("batch").length
-      ? `<div class="grid">${records("batch")
-          .map(
-            (b) =>
-              `<article class="card"><div class="row between"><span class="tag">${esc(b.data.storage)}</span><small class="muted">Cooked ${dateLabel(b.data.cooked_on)}</small></div><h2>${esc(b.data.title)}</h2><div class="row"><div><div class="number">${num(b.remaining_portions)}</div><small class="muted">portions remaining</small></div><div class="stat"><strong>${num(b.available_portions)}</strong><p>still unallocated</p></div></div><p>${num(b.reserved_portions)} reserved · ${num(b.eaten_portions)} enjoyed</p><div class="card-end">${link("Plan these portions", `leftovers/${b.id}`, false, "arrow")}</div></article>`,
-          )
-          .join("")}</div>`
-      : empty(
-          "Tomorrow’s lunch starts here.",
-          "Record a batch after cooking, then set aside portions for later. Those portions won’t add another set of groceries.",
-          link("Record your first batch", "new-batch", true),
-        )
-  }`;
-}
-
-function batchForm(recipeId, sessionId, dishId) {
-  const session = record("session", sessionId),
-    dish = session?.data.dishes.find((d) => d.dish_id === dishId);
-  const origin = session
-    ? ["Cooking session", `cooking/${sessionId}`]
-    : record("recipe", recipeId)
-      ? ["Recipe", `recipes/${recipeId}`]
-      : ["Leftovers", "leftovers"];
-  return `${backLink(...origin)}${heading("Already cooked", "Save some for another day.", "Record what you made. Allocate it to meals once it’s saved.")}<form data-form="batch" class="panel stack">${session ? `${hidden("session_id", sessionId)}${hidden("dish_id", dishId)}` : ""}${select("Recipe", "recipe_id", optionsFor("recipe"), dish?.recipe_id ?? recipeId ?? records("recipe")[0]?.id, session ? "disabled" : "required")}${session ? hidden("recipe_id", dish.recipe_id) : ""}<div class="form-grid">${field("Portions actually cooked", "portions", dish?.servings ?? record("recipe", recipeId)?.data.servings ?? "", "number", `required min="0.01" max="10000" step="any" ${session ? "readonly" : ""}`)}${field("Cooked on", "cooked_on", today(), "date", "required")}${select(
-    "Stored in",
-    "storage",
-    [
-      ["fridge", "Fridge"],
-      ["freezer", "Freezer"],
-    ],
-  )}</div>${area("Batch notes", "notes", "", 'placeholder="Label on the container, or a reheating note from your recipe."')}<div class="row">${submit("Record cooked batch")}${link("Cancel", "leftovers")}</div></form>`;
-}
-
-function batchPage(id) {
-  const b = record("batch", id);
-  if (!b) return empty("Batch not found.", "", link("Leftovers", "leftovers"));
-  return `${backLink("All leftovers", "leftovers")}${heading("Something good for later", b.data.title, `Cooked ${dateLabel(b.data.cooked_on)} · ${b.data.portions} portions originally`)}<div class="callout row between"><span><strong>${num(b.available_portions)}</strong> portions available to allocate</span><span>${num(b.reserved_portions)} reserved · ${num(b.eaten_portions)} eaten</span></div><div class="grid"><section class="panel"><h2>Where it’s going</h2>${b.data.allocations.map((a) => `<div class="list-row"><div class="grow"><strong>${num(a.portions)} portions · ${esc(a.slot)}</strong><p>${a.date ? dateLabel(a.date) : "No date set"} · ${esc(a.storage)} · ${a.status === "eaten" ? "Enjoyed" : "Reserved"}</p>${a.notes ? `<p>${esc(a.notes)}</p>` : ""}</div><div class="actions">${a.status === "reserved" ? button("Eaten", "allocation-eat", `data-id="${id}" data-allocation="${a.id}"`, "small-button", "check") : ""}${button("Release", "allocation-release", `data-id="${id}" data-allocation="${a.id}" aria-label="Remove ${esc(a.slot)} allocation"`, "quiet small-button")}</div></div>`).join("") || '<p class="small muted spacer">No portions allocated yet.</p>'}${b.data.notes ? `<div class="note"><p>${esc(b.data.notes)}</p></div>` : ""}</section><form data-form="allocation" class="panel stack" data-id="${id}" data-version="${b.version}"><h2>Make a little plan.</h2><div class="form-grid">${field("Portions", "portions", "", "number", `required min="0.01" max="${b.available_portions}" step="any"`)}${field("Meal date (optional)", "date", "", "date", `min="${b.data.cooked_on}"`)}${select(
-    "Meal",
-    "slot",
-    [
-      ["Lunch", "Lunch"],
-      ["Dinner", "Dinner"],
-      ["Breakfast", "Breakfast"],
-      ["For later", "For later"],
-    ],
-  )}${select(
-    "Store these portions in",
-    "storage",
-    [
-      ["fridge", "Fridge"],
-      ["freezer", "Freezer"],
-    ],
-    b.data.storage,
-  )}</div>${area("A note for this portion", "notes", "", 'rows="2"')}${check("Already eaten", "eaten")}<div class="row">${submit("Allocate portions")}</div><p class="small muted">These portions are already cooked. Planning them adds no groceries.</p></form></div>`;
-}
-
-function planPage() {
-  const days = Array.from({ length: 7 }, (_, index) => addDays(week, index));
-  return `${heading("A little thought ahead", "A good week at the table.", "A freshly cooked meal, a favorite combination, or yesterday’s good idea.")}<div class="pill-nav"><a href="#/plan" class="active">Weekly plan</a><a href="#/meals">Reusable meals</a></div><div class="row between spacer">${button("Previous week", "week", 'data-delta="-7"', "", "back")}<h2>${dateLabel(week)} – ${dateLabel(addDays(week, 6))}</h2>${button("Next week", "week", 'data-delta="7"', "", "arrow")}</div><div class="timeline spacer">${days
-    .map((date) => {
-      const planned = records("plan").filter((p) => p.data.date === date);
-      const leftovers = records("batch").flatMap((b) =>
-        b.data.allocations
-          .filter((a) => a.date === date)
-          .map((a) => ({ ...a, batch: b })),
-      );
-      return `<section class="day"><div><div class="day-name">${new Date(`${date}T12:00:00`).toLocaleDateString(undefined, { weekday: "short" })}</div><small>${dateLabel(date)}</small></div><div>${planned.map((p) => `<div class="list-row"><div class="grow"><strong>${esc(p.data.title)}</strong><p>${esc(p.data.slot)} · ${p.data.dishes.map((d) => `${esc(d.title)} ${d.servings ?? "original"} portions`).join(" + ")}</p></div><div class="actions">${button("Cook", "cook", `data-kind="plan" data-id="${p.id}"`, "small-button")}${link("Shop", `review/plan/${p.id}`)}${button("Remove", "archive", `data-kind="plan" data-id="${p.id}"`, "quiet small-button")}</div></div>`).join("")}${leftovers.map((a) => `<div class="list-row"><div class="grow"><span class="tag">Already cooked</span><p><strong>${esc(a.batch.data.title)}</strong> · ${num(a.portions)} portions · ${esc(a.slot)}${a.status === "eaten" ? " · Eaten" : ""}</p></div>${link("Open batch", `leftovers/${a.batch.id}`)}</div>`).join("")}${!planned.length && !leftovers.length ? '<p class="small muted">A little room for spontaneity.</p>' : ""}<details><summary>Plan something to cook</summary><form data-form="plan" class="stack">${hidden("date", date)}${select("Recipe or meal", "source", sourceOptions(), "", "required")}${field("Meal", "slot", "Dinner", "text", "required")}<div class="row">${submit("Add to this day")}${link("Plan leftovers instead", "leftovers")}</div></form></details></div></section>`;
-    })
-    .join("")}</div>`;
-}
-
-function mealsPage(editId) {
-  const editing = record("meal", editId);
-  return `${heading("Made to go together", "Bring your favorites together.", "Save combinations you’ll want to cook again, with portions for each dish.")}<div class="pill-nav"><a href="#/plan">Weekly plan</a><a href="#/meals" class="active">Reusable meals</a></div><div class="grid">${records(
-    "meal",
-  )
-    .map(
-      (m) =>
-        `<article class="card"><span class="eyebrow">${m.data.dishes.length} dishes · One meal</span><h2>${esc(m.data.title)}</h2>${m.data.dishes.map((d) => `<p>${esc(record("recipe", d.recipe_id)?.data.title)} · ${d.servings ?? "Original"} portions</p>`).join("")}<div class="card-end">${button("Cook meal", "cook", `data-kind="meal" data-id="${m.id}"`, "primary", "flame")}${link("Shop", `review/meal/${m.id}`)}${link("Edit", `meals/${m.id}`)}</div></article>`,
-    )
-    .join(
-      "",
-    )}</div><form data-form="meal" class="panel stack spacer" data-id="${editing?.id ?? ""}" data-version="${editing?.version ?? ""}"><h2>${editing ? "Refine your meal." : "Make a new combination."}</h2>${field("Meal name", "title", editing?.data.title ?? "", "text", 'required placeholder="Friday dinner"')}<div>${records(
-    "recipe",
-  )
-    .map((r) => {
-      const dish = editing?.data.dishes.find((d) => d.recipe_id === r.id);
-      return `<div class="list-row"><div class="grow">${check(r.data.title, "recipes", r.id, Boolean(dish))}</div>${field("Portions", `portions-${r.id}`, dish?.servings ?? r.data.servings ?? "", "number", `min="0.01" max="10000" step="any" class="inline-number" ${r.data.servings === null ? 'disabled placeholder="Original"' : ""}`)}</div>`;
-    })
-    .join(
-      "",
-    )}</div>${area("Meal notes", "notes", editing?.data.notes ?? "", 'rows="2"')}<div class="row">${submit("Save meal")}${editing ? link("Cancel", "meals") : ""}</div></form>`;
-}
-
-async function spendingPage(editId) {
-  const estimate = await api("cost_week", {
-    week_start: week,
-    currency,
-    as_of: today(),
-  });
-  const editing = record("price", editId),
-    d = editing?.data ?? {};
-  return `${heading("Make your meals add up", "Good food. Thoughtful spending.", "Estimates use the prices you confirm and the amounts your recipes need.")}<form data-form="currency" class="row panel">${field("Currency", "currency", currency, "text", 'required pattern="[A-Za-z]{3}" maxlength="3" aria-label="Currency code"')}${field("Week starting Monday", "week", week, "date", "required")}<button type="submit" class="button">View week</button></form><div class="grid spacer"><section class="panel"><div class="eyebrow">${estimate.complete ? "Planned cooking cost" : "Known ingredient subtotal"}</div><div class="number spacer">${money(estimate.known_cost)}</div><p class="small ${estimate.complete ? "muted" : "cost-unknown"}">${estimate.complete ? `${estimate.plans.length} planned cooking occurrences` : "Incomplete · some prices or quantities are missing"}</p>${estimate.budget ? `<hr class="divider"><p>Weekly budget <strong>${money(estimate.budget.data.amount)}</strong></p><p class="small muted">${estimate.remaining === null ? "Add missing prices to calculate the remaining budget." : estimate.remaining >= 0 ? `${money(estimate.remaining)} remaining` : `${money(-estimate.remaining)} over budget`}</p>` : ""}<details><summary>${estimate.budget ? "Change" : "Set"} this week’s budget</summary><form data-form="budget" class="stack" data-id="${estimate.budget?.id ?? ""}" data-version="${estimate.budget?.version ?? ""}">${field(`Budget (${currency})`, "amount", estimate.budget?.data.amount ?? "", "number", 'required min="0" max="1000000000" step="0.01"')}${submit("Save weekly budget")}</form></details></section><section class="panel"><h2>On the menu</h2>${estimate.plans.map((p) => `<div class="list-row"><div class="grow"><strong>${esc(p.title)}</strong><p>${dateLabel(p.date)}${!p.complete ? ` · Missing: ${esc(p.missing_prices.map((i) => i.ingredient.name).join(", "))}` : ""}</p></div><span>${money(p.known_cost)}${!p.complete ? '<br><small class="cost-unknown">partial</small>' : ""}</span></div>`).join("") || '<p class="small muted spacer">Plan a recipe or meal to see its ingredient cost here.</p>'}${estimate.leftovers.length ? `<p class="small muted spacer">${estimate.leftovers.length} leftover meals are already cooked and add no new grocery cost.</p>` : ""}${link("Open weekly plan", "plan")}</section></div><div class="section-heading"><h2>Your ingredient prices</h2><span class="small muted">Confirmed prices · ${esc(currency)}</span></div><div class="panel table-wrap"><table><thead><tr><th>Ingredient</th><th>Package</th><th>Price</th><th>Confirmed</th><th></th></tr></thead><tbody>${
-    records("price")
-      .filter((p) => p.data.currency === currency)
-      .map(
-        (p) =>
-          `<tr><td>${esc(p.data.name)}${p.data.preparation ? `<br><small>${esc(p.data.preparation)}</small>` : ""}</td><td>${num(p.data.package_quantity)} ${esc(p.data.unit)}</td><td>${money(p.data.price)}</td><td>${dateLabel(p.data.purchased_on)}<br><small>${esc(p.data.source)}</small></td><td>${link("Edit", `spending/${p.id}`)}</td></tr>`,
-      )
-      .join("") ||
-    '<tr><td colspan="5">Add your first confirmed price below.</td></tr>'
-  }</tbody></table></div><form data-form="price" class="panel stack spacer" data-id="${editing?.id ?? ""}" data-version="${editing?.version ?? ""}"><h2>${editing ? "Update a price." : "A price worth remembering."}</h2><div class="form-grid">${field("Ingredient name", "name", d.name ?? "", "text", "required")}${field("Preparation / form", "preparation", d.preparation ?? "", "text", 'placeholder="Match the recipe if specified"')}</div><div class="form-grid four">${field("Package amount", "package_quantity", d.package_quantity ?? "", "number", 'required min="0.01" max="10000" step="any"')}${field("Package unit", "unit", d.unit ?? "", "text", 'placeholder="g, kg, mL, each"')}${field("Package price", "price", d.price ?? "", "number", 'required min="0" max="1000000000" step="0.01"')}${field("Currency", "currency", d.currency ?? currency, "text", 'required pattern="[A-Za-z]{3}" maxlength="3"')}</div><div class="form-grid">${field("Price date", "purchased_on", d.purchased_on ?? today(), "date", "required")}${select(
-    "Price source",
-    "source",
-    [
-      ["manual", "Entered by me"],
-      ["receipt", "Confirmed from a receipt"],
-    ],
-    d.source ?? "manual",
-  )}</div>${area("Store or receipt note", "notes", d.notes ?? "", 'rows="2"')}<div class="row">${submit("Save confirmed price")}${editing ? link("Cancel", "spending") : ""}</div></form><p class="small muted spacer">These are ingredient-use estimates, not supermarket checkout totals. Unknown prices remain visible, and currencies are kept separate.</p>`;
-}
-
-function cookingPage(id) {
-  const s = record("session", id);
-  if (!s) {
-    const sessions = [...records("session")].sort((a, b) =>
-      b.updated_at.localeCompare(a.updated_at),
-    );
-    return `${heading("A little help in the kitchen", "Let’s cook together.", "Share the preparation, follow each dish, and keep the timers in view.")}${sessions.length ? `<div class="grid">${sessions.map((s) => `<article class="card"><span class="tag ${s.data.status === "finished" ? "neutral" : ""}">${s.data.status === "active" ? "On the stove" : "Finished"}</span><h2>${esc(s.data.title)}</h2><p>${s.data.dishes.length} dishes · ${dateLabel(s.created_at.slice(0, 10))}</p>${link(s.data.status === "active" ? "Keep cooking" : "Notes & leftovers", `cooking/${s.id}`, s.data.status === "active", "arrow")}</article>`).join("")}</div>` : empty("What are we making?", "Choose a recipe or a saved meal, then start cooking.", link("Find dinner", "today", true))}`;
-  }
-  const d = s.data,
-    finished = d.status === "finished";
-  if (finished)
-    return `${backLink("Cooking", "cooking")}${heading("Good food, made together", "That’s one for the cookbook.", d.title)}<div class="grid">${d.dishes
-      .map((dish) => {
-        const batch = records("batch").find(
-          (b) =>
-            b.data.session_id === id && b.data.dish.dish_id === dish.dish_id,
-        );
-        return `<article class="card"><h2>${esc(dish.title)}</h2><p>${dish.servings ?? "Original"} portions cooked</p><div class="actions">${link("Remember what worked", `memory/${dish.recipe_id}`)}${batch ? link("Open cooked batch", `leftovers/${batch.id}`) : dish.servings ? link("Record leftovers", `new-batch/${dish.recipe_id}/${id}/${dish.dish_id}`) : '<p class="small muted">The cooked yield was unknown; record a batch from the leftovers page once the recipe yield is set.</p>'}</div></article>`;
-      })
-      .join(
-        "",
-      )}</div>${d.notes ? `<div class="note spacer"><p>${esc(d.notes)}</p></div>` : ""}`;
-  const ownerOptions = [["", "Unassigned"], ...optionsFor("member")];
-  const dishOptions = [
-    ["", "Whole meal"],
-    ...d.dishes.map((dish) => [dish.dish_id, dish.title]),
-  ];
-  return `${backLink("Cooking", "cooking")}${heading("In good company", d.title, "Changes are shared with the other cooks connected to this kitchen.")}<div class="grid">${d.dishes
-    .map((dish) => {
-      const p = d.progress.find((p) => p.dish_id === dish.dish_id);
-      const current = dish.steps[p.current_step];
-      const memory = records("note")
-        .filter((n) => n.data.recipe_id === dish.recipe_id)
-        .sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
-      return `<section class="panel stack"><div class="row between"><h2>${esc(dish.title)}</h2><span class="tag">${dish.servings ?? "Original"} portions</span></div>${memory ? `<div class="note"><p>${esc(memory.data.next_time || memory.data.changes || memory.data.text)}</p><small>Your last cooking note</small></div>` : ""}<div><span class="eyebrow">${p.completed_steps.length} of ${dish.steps.length} steps complete</span><progress max="${Math.max(1, dish.steps.length)}" value="${p.completed_steps.length}"></progress></div>${current ? `<p class="preline">${esc(current.text)}</p><div class="row">${button("Previous step", "step-back", `data-id="${id}" data-dish="${dish.dish_id}" ${p.current_step === 0 ? "disabled" : ""}`, "small-button", "back")}${button(p.current_step === dish.steps.length - 1 ? "Mark step done" : "Done, next step", "step-next", `data-id="${id}" data-dish="${dish.dish_id}"`, "primary small-button", "check")}</div>` : '<p class="small muted">This dish has no recorded instructions.</p>'}${linkLine(dish.links)}<details><summary>Ingredients & full method</summary>${dish.ingredients.map((i) => `<div class="ingredient"><span>${esc(i.name)}</span><span class="amount">${esc(amount(i))}</span></div>`).join("")}<ol class="method spacer">${dish.steps.map((step, index) => `<li>${esc(step.text)}${button(`Go to step ${index + 1}`, "step-jump", `data-id="${id}" data-dish="${dish.dish_id}" data-step="${index}"`, "quiet small-button")}</li>`).join("")}</ol></details></section>`;
-    })
-    .join(
-      "",
-    )}</div><div class="section-heading"><h2>Many hands. One meal.</h2><span class="small muted">Assign a person to each task</span></div><section class="panel">${(d.tasks ?? []).map((t) => `<div class="task-row ${t.completed ? "done" : ""}"><input type="checkbox" data-change="task-complete" data-id="${id}" data-task="${t.id}" ${t.completed ? "checked" : ""} aria-label="Complete ${esc(t.text)}"><div class="task-title"><strong>${esc(t.text)}</strong>${t.dish_id ? `<p class="small muted">${esc(d.dishes.find((dish) => dish.dish_id === t.dish_id)?.title)}</p>` : ""}</div><select data-change="task-owner" data-id="${id}" data-task="${t.id}" aria-label="Assign ${esc(t.text)}">${ownerOptions.map(([v, l]) => `<option value="${v}" ${v === (t.member_id ?? "") ? "selected" : ""}>${esc(l)}</option>`).join("")}</select>${button("×", "task-remove", `data-id="${id}" data-task="${t.id}" aria-label="Remove task ${esc(t.text)}"`, "quiet icon-button remove-task")}</div>`).join("") || '<p class="small muted">Split the prep into small tasks, then choose who will handle each one.</p>'}<form data-form="task" class="stack spacer" data-id="${id}" data-version="${s.version}">${field("New task", "text", "", "text", 'required maxlength="500" placeholder="Chop the vegetables"')}<div class="form-grid">${select("For which dish?", "dish_id", dishOptions)}${select("Who’s doing it?", "member_id", ownerOptions)}</div><div>${submit("Add cooking task")}</div></form></section><div class="section-heading"><h2>Keep an eye on things.</h2></div><div class="stack">${d.timers
-    .filter((t) => !t.cancelled)
-    .map(
-      (t) =>
-        `<div class="timer" data-timer-row="${t.id}"><div><h3>${esc(t.label)}</h3><small>${t.dish_id ? `${esc(d.dishes.find((d) => d.dish_id === t.dish_id)?.title)} · ` : ""}${esc(person(t.member_id))}</small></div><strong data-deadline="${esc(t.deadline)}">—</strong>${button("Cancel", "timer-cancel", `data-id="${id}" data-timer="${t.id}"`, "quiet small-button")}</div>`,
-    )
-    .join(
-      "",
-    )}</div><form data-form="timer" class="panel stack spacer" data-id="${id}" data-version="${s.version}"><div class="form-grid four">${field("Timer name", "label", "", "text", 'required placeholder="Orzo"')}${field("Minutes", "minutes", "", "number", 'required min="0.016667" max="10080" step="any"')}${select("Dish", "dish_id", dishOptions)}${select("Who’s watching it?", "member_id", ownerOptions)}</div><div>${submit("Start timer")}</div><p class="small muted">Countdowns stay in view here. Use a device alarm for reliable alerts when the screen is locked.</p></form><form data-form="finish" class="panel stack spacer" data-id="${id}" data-version="${s.version}"><h2>Ready for the table?</h2>${area("A note about this meal", "notes", "", 'rows="2"')}${submit("Finish cooking")}</form>`;
-}
-
-let review = null;
-const exclusions = new Map();
-async function reviewPage(kind, id) {
-  const source = {
-    kind,
-    id,
-    ...(kind === "recipe" && portions.has(id)
-      ? { servings: portions.get(id) }
-      : {}),
-  };
-  const origin =
-    kind === "recipe"
-      ? backLink("Recipe", `recipes/${id}`)
-      : kind === "meal"
-        ? backLink("Meals", "meals")
-        : backLink("Weekly plan", "plan");
-  const list = records("shopping")[0];
-  if (!list)
-    return `${origin}${heading("Just what you need", "Start a shopping list.", "Create a list before reviewing this recipe or meal.")}<form data-form="shopping-create" class="panel stack">${field("List name", "title", "Groceries", "text", "required")}${submit("Create shopping list")}</form>`;
-  const key = `${kind}:${id}`,
-    excluded = exclusions.get(key) ?? [];
-  const input = {
-    id: list.id,
-    source,
-    source_key: key,
-    exclude_ingredients: excluded,
-  };
-  const preview = await api("shopping_preview", input);
-  review = { input, preview };
-  return `${origin}${heading("Just what you need", `Shop for ${preview.source.title}`, "Check the ingredients you need. Update the preview before adding them to your list.")}<div class="grid"><form data-form="shopping-review" class="panel stack"><h2>Include these ingredients</h2>${preview.source.dishes.map((d) => `<section><h3>${esc(d.title)}</h3>${d.ingredients.map((i, index) => `<div class="list-row">${check(`${i.name} · ${amount(i)}`, "ingredients", `${d.dish_id}:${index}`, !excluded.includes(`${d.dish_id}:${index}`))}</div>`).join("")}</section>`).join("")}<div>${submit("Update preview")}</div></form><section class="panel stack"><h2>Shopping changes</h2><p class="small muted">${preview.diff.added.length} new items · ${preview.diff.changed.length} changed · ${preview.diff.removed.length} removed</p>${preview.items.map((i) => `<div class="ingredient"><span>${esc(i.name)}</span><span class="amount">${esc(amount(i))}</span></div>`).join("") || '<p class="small muted">No ingredients remain on this list.</p>'}${button("Apply to shopping list", "shopping-apply", "", "primary", "check")}<p class="small muted" id="review-hint">Repeating this action updates this occurrence without adding it twice.</p>${preview.equipment.requirements.length ? `<details><summary>Required equipment</summary>${preview.equipment.requirements.map((e) => `<p class="small">${esc(e.name)} · ${e.available_quantity === null ? "availability unknown" : `${e.available_quantity} available`}</p>${e.conflicts.map((c) => `<p class="small muted">${esc(c)}</p>`).join("")}`).join("")}</details>` : ""}</section></div>`;
-}
-
-function shopPage(id) {
-  const list = record("shopping", id) ?? records("shopping")[0];
-  return `${heading("A short list. A good meal.", "Pick up something good.", "Recipe ingredients and the everyday things you need.")}<div class="pill-nav">${records(
-    "shopping",
-  )
-    .map(
-      (l, i) =>
-        `<a href="#/shop/${l.id}" class="${i === 0 ? "active" : ""}">${esc(l.data.title)}</a>`,
-    )
-    .join(
-      "",
-    )}</div>${list ? `<section class="panel"><h2>${esc(list.data.title)}</h2>${list.items.map((i) => `<div class="list-row ${i.checked ? "done" : ""}"><input type="checkbox" data-change="shopping-check" data-id="${list.id}" data-item="${i.id}" ${i.checked ? "checked" : ""} aria-label="Bought ${esc(i.name)}"><div class="grow item-title"><strong>${esc(i.name)}</strong><p>${esc([...new Set(i.contributions.map((c) => c.recipe_title).filter(Boolean))].join(", ") || "Everyday item")}</p></div><span class="shopping-quantity">${esc(amount(i))}</span></div>`).join("") || '<p class="small muted spacer">Open a recipe or planned meal to review its groceries.</p>'}<form data-form="shopping-item" class="row spacer" data-id="${list.id}" data-version="${list.version}">${field("Add an everyday item", "name", "", "text", 'required placeholder="Coffee"')}<div>${submit("Add item")}</div></form>${list.data.sources.length ? `<details class="spacer"><summary>Recipes contributing to this list</summary>${list.data.sources.map((s) => `<div class="list-row"><span class="grow">${esc(s.title)}</span>${button("Remove contribution", "shopping-remove", `data-id="${list.id}" data-source="${esc(s.source_key)}"`, "quiet small-button")}</div>`).join("")}</details>` : ""}</section>` : `<form data-form="shopping-create" class="panel stack">${field("List name", "title", "Groceries", "text", "required")}${submit("Create shopping list")}</form>`}`;
-}
-
+// ---------- Sign-in ----------
 async function authApi(path, input) {
   const response = await fetch(
     `/api/auth/${path}`,
@@ -1339,139 +1863,181 @@ function loginError(message) {
   const el = $("[data-login-error]");
   if (el) el.textContent = message;
 }
+// Settings › Sign-in: the passkeys of the signed-in member, and the way out.
+async function accountTab() {
+  const { passkeys } = await authApi("passkeys");
+  return `<div class="grid-2"><section class="panel stack"><h2>Signed in as ${esc(account.email)}</h2><p class="small muted">Passkeys let you sign in with your fingerprint, face or screen lock instead of waiting for an email.</p><div class="list">${
+    passkeys.length
+      ? passkeys
+          .map(
+            (p) =>
+              `<div class="list-item"><div class="list-body"><strong>${esc(p.name)}</strong><p>Added ${dateLabel(p.created_at.slice(0, 10))}${p.used_at ? ` · Last used ${dateLabel(p.used_at.slice(0, 10))}` : ""}${p.backed_up ? " · Synced by your password manager" : ""}</p></div>${button("Remove", "passkey-remove", `data-id="${esc(p.id)}" aria-label="Remove passkey ${esc(p.name)}"`, "btn-quiet btn-sm btn-danger")}</div>`,
+          )
+          .join("")
+      : '<p class="small muted">No passkeys yet. Add one on each phone or computer you cook from.</p>'
+  }</div><div>${passkeysSupported() ? button("Add a passkey on this device", "passkey-add", "", "btn-primary", "key-round") : '<p class="small muted">This browser cannot create passkeys. Email links keep working here.</p>'}</div></section><section class="panel stack"><h2>Email links</h2><p class="small muted">On a device without a passkey, ask for a one-time link at ${esc(account.email)}. Links work for 15 minutes.</p><h3>Sign out</h3><p class="small muted">Signing out ends this session on this device; your passkeys stay.</p><div>${button("Sign out", "sign-out", "", "", "log-in")}</div></section></div>`;
+}
+
+// ---------- Login, routing, rendering ----------
 function renderLogin() {
   conditional?.abort();
   conditional = null;
   const sent = signin.step === "sent";
   $("#app").innerHTML =
-    `<main class="login panel stack"><a class="brand" href="#/today">${icon("leaf")}kooks</a>${
+    `<main class="login panel"><a class="brand" href="#/today">${icon("cooking-pot")}kooks</a>${
       sent
-        ? `<h2>Check your inbox.</h2><p class="small muted">We sent a sign-in link to <strong>${esc(signin.email)}</strong>. Open it on this device within 15 minutes; it works once.</p><p class="small muted">Nothing there? Look in spam, or ask whoever runs this kitchen to add your address.</p><div>${button("Use a different address", "signin-restart", "", "quiet")}</div>`
-        : `<h2>Welcome to your kitchen.</h2><p class="small muted">${passkeysSupported() ? "Sign in with the passkey on this device, or get a link by email." : "Get a sign-in link by email."}</p><div class="error-message" role="alert" data-login-error>${esc(signin.error)}</div>${passkeysSupported() ? `${button("Sign in with a passkey", "passkey-signin", "", "primary wide", "key")}<div class="or">or</div>` : ""}<form data-form="email-link" class="stack">${field("Email address", "email", signin.email, "email", 'required autocomplete="username webauthn" placeholder="you@example.com"')}${submit("Email me a sign-in link")}</form>`
+        ? `<div><h1>Check your inbox.</h1><p class="small muted">We sent a sign-in link to <strong>${esc(signin.email)}</strong>. Open it on this device within 15 minutes; it works once.</p><p class="small muted">Nothing there? Look in spam, or ask whoever runs this kitchen to add your address.</p></div><div>${button("Use a different address", "signin-restart", "", "btn-quiet")}</div>`
+        : `<div><h1>Welcome to your kitchen.</h1><p class="small muted">${passkeysSupported() ? "Sign in with the passkey on this device, or get a link by email." : "Get a sign-in link by email."}</p></div><div class="error" role="alert" data-login-error>${esc(signin.error)}</div>${passkeysSupported() ? `${button("Sign in with a passkey", "passkey-signin", "", "btn-primary btn-block", "key-round")}<div class="or">or</div>` : ""}<form data-form="email-link" class="stack">${field("Email address", "email", signin.email, "email", 'required autocomplete="username webauthn" placeholder="you@example.com"')}${errorSlot()}<div>${submit("Email me a sign-in link", "log-in")}</div></form>`
     }</main>`;
+  document.title = "Sign in · Kooks";
   if (!sent) void offerConditionalPasskey();
 }
-async function accountPage() {
-  const { passkeys } = await authApi("passkeys");
-  return `${heading("Your sign-in", `Signed in as ${account.email}`, "Passkeys let you sign in with your fingerprint, face or screen lock instead of waiting for an email.")}<div class="grid"><section class="panel stack"><h2>Passkeys</h2>${
-    passkeys.length
-      ? passkeys
-          .map(
-            (p) =>
-              `<div class="list-row"><div class="grow"><strong>${esc(p.name)}</strong><p class="small muted">Added ${dateLabel(p.created_at.slice(0, 10))}${p.used_at ? ` · Last used ${dateLabel(p.used_at.slice(0, 10))}` : ""}${p.backed_up ? " · Synced by your password manager" : ""}</p></div>${button("Remove", "passkey-remove", `data-id="${esc(p.id)}" aria-label="Remove passkey ${esc(p.name)}"`, "quiet small-button danger")}</div>`,
-          )
-          .join("")
-      : '<p class="small muted">No passkeys yet. Add one on each phone or computer you cook from.</p>'
-  }<div>${passkeysSupported() ? button("Add a passkey on this device", "passkey-add", "", "primary", "key") : '<p class="small muted">This browser cannot create passkeys. Email links keep working here.</p>'}</div></section><section class="panel stack"><h2>Email links</h2><p class="small muted">On a device without a passkey, ask for a one-time link at ${esc(account.email)}. Links work for 15 minutes.</p><h2>Sign out</h2><p class="small muted">Signing out ends this session on this device; your passkeys stay.</p><div>${button("Sign out", "sign-out", "", "", "close")}</div></section></div>`;
+const notFound = () => ({
+  title: "Kooks",
+  active: "today",
+  content: emptyState(
+    "That page isn’t in the kitchen.",
+    "",
+    link("Today", "today", { primary: true }),
+  ),
+});
+// Older bookmarks keep working: the previous flat routes map onto the sections.
+function legacyRoute([first, a, b, c]) {
+  const rest = [a, b, c].filter(Boolean).join("/");
+  switch (first) {
+    case undefined:
+      return "today";
+    case "capture":
+      return "recipes/add";
+    case "new-recipe":
+      return a === "inspiration" && b
+        ? `recipes/new/inspiration/${b}`
+        : "recipes/new";
+    case "edit":
+      return a ? `recipes/${a}/edit` : "recipes";
+    case "variant":
+      return a ? `recipes/${a}/variant` : "recipes";
+    case "memory":
+      return a ? `recipes/${a}/memory` : "recipes";
+    case "pantry":
+      return a ? `shop/pantry/${a}` : "shop/pantry";
+    case "household":
+      return a ? `settings/household/${a}` : "settings/household";
+    case "leftovers":
+      return a ? `plan/leftovers/${a}` : "plan/leftovers";
+    case "new-batch":
+      return `plan/leftovers/new${rest ? `/${rest}` : ""}`;
+    case "meals":
+      return a ? `plan/meals/${a}` : "plan/meals";
+    case "spending":
+      return a ? `settings/prices/${a}` : "settings/prices";
+    case "cooking":
+      return a ? `cook/${a}` : "cook";
+    case "review":
+      return a && b ? `shop/review/${a}/${b}` : "shop";
+    case "shop":
+      return a && !["list", "pantry", "review"].includes(a)
+        ? `shop/list/${a}`
+        : null;
+    case "settings":
+      return a ? null : "settings/household";
+    default:
+      return null;
+  }
 }
-async function render() {
+async function render({ focus = false } = {}) {
   const token = ++draw;
-  const [page = "today", id, extra, last] = route();
+  const segments = location.hash.slice(2).split("/").filter(Boolean);
+  const target = legacyRoute(segments);
+  if (target) {
+    location.replace(`#/${target}`);
+    return;
+  }
+  const [page, a, b, c, d, e] = segments;
   if (page === "signin") {
-    if (id) await confirmLink(id);
+    if (a) await confirmLink(a);
     else navigate("today");
     return;
   }
-  let content,
-    active = page;
+  let view;
   try {
-    if (page === "today") content = await todayPage();
-    else if (page === "recipes")
-      content = id ? await recipePage(id) : libraryPage();
-    else if (page === "edit" || page === "variant" || page === "imports") {
-      content = recipeEditor(id, page === "imports" ? "import" : page);
-      active = "recipes";
-    } else if (page === "new-recipe") {
-      content = recipeEditor(
-        null,
-        "new",
-        id === "inspiration" ? record("inspiration", extra) : null,
-      );
-      active = "recipes";
-    } else if (page === "memory") {
-      content = memoryPage(id);
-      active = "recipes";
-    } else if (page === "capture") {
-      content = capturePage();
-      active = "recipes";
-    } else if (page === "techniques") {
-      content =
-        id === "new"
+    if (page === "today") view = await todayPage();
+    else if (page === "recipes") {
+      if (!a) view = libraryPage();
+      else if (a === "add") view = capturePage();
+      else if (a === "new")
+        view = recipeEditor(
+          null,
+          "new",
+          b === "inspiration" ? record("inspiration", c) : null,
+        );
+      else if (b === "edit") view = recipeEditor(a, "edit");
+      else if (b === "variant") view = recipeEditor(a, "variant");
+      else if (b === "memory") view = memoryPage(a);
+      else view = await recipePage(a);
+    } else if (page === "imports") view = recipeEditor(a, "import");
+    else if (page === "techniques")
+      view =
+        a === "new"
           ? techniqueEditor(null)
-          : extra === "edit"
-            ? techniqueEditor(id)
-            : id
-              ? techniquePage(id)
+          : b === "edit"
+            ? techniqueEditor(a)
+            : a
+              ? techniquePage(a)
               : techniquesPage();
-      active = "inspiration";
-    } else if (page === "inspiration")
-      content =
-        id === "new"
+    else if (page === "inspiration")
+      view =
+        a === "new"
           ? inspirationEditor(null)
-          : extra === "edit"
-            ? inspirationEditor(id)
-            : id
-              ? inspirationDetail(id)
+          : b === "edit"
+            ? inspirationEditor(a)
+            : a
+              ? inspirationDetail(a)
               : inspirationPage();
     else if (page === "library")
-      content = id ? bookPage(id, extra === "edit") : shelfPage();
-    else if (page === "pantry") content = pantryPage(id);
-    else if (page === "household") content = householdPage(id);
-    else if (page === "leftovers")
-      content = id ? batchPage(id) : leftoversPage();
-    else if (page === "new-batch") {
-      content = records("recipe").length
-        ? batchForm(id, extra, last)
-        : empty(
-            "Save a recipe first.",
-            "Then record how much you cooked.",
-            link("Add recipe", "capture", true),
-          );
-      active = "leftovers";
-    } else if (page === "plan") content = planPage();
-    else if (page === "meals") {
-      content = mealsPage(id);
-      active = "plan";
-    } else if (page === "spending") content = await spendingPage(id);
-    else if (page === "cooking") content = cookingPage(id);
-    else if (page === "review") {
-      content = await reviewPage(id, extra);
-      active = "shop";
-    } else if (page === "shop") content = shopPage(id);
-    else if (page === "account")
-      content = account
-        ? await accountPage()
-        : empty(
-            "No sign-in on this computer.",
-            "Kooks is running for this computer only; nobody needs to sign in.",
-            link("Today", "today"),
-          );
-    else
-      content = empty(
-        "Let’s get back to the kitchen.",
-        "",
-        link("Today", "today"),
-      );
-    if (token !== draw) return;
-    $("#app").innerHTML = shell(content, active);
-    updateTimers();
+      view =
+        a === "new" ? bookForm() : a ? bookPage(a, b === "edit") : shelfPage();
+    else if (page === "account") view = await settingsPage("account");
+    else if (page === "plan") {
+      if (!a) view = await planWeekPage();
+      else if (a === "meals") view = mealsPage(b);
+      else if (a === "leftovers")
+        view =
+          b === "new" ? batchForm(c, d, e) : b ? batchPage(b) : leftoversPage();
+      else view = notFound();
+    } else if (page === "shop") {
+      if (!a) view = shopListPage();
+      else if (a === "list") view = shopListPage(b);
+      else if (a === "pantry") view = b ? pantryForm(b) : pantryPage();
+      else if (a === "review") view = await reviewPage(b, c);
+      else view = notFound();
+    } else if (page === "cook") view = a ? sessionPage(a) : cookPage();
+    else if (page === "settings") view = await settingsPage(a, b);
+    else view = notFound();
   } catch (error) {
-    if (token === draw) {
-      if (error.code === "SIGN_IN") renderLogin();
-      else {
-        $("#app").innerHTML = shell(
-          empty(
-            "Something needs a second look.",
-            error.message,
-            button("Try again", "reload"),
-          ),
-          active,
-        );
-      }
-    }
+    if (token !== draw) return;
+    if (error.code === "SIGN_IN") return renderLogin();
+    view = {
+      title: "Kooks",
+      active: page,
+      content: emptyState(
+        "Something needs a second look.",
+        error.message,
+        button("Try again", "reload"),
+        "circle-alert",
+      ),
+    };
   }
+  if (token !== draw) return;
+  $("#app").innerHTML = shell({
+    ...view,
+    active: page === "account" ? "account" : view.active,
+  });
+  document.title = `${view.title} · Kooks`;
+  updateTimers();
+  void manageWakeLock(Boolean(view.wakeLock));
+  if (focus) $("#main")?.focus({ preventScroll: true });
 }
-
 function updateTimers() {
   document.querySelectorAll("[data-deadline]").forEach((el) => {
     const seconds = Math.max(
@@ -1574,9 +2140,22 @@ async function saveRecipe(form, values) {
   await afterSave("Recipe saved.", `recipes/${result.record.id}`);
 }
 
+// ---------- Events ----------
+const listResults = {
+  recipes: () => libraryResults(),
+  techniques: () => techniqueResults(),
+  inspiration: () => ideaResults(),
+  library: () => bookResults(),
+};
 document.addEventListener("input", (event) => {
   const form = event.target.closest("form");
   if (form) form.dataset.dirty = "true";
+  const scope = event.target.dataset.search;
+  if (scope) {
+    searches[scope] = event.target.value;
+    const results = $("#list-results");
+    if (results && listResults[scope]) results.innerHTML = listResults[scope]();
+  }
   if (form?.dataset.form === "shopping-review") {
     const apply = $('[data-action="shopping-apply"]');
     if (apply) apply.disabled = true;
@@ -1606,48 +2185,6 @@ document.addEventListener("submit", async (event) => {
       await authApi("link", { email });
       signin = { step: "sent", email, error: "" };
       renderLogin();
-    } else if (type === "suggest") {
-      filters = {
-        available_ingredients: comma(v.get("available")),
-        member_ids: v.getAll("members"),
-        avoid_dislikes: v.has("avoid"),
-        diets: v.getAll("diets"),
-        tags: v.getAll("tags"),
-      };
-      for (const key of ["course", "cuisine"])
-        if (v.get(key)) filters[key] = v.get(key);
-      for (const [input, key] of [
-        ["active", "max_active_minutes"],
-        ["total", "max_total_minutes"],
-        ["pans", "max_pans"],
-        ["servings", "servings"],
-      ])
-        if (v.get(input) !== "") filters[key] = Number(v.get(input));
-      if (v.get("cleanup")) filters.cleanup = v.get("cleanup");
-      await render();
-    } else if (type === "search") {
-      searches[v.get("scope") || "recipes"] = v.get("query");
-      await render();
-    } else if (type === "servings") {
-      portions.set(v.get("id"), Number(v.get("servings")));
-      await render();
-    } else if (type === "recipe") await saveRecipe(form, v);
-    else if (type === "paste") {
-      const result = await write("recipe_import_text", { text: v.get("text") });
-      await afterSave("Draft ready for review.", `imports/${result.record.id}`);
-    } else if (type === "photo") {
-      const image = v.get("image");
-      if (!image?.size || image.size > 8 * 1024 * 1024)
-        throw new Error("Choose a PNG, JPEG or WebP image smaller than 8 MB.");
-      const base64 = await readBase64(image);
-      toast("Reading your photo locally. This may take a moment.");
-      const result = await write("recipe_import_image", {
-        image: { name: image.name, mime_type: image.type, base64 },
-      });
-      await afterSave(
-        "Photo read. Check the draft beside the original.",
-        `imports/${result.record.id}`,
-      );
     } else if (type === "technique") {
       const t = record("technique", form.dataset.id);
       const result = await write("technique_save", {
@@ -1730,6 +2267,51 @@ document.addEventListener("submit", async (event) => {
         },
       });
       await afterSave("Bookmark added.");
+    } else if (type === "suggest") {
+      filters = {
+        available_ingredients: comma(v.get("available")),
+        member_ids: v.getAll("members"),
+        avoid_dislikes: v.has("avoid"),
+        diets: v.getAll("diets"),
+        tags: v.getAll("tags"),
+      };
+      for (const key of ["course", "cuisine"])
+        if (v.get(key)) filters[key] = v.get(key);
+      for (const [input, key] of [
+        ["active", "max_active_minutes"],
+        ["total", "max_total_minutes"],
+        ["pans", "max_pans"],
+        ["servings", "servings"],
+      ])
+        if (v.get(input) !== "" && v.get(input) !== null)
+          filters[key] = Number(v.get(input));
+      if (v.get("cleanup")) filters.cleanup = v.get("cleanup");
+      await render();
+    } else if (type === "servings") {
+      portions.set(v.get("id"), Number(v.get("servings")));
+      await render();
+    } else if (type === "recipe") await saveRecipe(form, v);
+    else if (type === "paste") {
+      const result = await write("recipe_import_text", { text: v.get("text") });
+      await afterSave("Draft ready for review.", `imports/${result.record.id}`);
+    } else if (type === "photo") {
+      const image = v.get("image");
+      if (!image?.size || image.size > 8 * 1024 * 1024)
+        throw new Error("Choose a PNG, JPEG or WebP image smaller than 8 MB.");
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result).split(",")[1]);
+        reader.onerror = () => reject(new Error("Could not read that photo."));
+        reader.readAsDataURL(image);
+      });
+      toast("Reading your photo locally. This may take a moment.");
+      const result = await write("recipe_import_image", {
+        image: { name: image.name, mime_type: image.type, base64 },
+      });
+      await afterSave(
+        "Photo read. Check the draft beside the original.",
+        `imports/${result.record.id}`,
+      );
     } else if (type === "pantry") {
       await write("pantry_save", {
         ...editing,
@@ -1743,7 +2325,7 @@ document.addEventListener("submit", async (event) => {
           notes: v.get("notes"),
         },
       });
-      await afterSave("Pantry updated.", "pantry");
+      await afterSave("Pantry updated.", "shop/pantry");
     } else if (type === "member") {
       await write("member_save", {
         ...editing,
@@ -1755,7 +2337,7 @@ document.addEventListener("submit", async (event) => {
           notes: v.get("notes"),
         },
       });
-      await afterSave("Preferences saved.", "household");
+      await afterSave("Preferences saved.", "settings/household");
     } else if (type === "memory") {
       await write("note_save", {
         recipe_id: v.get("recipe_id"),
@@ -1781,7 +2363,7 @@ document.addEventListener("submit", async (event) => {
       });
       await afterSave(
         "Cooked batch recorded.",
-        `leftovers/${result.record.id}`,
+        `plan/leftovers/${result.record.id}`,
       );
     } else if (type === "allocation") {
       await write("batch_allocate", {
@@ -1802,7 +2384,10 @@ document.addEventListener("submit", async (event) => {
         date: v.get("date"),
         slot: v.get("slot"),
       });
-      await afterSave("Added to your week.");
+      if (form.id === "plan-form") {
+        week = monday(v.get("date"));
+        await afterSave("Added to your week.", "plan");
+      } else await afterSave("Added to your week.");
     } else if (type === "meal") {
       const chosen = v.getAll("recipes");
       if (!chosen.length)
@@ -1822,12 +2407,20 @@ document.addEventListener("submit", async (event) => {
           })),
         },
       });
-      await afterSave("Meal saved.", "meals");
+      await afterSave("Meal saved.", "plan/meals");
     } else if (type === "currency") {
       currency = v.get("currency").toUpperCase();
       week = monday(v.get("week"));
       localStorage.setItem("kooks.currency", currency);
       await render();
+    } else if (type === "preferences") {
+      theme = v.get("theme") ?? "system";
+      localStorage.setItem("kooks.theme", theme);
+      applyTheme();
+      currency = v.get("currency").toUpperCase();
+      localStorage.setItem("kooks.currency", currency);
+      await render();
+      toast("Preferences saved.");
     } else if (type === "price") {
       await write("price_save", {
         ...editing,
@@ -1843,7 +2436,7 @@ document.addEventListener("submit", async (event) => {
           notes: v.get("notes"),
         },
       });
-      await afterSave("Confirmed price saved.", "spending");
+      await afterSave("Confirmed price saved.", "settings/prices");
     } else if (type === "budget") {
       await write("budget_save", {
         ...editing,
@@ -1915,7 +2508,7 @@ document.addEventListener("click", async (event) => {
   const a = el.dataset.action,
     id = el.dataset.id;
   if (a === "dismiss-toast") {
-    $("#toast").hidden = true;
+    $("#toast").textContent = "";
     return;
   }
   if (a === "embed-load") {
@@ -1935,42 +2528,84 @@ document.addEventListener("click", async (event) => {
     }
     return;
   }
+  if (a === "toggle") {
+    const target = $(el.dataset.target);
+    if (!target) return;
+    target.hidden = !target.hidden;
+    document
+      .querySelectorAll(
+        `[data-action="toggle"][data-target="${el.dataset.target}"][aria-controls]`,
+      )
+      .forEach((b) => b.setAttribute("aria-expanded", String(!target.hidden)));
+    if (!target.hidden)
+      target.querySelector("input, select, textarea")?.focus();
+    return;
+  }
+  if (a === "capture-method") {
+    captureMethod = el.dataset.method;
+    document
+      .querySelectorAll('[data-action="capture-method"]')
+      .forEach((b) =>
+        b.setAttribute(
+          "aria-pressed",
+          String(b.dataset.method === captureMethod),
+        ),
+      );
+    document
+      .querySelectorAll("[data-method]")
+      .forEach(
+        (panel) => (panel.hidden = panel.dataset.method !== captureMethod),
+      );
+    return;
+  }
+  if (a === "library-toggle") {
+    library[el.dataset.key] = !library[el.dataset.key];
+    navigate("recipes");
+    return;
+  }
+  if (a === "library-facet") {
+    // Chips on the Recipes page toggle; chips on a card or recipe only add.
+    const { facet, value } = el.dataset,
+      add = el.dataset.mode === "add",
+      same = (v) => labelKey(v) === labelKey(value);
+    if (Array.isArray(library[facet])) {
+      if (!library[facet].some(same)) library[facet].push(value);
+      else if (!add) library[facet] = library[facet].filter((v) => !same(v));
+    } else library[facet] = !add && same(library[facet]) ? "" : value;
+    if (add) library.drafts = false;
+    navigate("recipes");
+    return;
+  }
+  if (a === "library-clear") {
+    library = noLibraryFilters();
+    navigate("recipes");
+    return;
+  }
+  if (a === "append-tag") {
+    const input = el.closest("form")?.querySelector('input[name="tags"]');
+    if (input) {
+      const tags = parseLabels(input.value);
+      if (!tags.some((t) => labelKey(t) === labelKey(el.dataset.value)))
+        tags.push(el.dataset.value);
+      input.value = formatLabels(tags);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+    return;
+  }
   el.disabled = true;
   busy++;
   try {
     if (a === "clear-filters") {
       filters = {};
       await render();
-    } else if (a === "library-toggle") {
-      library[el.dataset.key] = !library[el.dataset.key];
-      navigate("recipes");
-    } else if (a === "library-facet") {
-      // Chips on the Recipes page toggle; chips on a recipe only add.
-      const { facet, value } = el.dataset,
-        add = el.dataset.mode === "add",
-        same = (v) => labelKey(v) === labelKey(value);
-      if (Array.isArray(library[facet])) {
-        if (!library[facet].some(same)) library[facet].push(value);
-        else if (!add) library[facet] = library[facet].filter((v) => !same(v));
-      } else library[facet] = !add && same(library[facet]) ? "" : value;
-      navigate("recipes");
-    } else if (a === "library-clear") {
-      library = noLibraryFilters();
-      navigate("recipes");
-    } else if (a === "append-tag") {
-      const input = el.closest("form")?.querySelector('input[name="tags"]');
-      if (input) {
-        const tags = parseLabels(input.value);
-        if (!tags.some((t) => labelKey(t) === labelKey(el.dataset.value)))
-          tags.push(el.dataset.value);
-        input.value = formatLabels(tags);
-        input.dispatchEvent(new Event("input", { bubbles: true }));
-      }
     } else if (a === "reload") {
       await loadState();
       await render();
     } else if (a === "week") {
       week = addDays(week, Number(el.dataset.delta));
+      await render();
+    } else if (a === "week-today") {
+      week = monday(today());
       await render();
     } else if (a === "favorite") {
       const r = record("recipe", id);
@@ -2001,7 +2636,7 @@ document.addEventListener("click", async (event) => {
             : {}),
         },
       });
-      await afterSave("Let’s get cooking.", `cooking/${result.record.id}`);
+      await afterSave("Let’s get cooking.", `cook/${result.record.id}`);
     } else if (a === "allocation-eat" || a === "allocation-release") {
       const b = record("batch", id),
         allocation = b.data.allocations.find(
@@ -2230,7 +2865,10 @@ document.addEventListener("change", async (event) => {
 
 window.addEventListener("hashchange", () => {
   window.scrollTo(0, 0);
-  void render();
+  void render({ focus: true });
+});
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && wantsWakeLock) void manageWakeLock(true);
 });
 setInterval(updateTimers, 1000);
 setInterval(async () => {
@@ -2247,11 +2885,12 @@ setInterval(async () => {
     }
   }
 }, 3000);
+applyTheme();
 try {
-  const [page, token] = route();
+  const [page, token] = location.hash.slice(2).split("/");
   if (page === "signin" && token) await confirmLink(token);
   else if (await loadState()) await render();
 } catch (error) {
   $("#app").innerHTML =
-    `<main class="content">${empty("Your kitchen is taking a moment.", error.message, button("Try again", "reload"))}</main>`;
+    `<main class="page">${emptyState("Your kitchen is taking a moment.", error.message, button("Try again", "reload"), "circle-alert")}</main>`;
 }

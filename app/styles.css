@@ -1,1095 +1,251 @@
-#kooks-concept {
-  --k-paper: #f6f5ef;
-  --k-surface: #fffef9;
-  --k-ink: #263729;
-  --k-muted: #66705f;
-  --k-line: #dedfd3;
-  --k-brand: #385740;
-  --k-on-brand: #fffef7;
-  --k-soft: #e7edda;
-  --k-warm: #f1e4c6;
-  --k-error: #a23529;
-  font:
-    15px/1.5 -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    sans-serif;
-  color: var(--k-ink);
-  width: 100%;
-}
-#kooks-concept * {
-  box-sizing: border-box;
-}
-#kooks-concept button,
-#kooks-concept input,
-#kooks-concept textarea,
-#kooks-concept select {
-  font: inherit;
-}
-#kooks-concept button {
-  color: inherit;
-}
-#kooks-concept .k-shell {
-  background: var(--k-paper);
-  border: 1px solid var(--k-line);
-  border-radius: 20px;
-  overflow: clip;
-}
-#kooks-concept .k-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 16px;
-  padding: 17px 25px;
-  border-bottom: 1px solid var(--k-line);
-  background: var(--k-surface);
-}
-#kooks-concept .k-wordmark {
-  font:
-    italic 500 30px/1 Georgia,
-    serif;
-  letter-spacing: -1.5px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-#kooks-concept .k-wordmark svg {
-  width: 25px;
-  height: 25px;
-}
-#kooks-concept .k-household {
-  color: var(--k-muted);
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  font-size: 13px;
-}
-#kooks-concept .k-body {
-  display: grid;
-  grid-template-columns: 165px minmax(0, 1fr);
-  min-height: 620px;
-}
-#kooks-concept .k-sidebar {
-  padding: 25px 13px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  border-right: 1px solid var(--k-line);
-}
-#kooks-concept .k-nav {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  text-align: left;
-  width: 100%;
+/* Kooks mobile app: platform details on top of the shared tokens and
+   components. Safe areas, native quirks and the appearance settings that the
+   backup format carries (palette, layout, spacing). */
+
+/* The top bar and tab bar are buttons here, not links. */
+.topbar .brand,
+.sidebar .brand {
   border: 0;
-  border-radius: 10px;
-  min-height: 46px;
-  padding: 10px 13px;
-  background: transparent;
-}
-#kooks-concept .k-nav[aria-current="page"] {
-  background: var(--k-soft);
-  font-weight: 600;
-}
-#kooks-concept .k-nav svg,
-#kooks-concept .k-button svg {
-  flex-shrink: 0;
-}
-#kooks-concept .k-count {
-  margin-left: auto;
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-}
-#kooks-concept .k-sidebar-foot {
-  margin-top: auto;
-  padding: 34px 11px 0;
-  color: var(--k-muted);
-  font:
-    italic 19px/1.4 Georgia,
-    serif;
-}
-#kooks-concept .k-content {
-  min-width: 0;
-  padding: 29px 30px 32px;
-}
-#kooks-concept .k-mobile-nav {
-  display: none;
-}
-#kooks-concept h1,
-#kooks-concept h2,
-#kooks-concept h3,
-#kooks-concept p {
-  margin: 0;
-}
-#kooks-concept h1 {
-  font:
-    400 35px/1.12 Georgia,
-    serif;
-  letter-spacing: -0.8px;
-}
-#kooks-concept h2 {
-  font:
-    400 26px/1.2 Georgia,
-    serif;
-  letter-spacing: -0.3px;
-}
-#kooks-concept h3 {
-  font-size: 15px;
-  font-weight: 600;
-}
-#kooks-concept .k-kicker {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 1.6px;
-  font-weight: 600;
-  color: var(--k-muted);
-}
-#kooks-concept .k-muted {
-  color: var(--k-muted);
-}
-#kooks-concept .k-small {
-  font-size: 13px;
-}
-#kooks-concept .k-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 23px;
-}
-#kooks-concept .k-heading h1 {
-  margin: 7px 0 8px;
-}
-#kooks-concept .k-button {
-  border: 1px solid var(--k-line);
-  background: var(--k-surface);
-  border-radius: 9px;
-  padding: 10px 14px;
-  min-height: 44px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  font-weight: 500;
-  text-decoration: none;
-}
-#kooks-concept .k-primary {
-  background: var(--k-brand);
-  color: var(--k-on-brand);
-  border-color: var(--k-brand);
-}
-#kooks-concept .k-quiet {
-  background: transparent;
-  border-color: transparent;
-  padding-inline: 5px;
-}
-#kooks-concept .k-icon {
-  width: 44px;
-  height: 44px;
-  padding: 10px;
-  flex-shrink: 0;
-}
-#kooks-concept button:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-#kooks-concept .k-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-#kooks-concept .k-between {
-  justify-content: space-between;
-}
-#kooks-concept .k-stack {
-  display: grid;
-  gap: 16px;
-}
-#kooks-concept .k-search {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 0 14px;
-  border: 1px solid var(--k-line);
-  border-radius: 10px;
-  background: var(--k-surface);
-}
-#kooks-concept .k-search input {
-  min-width: 0;
-  width: 100%;
-  border: 0;
-  background: transparent;
-  color: var(--k-ink);
-  padding: 13px 0;
-  font-size: 16px;
-}
-#kooks-concept .k-filters {
-  display: flex;
-  gap: 7px;
-  flex-wrap: wrap;
-  margin: 17px 0 20px;
-}
-#kooks-concept .k-filter {
-  border: 1px solid var(--k-line);
-  background: transparent;
-  border-radius: 20px;
-  padding: 7px 13px;
-  min-height: 38px;
-  font-size: 13px;
-}
-#kooks-concept .k-filter[aria-pressed="true"] {
-  background: var(--k-ink);
-  color: var(--k-paper);
-  border-color: var(--k-ink);
-}
-#kooks-concept .k-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-}
-#kooks-concept .k-recipe-card {
-  min-width: 0;
-  border: 1px solid var(--k-line);
-  border-radius: 13px;
-  background: var(--k-surface);
-  position: relative;
-  display: flex;
-  flex-direction: column;
-}
-#kooks-concept .k-card-open {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  flex: 1;
-  text-align: left;
-  padding: 21px 20px 13px;
-  border: 0;
-  border-radius: 13px 13px 0 0;
-  background: transparent;
-  width: 100%;
-}
-#kooks-concept .k-card-title {
-  font:
-    400 25px/1.15 Georgia,
-    serif;
-  letter-spacing: -0.3px;
-  margin: 14px 0 10px;
-}
-#kooks-concept .k-tag {
-  color: var(--k-brand);
-  background: var(--k-soft);
-  border-radius: 4px;
-  padding: 3px 6px;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-}
-#kooks-concept .k-card-description {
-  color: var(--k-muted);
-  font-size: 13px;
-}
-#kooks-concept .k-chip {
-  display: inline-block;
-  color: var(--k-brand);
-  background: var(--k-soft);
-  border-radius: 4px;
-  padding: 3px 7px;
-  font-size: 11px;
-  font-weight: 600;
-}
-#kooks-concept .k-card-facets {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-  padding: 0 20px 12px;
-}
-#kooks-concept .k-detail-facets {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 12px;
-}
-#kooks-concept .k-facet-row {
-  display: grid;
-  gap: 6px;
-  margin-bottom: 14px;
-}
-#kooks-concept .k-facet-row .k-filters {
-  margin: 0;
-}
-#kooks-concept .k-facet-label {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  color: var(--k-muted);
-}
-#kooks-concept .k-check-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
+  background: none;
   cursor: pointer;
 }
-#kooks-concept .k-check-chip input {
-  width: 16px;
-  height: 16px;
-  margin: 0;
-  accent-color: var(--k-brand);
-}
-#kooks-concept .k-diets {
+.nav-item {
+  width: 100%;
   border: 0;
-  padding: 0;
-  margin: 0;
-  min-width: 0;
+  background: none;
+  cursor: pointer;
+  font-family: inherit;
 }
-#kooks-concept .k-diets legend {
-  padding: 0;
-  margin-bottom: 7px;
-  font-size: 13px;
-  font-weight: 500;
+.sidebar .nav-item {
+  text-align: left;
 }
-#kooks-concept .k-diets .k-filters {
-  margin: 0 0 8px;
+.tabbar .nav-item {
+  width: auto;
 }
-#kooks-concept .k-editor-facets {
+
+/* Segmented controls are buttons too. */
+.segmented button {
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+/* Recipe detail: ingredients beside the method on wide screens. */
+.recipe-columns {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 15px;
-}
-#kooks-concept .k-card-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-  padding: 0 10px 10px 20px;
-}
-#kooks-concept .k-card-meta {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  color: var(--k-muted);
-  flex-wrap: wrap;
-}
-#kooks-concept .k-favorite[aria-pressed="true"] {
-  color: var(--k-brand);
-}
-#kooks-concept .k-favorite[aria-pressed="true"] svg {
-  fill: var(--k-soft);
-}
-#kooks-concept .k-library-footer {
-  margin-top: 18px;
-  color: var(--k-muted);
-  font-size: 12px;
-}
-#kooks-concept .k-back {
-  margin: -7px 0 20px -5px;
-}
-#kooks-concept .k-detail-title {
-  max-width: 560px;
-  margin: 12px 0 12px;
-}
-#kooks-concept .k-detail-meta {
-  display: flex;
-  gap: 14px;
-  flex-wrap: wrap;
-  color: var(--k-muted);
-  font-size: 13px;
-  margin-bottom: 20px;
-}
-#kooks-concept .k-actions {
-  display: flex;
-  gap: 9px;
-  flex-wrap: wrap;
-  margin: 20px 0 25px;
-}
-#kooks-concept .k-recipe-columns {
-  display: grid;
-  grid-template-columns: minmax(230px, 0.95fr) minmax(0, 1.25fr);
-  gap: 25px;
+  gap: var(--s-6);
   align-items: start;
 }
-#kooks-concept .k-ingredients {
-  background: var(--k-surface);
-  border: 1px solid var(--k-line);
-  border-radius: 12px;
-  padding: 18px;
+@media (min-width: 840px) {
+  .recipe-columns {
+    grid-template-columns: minmax(260px, 0.9fr) minmax(0, 1.3fr);
+  }
 }
-#kooks-concept .k-serving-control {
+.serving-control {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid var(--k-line);
-  padding: 12px 0;
-  margin-bottom: 14px;
-  gap: 8px;
+  gap: var(--s-2);
+  padding: var(--s-2) 0 var(--s-3);
+  border-bottom: 1px solid var(--line);
+  margin-bottom: var(--s-2);
 }
-#kooks-concept .k-stepper {
+
+/* Cooking mode. */
+.cook-layout {
+  display: grid;
+  gap: var(--s-5);
+  align-items: start;
+}
+@media (min-width: 840px) {
+  .cook-layout {
+    grid-template-columns: minmax(0, 1.4fr) minmax(260px, 0.8fr);
+  }
+}
+.cook-footer {
+  position: sticky;
+  bottom: calc(var(--tabbar-h) + var(--safe-bottom));
   display: flex;
+  gap: var(--s-2);
+  justify-content: space-between;
+  padding: var(--s-3) 0;
+  background: var(--paper);
+  border-top: 1px solid var(--line);
+  margin-top: var(--s-5);
+}
+.cook-footer .btn {
+  flex: 1 1 auto;
+}
+@media (min-width: 840px) {
+  .cook-footer {
+    bottom: 0;
+  }
+}
+.meal-context {
+  display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--s-2);
+  color: var(--muted);
+  font-size: var(--fs-sm);
 }
-#kooks-concept .k-stepper strong {
-  min-width: 23px;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
-  font-weight: 600;
+
+/* Meals. */
+.dish {
+  display: grid;
+  gap: var(--s-3);
+  padding: var(--s-4) 0;
+  border-top: 1px solid var(--line);
 }
-#kooks-concept .k-select {
-  border: 1px solid var(--k-line);
-  border-radius: 7px;
-  background: var(--k-surface);
-  color: var(--k-ink);
-  padding: 9px;
-  min-height: 44px;
-  max-width: 100%;
+.dish:first-of-type {
+  border-top: 0;
 }
-#kooks-concept .k-ingredient {
+@media (min-width: 600px) {
+  .dish {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+}
+.tool-row {
   display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 10px 0;
-  border-bottom: 1px solid var(--k-line);
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-2) 0;
+  border-top: 1px solid var(--line);
+  font-size: var(--fs-sm);
 }
-#kooks-concept .k-ingredient:last-child {
-  border-bottom: 0;
+.tool-row:first-of-type {
+  border-top: 0;
 }
-#kooks-concept .k-amount {
-  min-width: 62px;
-  max-width: 100px;
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
+.tool-uses {
+  color: var(--muted);
+  font-size: var(--fs-xs);
 }
-#kooks-concept .k-note {
-  color: var(--k-muted);
-  font-size: 12px;
-  margin-top: 12px;
-}
-#kooks-concept .k-method {
-  counter-reset: method;
-  list-style: none;
-  padding: 0;
-  margin: 14px 0 0;
-}
-#kooks-concept .k-method li {
-  position: relative;
-  padding: 0 0 21px 33px;
-  counter-increment: method;
-}
-#kooks-concept .k-method li:before {
-  content: counter(method, decimal-leading-zero);
-  position: absolute;
-  left: 0;
-  top: 1px;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--k-muted);
-}
-#kooks-concept .k-method h3 {
-  margin-bottom: 6px;
-}
-#kooks-concept .k-method p {
-  font-size: 14px;
-}
-#kooks-concept .k-links {
+.meal-option {
   display: grid;
-  gap: 12px;
-  margin-top: 20px;
+  gap: var(--s-2);
+  padding: var(--s-3) 0;
+  border-top: 1px solid var(--line);
 }
-#kooks-concept .k-link-item {
+.meal-option:first-of-type {
+  border-top: 0;
+}
+@media (min-width: 600px) {
+  .meal-option {
+    grid-template-columns: minmax(0, 1fr) 140px 120px;
+    align-items: end;
+  }
+}
+
+/* Plan week on mobile: seven compact days. */
+.plan-choice {
+  display: flex;
+  gap: var(--s-2);
+  align-items: center;
+}
+.plan-choice .select {
+  flex: 1 1 auto;
+}
+
+/* Assistant preview. */
+.intents {
   display: grid;
-  gap: 8px;
+  gap: var(--s-2);
 }
-#kooks-concept .k-links a,
-#kooks-concept .k-note a {
-  color: var(--k-brand);
-  text-underline-offset: 3px;
+@media (min-width: 600px) {
+  .intents {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
-/* A compact panel until play is pressed; then the size the player needs. */
-#kooks-concept .k-embed {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  border-radius: 12px;
-  overflow: hidden;
-  background: #22312a;
-  color: #fffef7;
+.intents .btn {
+  justify-content: flex-start;
 }
-#kooks-concept .k-embed[data-loaded][data-shape="tall"] {
-  aspect-ratio: 9 / 16;
-  max-width: 340px;
+.proposal-lines {
+  padding-left: var(--s-5);
+  font-size: var(--fs-sm);
 }
-#kooks-concept .k-embed[data-loaded][data-shape="post"] {
-  aspect-ratio: auto;
-  height: 640px;
-  max-width: 420px;
+
+/* Editor. */
+.editor-meta {
+  display: grid;
+  gap: var(--s-3);
+  grid-template-columns: minmax(0, 1fr) 120px;
 }
-#kooks-concept .k-embed[data-loaded][data-shape="portrait"] {
-  aspect-ratio: auto;
-  height: 780px;
-  max-width: 420px;
+
+/* Appearance settings carried in the backup format. */
+:root[data-palette="clay"] {
+  --brand: #7a4934;
+  --brand-strong: #5e3626;
+  --on-brand: #fffaf4;
+  --soft: #efe0d6;
+  --soft-ink: #5a3425;
+  --focus: #b27a5c;
 }
-#kooks-concept .k-embed iframe {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  border: 0;
-  background: #fff;
+@media (prefers-color-scheme: dark) {
+  :root[data-palette="clay"]:not([data-theme="light"]) {
+    --brand: #d9a88f;
+    --brand-strong: #e9c3ae;
+    --on-brand: #2a1a12;
+    --soft: #3a2b24;
+    --soft-ink: #efd7c8;
+  }
 }
-#kooks-concept .k-embed .k-embed-load {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
+:root[data-palette="clay"][data-theme="dark"] {
+  --brand: #d9a88f;
+  --brand-strong: #e9c3ae;
+  --on-brand: #2a1a12;
+  --soft: #3a2b24;
+  --soft-ink: #efd7c8;
+}
+:root[data-density="compact"] {
+  --s-4: 12px;
+  --s-5: 14px;
+  --s-6: 18px;
+  --s-8: 24px;
+  --fs-xl: 21px;
+}
+:root[data-layout="rows"] .grid-3 {
+  grid-template-columns: 1fr;
+}
+:root[data-layout="rows"] .card.recipe-card {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+}
+:root[data-layout="rows"] .card.recipe-card .card-title {
+  font-size: var(--fs-lg);
+}
+:root[data-layout="rows"] .card.recipe-card .card-end {
+  margin-top: 0;
+  margin-left: auto;
+}
+
+/* Card titles are buttons here (no routing on the device). */
+.card-open {
+  font: inherit;
   color: inherit;
-  flex-direction: column;
-  font-size: 15px;
+  text-align: left;
+  padding: 0;
+  cursor: pointer;
 }
-#kooks-concept .k-embed .k-embed-load svg {
-  width: 44px;
-  height: 44px;
+.card-open:hover {
+  text-decoration: underline;
 }
-#kooks-concept .k-embed small {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 14px;
-  text-align: center;
-  font-size: 12px;
-  opacity: 0.8;
-  pointer-events: none;
+.favorite.is-favorite .icon {
+  fill: currentColor;
 }
-#kooks-concept .k-source {
-  border-top: 1px solid var(--k-line);
-  padding-top: 18px;
-  margin-top: 22px;
-}
-#kooks-concept .k-source summary {
-  font-size: 13px;
-}
-#kooks-concept .k-source pre {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  color: var(--k-muted);
-  font-family: inherit;
-  font-size: 13px;
-  line-height: 1.6;
-  margin: 12px 0 0;
-}
-#kooks-concept .k-resume {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  padding: 13px 15px;
-  background: var(--k-soft);
-  border-radius: 10px;
-  margin-bottom: 20px;
-}
-#kooks-concept .k-empty {
-  padding: 48px 16px;
-  text-align: center;
-  display: grid;
-  justify-items: center;
-  gap: 14px;
-}
-#kooks-concept .k-empty p {
-  max-width: 310px;
-  color: var(--k-muted);
-}
-#kooks-concept .k-check-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 13px 4px;
-  min-height: 54px;
-  border-bottom: 1px solid var(--k-line);
-}
-#kooks-concept .k-check-row input {
-  width: 21px;
-  height: 21px;
+.list-item .check-input {
+  width: 22px;
+  height: 22px;
   margin: 0;
-  accent-color: var(--k-brand);
+  accent-color: var(--brand);
   flex-shrink: 0;
 }
-#kooks-concept .k-check-row .k-item-main {
-  flex: 1;
-  min-width: 0;
-}
-#kooks-concept .k-check-row .k-item-amount {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-#kooks-concept .k-check-row.k-bought .k-item-main,
-#kooks-concept .k-check-row.k-bought .k-item-amount {
-  text-decoration: line-through;
-  color: var(--k-muted);
-}
-#kooks-concept .k-group-label {
-  margin-top: 26px;
-  padding-bottom: 6px;
-  font-size: 11px;
-  letter-spacing: 1.3px;
-  text-transform: uppercase;
-  color: var(--k-muted);
-}
-#kooks-concept .k-inline-add {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 23px;
-}
-#kooks-concept .k-input {
-  border: 1px solid var(--k-line);
-  border-radius: 8px;
-  background: var(--k-surface);
-  color: var(--k-ink);
-  padding: 11px 12px;
-  width: 100%;
-  min-width: 0;
-  font-size: 16px;
-}
-#kooks-concept textarea.k-input {
-  min-height: 155px;
-  resize: vertical;
-  line-height: 1.6;
-}
-#kooks-concept .k-field {
-  display: grid;
-  gap: 7px;
-  min-width: 0;
-}
-#kooks-concept .k-field > span {
-  font-size: 13px;
-  font-weight: 500;
-}
-#kooks-concept .k-editor-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-}
-#kooks-concept .k-editor-meta {
-  display: grid;
-  grid-template-columns: 1fr 105px;
-  gap: 15px;
-}
-#kooks-concept .k-form-error {
-  color: var(--k-error);
-  font-size: 13px;
-}
-#kooks-concept .k-notice {
-  background: var(--k-warm);
-  padding: 12px 14px;
-  border-radius: 8px;
-  font-size: 13px;
-}
-#kooks-concept .k-plan-grid {
-  display: grid;
-  gap: 10px;
-  margin-top: 23px;
-}
-#kooks-concept .k-day {
-  display: grid;
-  grid-template-columns: 82px 1fr;
-  padding: 14px;
-  gap: 15px;
-  background: var(--k-surface);
-  border: 1px solid var(--k-line);
-  border-radius: 10px;
-  align-items: start;
-}
-#kooks-concept .k-day-name {
-  padding-top: 7px;
-  font-size: 13px;
-  font-weight: 600;
-}
-#kooks-concept .k-day-recipe {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-#kooks-concept .k-plan-choice {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  flex-wrap: wrap;
-  padding-top: 8px;
-}
-#kooks-concept .k-plan-choice select {
-  flex: 1;
-  min-width: 0;
-  font-size: 13px;
-}
-#kooks-concept .k-progress {
-  height: 5px;
-  border-radius: 4px;
-  background: var(--k-line);
-  margin: 22px 0;
-  overflow: hidden;
-}
-#kooks-concept .k-progress-fill {
-  height: 100%;
-  background: var(--k-brand);
-}
-#kooks-concept .k-cook-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1.5fr) minmax(190px, 1fr);
-  gap: 24px;
-}
-#kooks-concept .k-cook-step {
-  font:
-    400 32px/1.22 Georgia,
-    serif;
-  margin: 14px 0 18px;
-  letter-spacing: -0.3px;
-}
-#kooks-concept .k-cook-copy {
-  font-size: 18px;
-  line-height: 1.65;
-}
-#kooks-concept .k-cook-ingredients {
-  background: var(--k-surface);
-  border: 1px solid var(--k-line);
-  border-radius: 10px;
-  padding: 16px;
-}
-#kooks-concept .k-timer {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 12px 14px;
-  margin-top: 18px;
-  background: var(--k-soft);
-  border-radius: 9px;
-  flex-wrap: wrap;
-}
-#kooks-concept .k-timer-time {
-  font-variant-numeric: tabular-nums;
-  font-size: 21px;
-  margin-right: auto;
-}
-#kooks-concept .k-cook-footer {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  padding-top: 27px;
-  margin-top: 20px;
-  border-top: 1px solid var(--k-line);
-}
-#kooks-concept .k-cook-ingredients .k-ingredient {
-  font-size: 13px;
-}
-#kooks-concept .k-toast {
-  padding: 11px 20px;
-  background: var(--k-soft);
-  font-size: 13px;
-  border-top: 1px solid var(--k-line);
-}
-#kooks-concept .k-toast:empty {
-  display: none;
-}
-#kooks-concept .k-sr {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-}
-#kooks-concept .k-meal-list {
-  display: grid;
-  gap: 15px;
-}
-#kooks-concept .k-meal-card {
-  padding: 21px;
-  border: 1px solid var(--k-line);
-  border-radius: 13px;
-  background: var(--k-surface);
-}
-#kooks-concept .k-meal-card h2 {
-  margin: 8px 0 11px;
-}
-#kooks-concept .k-dish {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  flex-wrap: wrap;
-  padding: 17px 0;
-  border-bottom: 1px solid var(--k-line);
-}
-#kooks-concept .k-dish-main {
-  min-width: 0;
-  flex: 1 1 190px;
-}
-#kooks-concept .k-dish-main h3 {
-  margin: 5px 0;
-}
-#kooks-concept .k-equipment {
-  margin-top: 25px;
-}
-#kooks-concept .k-equipment h3 {
-  margin-bottom: 9px;
-}
-#kooks-concept .k-tool-row {
-  display: flex;
-  gap: 10px;
-  justify-content: space-between;
-  align-items: flex-start;
-  padding: 10px 0;
-  border-bottom: 1px solid var(--k-line);
-}
-#kooks-concept .k-tool-row span {
-  min-width: 0;
-}
-#kooks-concept .k-tool-uses {
-  color: var(--k-muted);
-  font-size: 12px;
-  margin-top: 3px;
-}
-#kooks-concept .k-meal-option {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 110px 90px;
-  gap: 10px;
-  align-items: center;
-  padding: 15px 0;
-  border-bottom: 1px solid var(--k-line);
-}
-#kooks-concept .k-meal-option .k-check-row {
-  border: 0;
-  padding: 0;
-}
-#kooks-concept .k-byk-intents {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  margin: 20px 0;
-}
-#kooks-concept .k-byk-choice {
-  text-align: left;
-  justify-content: flex-start;
-  padding: 15px;
-}
-#kooks-concept .k-byk-proposal {
-  border: 1px solid var(--k-line);
-  border-radius: 13px;
-  background: var(--k-surface);
-  padding: 21px;
-  margin: 20px 0;
-}
-#kooks-concept .k-byk-proposal h2 {
-  margin: 8px 0 14px;
-}
-#kooks-concept .k-proposal-lines {
-  padding-left: 19px;
-  margin: 14px 0;
-}
-#kooks-concept .k-proposal-lines li {
-  margin: 8px 0;
-}
-#kooks-concept .k-dish-tabs {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin: 18px 0;
-}
-#kooks-concept .k-dish-tabs button {
-  text-align: left;
-  font-size: 13px;
-}
-#kooks-concept .k-dish-tabs button[aria-pressed="true"] {
-  background: var(--k-soft);
-  border-color: var(--k-brand);
-}
-#kooks-concept .k-meal-option input[type="number"] {
-  padding: 9px;
-}
-#kooks-concept .k-meal-context {
-  display: inline-flex;
-  gap: 7px;
-  align-items: center;
-  color: var(--k-muted);
-  font-size: 13px;
-  margin-bottom: 13px;
-}
-#kooks-concept.k-compact .k-card-open {
-  padding: 15px 16px 8px;
-}
-#kooks-concept.k-compact .k-card-title {
-  font-size: 21px;
-  margin: 10px 0 7px;
-}
-#kooks-concept.k-rows .k-grid {
-  grid-template-columns: 1fr;
-}
-#kooks-concept.k-rows .k-recipe-card {
-  flex-direction: row;
-}
-#kooks-concept.k-rows .k-card-footer {
-  padding: 15px;
-  flex-direction: column;
-  justify-content: center;
-}
-#kooks-concept.k-rows .k-card-facets {
-  align-self: center;
-  max-width: 180px;
-  padding: 15px 0;
-}
-#kooks-concept.k-phone {
-  max-width: 420px;
-  margin-inline: auto;
-}
-#kooks-concept.k-phone .k-body {
-  display: block;
-  min-height: 540px;
-}
-#kooks-concept.k-phone .k-sidebar {
-  display: none;
-}
-#kooks-concept.k-phone .k-mobile-nav {
-  display: flex;
-  border-top: 1px solid var(--k-line);
-  background: var(--k-surface);
-  padding: 7px 9px;
-}
-#kooks-concept.k-phone .k-mobile-nav .k-nav {
-  flex-direction: column;
-  gap: 2px;
-  padding: 5px;
-  font-size: 11px;
-}
-#kooks-concept.k-phone .k-mobile-nav .k-count {
-  display: none;
-}
-#kooks-concept.k-phone .k-content {
-  padding: 23px 17px;
-}
-#kooks-concept.k-phone .k-header {
-  padding: 16px 17px;
-}
-#kooks-concept.k-phone .k-heading {
-  align-items: flex-start;
-  flex-direction: column;
-}
-#kooks-concept.k-phone .k-grid,
-#kooks-concept.k-phone .k-recipe-columns,
-#kooks-concept.k-phone .k-editor-grid,
-#kooks-concept.k-phone .k-cook-layout {
-  grid-template-columns: 1fr;
-}
-#kooks-concept.k-phone .k-card-title {
-  font-size: 27px;
-}
-#kooks-concept.k-phone .k-cook-step {
-  font-size: 30px;
-}
-#kooks-concept.k-phone .k-cook-copy {
-  font-size: 17px;
-}
-#kooks-concept.k-phone .k-cook-ingredients {
-  margin-top: 4px;
-}
-#kooks-concept.k-phone .k-day {
-  grid-template-columns: 48px 1fr;
-  gap: 10px;
-}
-#kooks-concept.k-phone .k-meal-option {
-  grid-template-columns: 1fr 1fr;
-}
-#kooks-concept.k-phone .k-meal-option .k-check-row {
-  grid-column: 1/-1;
-}
-#kooks-concept.k-phone .k-byk-intents {
-  grid-template-columns: 1fr;
-}
-@media (max-width: 700px) {
-  #kooks-concept .k-body {
-    display: block;
-    min-height: 520px;
-  }
-  #kooks-concept .k-sidebar {
-    display: none;
-  }
-  #kooks-concept .k-mobile-nav {
-    display: flex;
-    border-top: 1px solid var(--k-line);
-    background: var(--k-surface);
-    padding: 7px 9px;
-  }
-  #kooks-concept .k-mobile-nav .k-nav {
-    flex-direction: column;
-    gap: 2px;
-    padding: 5px;
-    font-size: 11px;
-  }
-  #kooks-concept .k-mobile-nav .k-count {
-    display: none;
-  }
-  #kooks-concept .k-content {
-    padding: 23px 17px;
-  }
-  #kooks-concept .k-header {
-    padding: 16px 17px;
-  }
-  #kooks-concept .k-recipe-columns,
-  #kooks-concept .k-cook-layout,
-  #kooks-concept .k-editor-grid {
-    grid-template-columns: 1fr;
-  }
-  #kooks-concept .k-cook-step {
-    font-size: 30px;
-  }
-  #kooks-concept .k-cook-copy {
-    font-size: 17px;
-  }
-  #kooks-concept .k-day {
-    grid-template-columns: 48px 1fr;
-    gap: 10px;
-  }
-  #kooks-concept .k-meal-option {
-    grid-template-columns: 1fr 1fr;
-  }
-  #kooks-concept .k-meal-option .k-check-row {
-    grid-column: 1/-1;
-  }
-}
-@media (max-width: 440px) {
-  #kooks-concept .k-heading {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-  #kooks-concept .k-grid {
-    grid-template-columns: 1fr;
-  }
-  #kooks-concept h1 {
-    font-size: 31px;
-  }
-  #kooks-concept .k-household {
-    font-size: 11px;
-  }
-  #kooks-concept .k-byk-intents {
-    grid-template-columns: 1fr;
-  }
-  #kooks-concept.k-rows .k-recipe-card {
-    flex-direction: column;
-  }
-  #kooks-concept.k-rows .k-card-footer {
-    flex-direction: row;
-    justify-content: space-between;
-  }
-  #kooks-concept.k-rows .k-card-facets {
-    align-self: auto;
-    max-width: none;
-    padding: 0 20px 12px;
-  }
+label.list-item {
+  cursor: pointer;
+}
+
+.detail-facets {
+  margin-top: var(--s-2);
 }

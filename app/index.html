@@ -6,52 +6,107 @@
       name="viewport"
       content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
-    <meta name="theme-color" content="#f6f5ef" />
-    <meta name="color-scheme" content="light" />
+    <meta name="color-scheme" content="light dark" />
+    <meta
+      name="theme-color"
+      media="(prefers-color-scheme: light)"
+      content="#f6f5ef"
+    />
+    <meta
+      name="theme-color"
+      media="(prefers-color-scheme: dark)"
+      content="#161b17"
+    />
     <meta
       name="description"
       content="Your recipes, meals, shopping lists, and cooking companion. At home in your kitchen."
     />
-    <title>Kooks · Your everyday cookbook</title>
+    <title>Kooks</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="../shared/tokens.css" />
+    <link rel="stylesheet" href="../shared/ui.css" />
     <link rel="stylesheet" href="/styles.css" />
-    <link rel="stylesheet" href="/mobile.css" />
   </head>
   <body>
-    <div id="kooks-concept" aria-label="Kooks cookbook">
-      <div class="k-shell">
-        <header class="k-header">
-          <div class="k-wordmark">
-            <i data-lucide="cooking-pot" aria-hidden="true"></i>kooks
-          </div>
+    <a class="skip" href="#main">Skip to content</a>
+    <div id="app" class="app" aria-label="Kooks cookbook">
+      <nav class="sidebar" aria-label="Main"></nav>
+      <header class="topbar">
+        <button type="button" class="brand" data-action="nav" data-view="today">
+          <svg
+            class="icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M2 12h20" />
+            <path d="M20 12v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8" />
+            <path d="m4 8 16-4" />
+            <path
+              d="m8.86 6.78-.45-1.81a2 2 0 0 1 1.45-2.43l1.94-.48a2 2 0 0 1 2.43 1.46l.45 1.8"
+            />
+          </svg>
+          kooks
+        </button>
+        <div class="topbar-actions">
           <button
             type="button"
-            class="k-button k-quiet k-icon"
-            data-action="settings"
-            aria-label="Settings and backups"
+            class="btn btn-quiet btn-icon"
+            data-action="capture"
+            aria-label="Add recipe"
           >
-            <i data-lucide="settings" aria-hidden="true"></i>
+            <svg
+              class="icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M5 12h14" />
+              <path d="M12 5v14" />
+            </svg>
           </button>
-        </header>
-        <div
-          id="storage-status"
-          class="k-storage-error"
-          role="alert"
-          hidden
-        ></div>
-        <div class="k-body">
-          <nav class="k-sidebar" aria-label="Main navigation"></nav>
-          <main class="k-content" aria-label="Cookbook">
-            <div class="k-empty">
-              <h1>Your kitchen, collected.</h1>
-              <p>Opening your cookbook…</p>
-            </div>
-          </main>
+          <button
+            type="button"
+            class="btn btn-quiet btn-icon"
+            data-action="settings"
+            aria-label="Settings"
+          >
+            <svg
+              class="icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path
+                d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"
+              />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+          </button>
         </div>
-        <div class="k-toast" role="status" aria-live="polite"></div>
-        <nav class="k-mobile-nav" aria-label="Mobile navigation"></nav>
-      </div>
+      </header>
+      <div id="storage-status" class="storage-error" role="alert" hidden></div>
+      <main id="main" class="main" tabindex="-1" aria-label="Cookbook">
+        <div class="page">
+          <h1 class="page-title">Today</h1>
+          <p class="loading">Opening your cookbook…</p>
+        </div>
+      </main>
+      <nav class="tabbar" aria-label="Main"></nav>
     </div>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
     <script type="module" src="/cookbook.js"></script>
   </body>
 </html>

@@ -3,19 +3,27 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#f6f5ef" />
-    <title>Kooks · Your everyday kitchen</title>
+    <meta name="color-scheme" content="light dark" />
+    <meta
+      name="theme-color"
+      media="(prefers-color-scheme: light)"
+      content="#f6f5ef"
+    />
+    <meta
+      name="theme-color"
+      media="(prefers-color-scheme: dark)"
+      content="#161b17"
+    />
+    <title>Kooks</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/shared/tokens.css" />
+    <link rel="stylesheet" href="/shared/ui.css" />
     <link rel="stylesheet" href="/style.css" />
   </head>
   <body>
     <a class="skip" href="#main">Skip to content</a>
     <div id="app"><div class="loading">Opening your kitchen…</div></div>
-    <footer>
-      <a href="https://github.com/Sweatpantslife/kooks"
-        >Kooks source code (AGPL-3.0)</a
-      >
-    </footer>
-    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
     <script type="module" src="/app.js"></script>
   </body>
 </html>

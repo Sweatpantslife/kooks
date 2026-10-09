@@ -326,7 +326,7 @@ export const days = [
   "Sunday",
 ];
 export const initial = {
-  view: "library",
+  view: "today",
   selected: "orzo",
   query: "",
   filter: "all",
