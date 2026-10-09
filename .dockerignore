@@ -1,0 +1,13 @@
+*
+!package.json
+!package-lock.json
+!mcp/
+!mcp/**
+!shared/
+!shared/**
+!web/
+!web/**
+!ocr/
+!ocr/**
+!LICENSE
+!Dockerfile
