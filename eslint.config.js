@@ -42,6 +42,11 @@ export default [
     languageOptions: { globals: globals["shared-node-browser"] },
   },
   {
+    // Served to both apps, never imported by the server.
+    files: ["shared/a11y.js"],
+    languageOptions: { globals: globals.browser },
+  },
+  {
     // Playwright callbacks passed to page.evaluate() run in the browser.
     files: ["test/*-e2e/**"],
     languageOptions: { globals: globals.browser },
