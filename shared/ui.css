@@ -601,7 +601,7 @@ small,
   width: 100%;
   min-height: var(--control-h);
   padding: 10px var(--s-3);
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--field-line);
   border-radius: var(--r-md);
   background: var(--surface);
   color: var(--ink);
@@ -698,7 +698,7 @@ small,
   width: 100%;
   min-height: var(--control-h);
   padding: 10px var(--s-3) 10px 42px;
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--field-line);
   border-radius: var(--r-pill);
   background: var(--surface);
   color: var(--ink);
@@ -1102,7 +1102,7 @@ small,
 }
 .toast-error {
   background: var(--danger);
-  color: #fff;
+  color: var(--paper);
 }
 .toast button {
   color: inherit;
@@ -1433,7 +1433,7 @@ details.disclosure.quiet > .disclosure-body {
   max-width: 160px;
   min-height: 36px;
   padding: 4px var(--s-2);
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--field-line);
   border-radius: var(--r-sm);
   background: var(--surface);
   font-size: var(--fs-sm);
@@ -1763,7 +1763,7 @@ progress.progress::-moz-progress-bar {
   min-width: 60px;
 }
 .chip .count {
-  opacity: 0.6;
+  opacity: 0.75;
   font-size: var(--fs-xs);
   margin-left: 2px;
 }
@@ -1816,4 +1816,33 @@ button.facet-chip:hover {
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+/* ---------- Forced colours (Windows contrast themes) ----------
+   The system palette replaces backgrounds and shadows there, so the states
+   they carry use the system's selection colours, and surfaces that only a
+   background set apart get an outline. */
+@media (forced-colors: active) {
+  .chip[aria-pressed="true"],
+  .chip[aria-current="page"],
+  .segmented [aria-current="page"],
+  .segmented [aria-pressed="true"],
+  .btn[aria-pressed="true"],
+  .nav-item[aria-current="page"] {
+    forced-color-adjust: none;
+    background: Highlight;
+    color: HighlightText;
+  }
+  .toast,
+  .callout,
+  .tag,
+  .badge,
+  .facet-chip,
+  .sync-note,
+  .storage-error {
+    border: 1px solid CanvasText;
+  }
+  progress.progress {
+    appearance: auto;
+  }
 }
