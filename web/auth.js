@@ -1,5 +1,10 @@
 import { DatabaseSync } from "node:sqlite";
-import { createHash, randomBytes } from "node:crypto";
+import {
+  createHash,
+  randomBytes,
+  randomInt,
+  timingSafeEqual,
+} from "node:crypto";
 import { KooksError } from "../mcp/store.js";
 import { isEmail } from "./mail.js";
 import {
@@ -12,8 +17,10 @@ import {
 
 // Who may enter the kitchen and how: the household's email addresses are the
 // membership list, a one-time emailed link proves an address, and a passkey
-// makes every later sign-in one tap. Sessions, links and passkeys live in
-// auth_* tables beside the cookbook; only hashes of tokens are stored.
+// makes every later sign-in one tap. The phone app, which a link cannot
+// reach and a passkey cannot serve, proves an address with an emailed code
+// instead and keeps a device token. Sessions, links, codes and passkeys live
+// in auth_* tables beside the cookbook; only hashes of tokens are stored.
 
 export class AuthError extends KooksError {
   constructor(code, message, status = 400) {
@@ -47,6 +54,11 @@ const cleanName = (value) =>
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 60);
+export const wrongCode = () =>
+  new AuthError(
+    "CODE_INVALID",
+    "That code is not right, or it has expired. Check it, or ask for a new one.",
+  );
 const tooSlow = () =>
   new AuthError("PASSKEY_EXPIRED", "That took a little too long. Try again.");
 
@@ -56,6 +68,8 @@ export function createAuth({
   mailer,
   now = () => Date.now(),
   linkLifetime = 15 * MINUTE,
+  codeLifetime = 10 * MINUTE,
+  codeAttempts = 5,
   sessionLifetime = 30 * DAY,
   challengeLifetime = 10 * MINUTE,
 }) {
@@ -82,6 +96,11 @@ export function createAuth({
       token_hash TEXT PRIMARY KEY, email TEXT NOT NULL,
       created_at TEXT NOT NULL, expires_at INTEGER NOT NULL, used_at TEXT
     );
+    CREATE TABLE IF NOT EXISTS auth_codes (
+      email TEXT PRIMARY KEY, salt TEXT NOT NULL, code_hash TEXT NOT NULL,
+      created_at TEXT NOT NULL, expires_at INTEGER NOT NULL,
+      attempts INTEGER NOT NULL
+    );
   `);
   const statements = new Map();
   const q = (sql) => {
@@ -96,6 +115,7 @@ export function createAuth({
     const t = now();
     q("DELETE FROM auth_sessions WHERE expires_at < ?").run(t);
     q("DELETE FROM auth_links WHERE expires_at < ?").run(t);
+    q("DELETE FROM auth_codes WHERE expires_at < ?").run(t);
     for (const [key, pending] of challenges)
       if (pending.expires < t) challenges.delete(key);
   }
@@ -182,6 +202,64 @@ export function createAuth({
         hash(token),
       );
       return row.email;
+    },
+    // One code per address at a time, six digits, for a few minutes and a
+    // few tries: a new request replaces the last code, a wrong guess spends
+    // a try, and the last wrong guess spends the code.
+    async requestCode({ email }) {
+      prune();
+      const address = normalizeEmail(email);
+      if (!allowed.has(address)) return false;
+      const code = String(randomInt(0, 1000000)).padStart(6, "0");
+      const salt = toBase64Url(randomBytes(16));
+      q(
+        "INSERT OR REPLACE INTO auth_codes(email, salt, code_hash, created_at, expires_at, attempts) VALUES (?, ?, ?, ?, ?, 0)",
+      ).run(
+        address,
+        salt,
+        hash(`${salt}:${code}`),
+        iso(now()),
+        now() + codeLifetime,
+      );
+      const minutes = Math.round(codeLifetime / MINUTE);
+      try {
+        await mailer.send({
+          to: address,
+          subject: `Your Kooks code: ${code}`,
+          text: `Enter this code in the Kooks app to get into your kitchen:\n\n${code}\n\nIt works once, for the next ${minutes} minutes. Kooks will never ask you for this code: type it only into the Kooks app.\nIf you did not ask for it, you can ignore this email.\n`,
+        });
+      } catch (error) {
+        q("DELETE FROM auth_codes WHERE email = ? AND salt = ?").run(
+          address,
+          salt,
+        );
+        console.error(`Kooks could not email a sign-in code: ${error.message}`);
+        return false;
+      }
+      return true;
+    },
+    confirmCode({ email, code }) {
+      prune();
+      const address = normalizeEmail(email);
+      const row = q(
+        "SELECT salt, code_hash, attempts FROM auth_codes WHERE email = ? AND expires_at >= ?",
+      ).get(address, now());
+      if (!row || !allowed.has(address)) throw wrongCode();
+      const given = String(code ?? "").replace(/\s/g, "");
+      const right =
+        /^\d{6}$/.test(given) &&
+        timingSafeEqual(
+          Buffer.from(hash(`${row.salt}:${given}`)),
+          Buffer.from(row.code_hash),
+        );
+      if (right || row.attempts + 1 >= codeAttempts)
+        q("DELETE FROM auth_codes WHERE email = ?").run(address);
+      else
+        q("UPDATE auth_codes SET attempts = attempts + 1 WHERE email = ?").run(
+          address,
+        );
+      if (!right) throw wrongCode();
+      return address;
     },
     createSession(email, method) {
       const token = randomBytes(32).toString("hex"),

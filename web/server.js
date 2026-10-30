@@ -16,7 +16,13 @@ import { batchView } from "../mcp/features.js";
 import { backupChunks } from "../mcp/backup.js";
 import { shoppingItems } from "../mcp/shopping.js";
 import { embedOrigins } from "../shared/links.js";
-import { AuthError, createAuth, normalizeEmail, parseMembers } from "./auth.js";
+import {
+  AuthError,
+  createAuth,
+  normalizeEmail,
+  parseMembers,
+  wrongCode,
+} from "./auth.js";
 import { createMailer, isEmail } from "./mail.js";
 
 // The app, built by `npm run build:client`, is the files in client/dist.
@@ -101,6 +107,14 @@ const MINUTE = 60000;
 // the changed records.
 const maxChangedActions = 200;
 const isLoopback = (host) => ["127.0.0.1", "localhost", "::1"].includes(host);
+// The phone app is this app inside Capacitor, whose pages come from these
+// origins: capacitor://localhost on iOS and https://localhost on Android.
+// It signs in with an emailed code and sends a device token with every
+// request, never a cookie, so its requests are allowed across origins only
+// to the API and only with that token.
+const appOrigins = new Set(["capacitor://localhost", "https://localhost"]);
+const bearer = (req) =>
+  String(req.headers.authorization ?? "").match(/^Bearer ([a-f0-9]{64})$/)?.[1];
 // Plain HTTP is only for the household's own network: loopback, private and
 // link-local addresses (100.64.0.0/10 is Tailscale's), and names that only
 // resolve there.
@@ -252,6 +266,12 @@ export function createWebServer({
   const tools = new Map(createTools(store).map((t) => [t.name, t]));
   const clientDir = resolve(clientRoot) + sep;
   const limits = new Map();
+  // Wrong sign-in codes per address, for the day: exact for the household's
+  // addresses, and for any other address in a map that keeps the latest
+  // 10,000, so strangers get the same answer without the map growing
+  // without end.
+  const missed = { members: new Map(), others: new Map() };
+  const othersKept = 10000;
   // Revisions are this server start plus the action sequence, so a tab that
   // was open before a restart, or against another database, reloads fully.
   const started = randomUUID().slice(0, 8);
@@ -325,14 +345,23 @@ export function createWebServer({
     "unknown";
   const cookieFor = (token, maxAge) =>
     `kooks_session=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${maxAge}${proxied ? "; Secure" : ""}`;
+  // The phone app's device token, or else the browser's cookie. A request
+  // from the phone app never counts a cookie. A kitchen whose own address is
+  // https://localhost is a browser's, not the app's.
+  const fromApp = (req) =>
+    appOrigins.has(req.headers.origin) &&
+    req.headers.origin !== external?.origin;
   const sessionToken = (req) =>
-    (req.headers.cookie ?? "").match(
-      /(?:^|;\s*)kooks_session=([a-f0-9]{64})(?:;|$)/,
-    )?.[1];
+    bearer(req) ??
+    (fromApp(req)
+      ? undefined
+      : (req.headers.cookie ?? "").match(
+          /(?:^|;\s*)kooks_session=([a-f0-9]{64})(?:;|$)/,
+        )?.[1]);
   function authenticated(req, res) {
     const token = sessionToken(req);
     const session = auth.session(token);
-    if (session?.renewed)
+    if (session?.renewed && !bearer(req))
       res.setHeader(
         "Set-Cookie",
         cookieFor(token, auth.sessionLifetime / 1000),
@@ -363,6 +392,76 @@ export function createWebServer({
           429,
         );
     };
+    // The phone app signs in with a code; links and passkeys are the
+    // browser's, and are never offered across origins, whatever the request
+    // carries.
+    if (fromApp(req) && /^POST (link|passkey\/)/.test(route))
+      return send(res, 403, {
+        message: "Open Kooks directly to make changes.",
+      });
+    if (route === "POST code") {
+      const email = normalizeEmail((await input()).email);
+      if (!isEmail(email))
+        throw new AuthError("INVALID_INPUT", "Enter a valid email address.");
+      throttle(`link:${address}`, 10, 10 * MINUTE);
+      throttle(`link:${email}`, 5, 15 * MINUTE);
+      // As for links: one answer for everyone, then the member's email.
+      send(res, 200, { ok: true });
+      if (!auth.isMember(email)) return;
+      if (limited("mail", 100, 60 * MINUTE))
+        return console.error(
+          "Kooks held back a sign-in email: 100 went out in the last hour.",
+        );
+      return void auth
+        .requestCode({ email })
+        .catch((error) =>
+          console.error(
+            `Kooks could not prepare a sign-in code: ${error.message}`,
+          ),
+        );
+    }
+    if (route === "POST code/confirm") {
+      throttle(`confirm:${address}`, 20, 10 * MINUTE);
+      const { email, code } = await input();
+      // Each code takes five guesses; across new codes, and from anywhere,
+      // an address takes twenty wrong guesses a day, and a right one starts
+      // the count again.
+      const key = normalizeEmail(email);
+      // What is not an address is never counted, so it cannot fill the map.
+      if (!isEmail(key)) throw wrongCode();
+      const counts = auth.isMember(key) ? missed.members : missed.others;
+      const t = Date.now();
+      const wrong = counts.get(key);
+      if (wrong?.until > t && wrong.count >= 20)
+        throw new AuthError(
+          "RATE_LIMITED",
+          "Too many wrong codes today. Wait until tomorrow, or sign in with a link in a browser.",
+          429,
+        );
+      let confirmed;
+      try {
+        confirmed = auth.confirmCode({ email, code });
+      } catch (error) {
+        // Set afresh, so the map's order is the order of the latest guesses.
+        counts.delete(key);
+        counts.set(
+          key,
+          wrong?.until > t
+            ? { ...wrong, count: wrong.count + 1 }
+            : { count: 1, until: t + 24 * 60 * MINUTE },
+        );
+        if (counts === missed.others && counts.size > othersKept)
+          counts.delete(counts.keys().next().value);
+        throw error;
+      }
+      counts.delete(key);
+      // The device keeps the token and sends it; it is never a cookie.
+      return send(res, 200, {
+        ok: true,
+        token: auth.createSession(confirmed, "code"),
+        account: { email: confirmed, method: "code" },
+      });
+    }
     if (route === "POST link") {
       const email = normalizeEmail((await input()).email);
       if (!isEmail(email))
@@ -407,7 +506,7 @@ export function createWebServer({
     }
     if (route === "POST signout") {
       auth.endSession(sessionToken(req));
-      res.setHeader("Set-Cookie", cookieFor("", 0));
+      if (!bearer(req)) res.setHeader("Set-Cookie", cookieFor("", 0));
       return send(res, 200, { ok: true });
     }
     const session = authenticated(req, res);
@@ -455,9 +554,25 @@ export function createWebServer({
           : !isLoopback(url.hostname.replace(/^\[|\]$/g, ""))
       )
         return send(res, 403, { message: "Unrecognized host." });
+      // With sign-in on, the phone app may call the API, and ask first;
+      // nothing else of the server is open to it. Without sign-in nothing is
+      // open across origins, since nothing would ask who is calling.
+      if (auth && fromApp(req) && url.pathname.startsWith("/api/")) {
+        res.setHeader("Access-Control-Allow-Origin", req.headers.origin);
+        res.setHeader("Vary", "Origin");
+        if (req.method === "OPTIONS") {
+          res.writeHead(204, {
+            "Access-Control-Allow-Methods": "GET, POST",
+            "Access-Control-Allow-Headers": "Authorization, Content-Type",
+            "Access-Control-Max-Age": "600",
+          });
+          return res.end();
+        }
+      }
       if (
         req.method === "POST" &&
-        req.headers.origin !== (external?.origin ?? url.origin)
+        req.headers.origin !== (external?.origin ?? url.origin) &&
+        !(fromApp(req) && auth && url.pathname.startsWith("/api/"))
       )
         return send(res, 403, {
           message: "Open Kooks directly to make changes.",
@@ -674,6 +789,11 @@ export function createWebServer({
   // slow household connection may take a few minutes to send.
   server.requestTimeout = 300000;
   server.auth = auth;
+  // How many addresses have wrong codes counted, for the tests.
+  server.wrongCodes = () => ({
+    members: missed.members.size,
+    others: missed.others.size,
+  });
   return server;
 }
 

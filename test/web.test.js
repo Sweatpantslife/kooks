@@ -59,6 +59,7 @@ async function setup(t, options = {}) {
           response.on("end", () =>
             resolve({
               status: response.statusCode,
+              headers: response.headers,
               cookie: response.headers["set-cookie"]?.[0] ?? null,
               json: () =>
                 JSON.parse(Buffer.concat(chunks).toString() || "null"),
@@ -72,6 +73,7 @@ async function setup(t, options = {}) {
   return {
     origin,
     server,
+    call,
     get: (path, headers) => call(path, { headers }),
     post: (path, input, headers) =>
       call(path, { method: "POST", input, headers }),
@@ -652,6 +654,232 @@ test("household addresses turn sign-in on, links expire, sessions slide and leav
   assert.equal((await get("/api/state", { Cookie: fresh })).status, 401);
   assert.equal((await post("/api/auth/link", { email: member })).status, 200);
   assert.equal(box.sent.length, 3);
+});
+
+const codeIn = (message) => message.text.match(/\b(\d{6})\b/)[1];
+
+test("the phone app signs in with an emailed code and sends a device token, across origins to the API only", async (t) => {
+  const box = mailbox();
+  let clock = Date.now();
+  const { call, get, post } = await setup(t, {
+    host: "0.0.0.0",
+    publicOrigin: "https://kooks.example",
+    members: [member],
+    mailer: box,
+    authOptions: { now: () => clock },
+  });
+  const app = { Host: "kooks.example", Origin: "capacitor://localhost" };
+  const browser = { Host: "kooks.example", Origin: "https://kooks.example" };
+
+  // The app asks before it calls, and only its own origins hear yes.
+  const asked = await call("/api/state", {
+    method: "OPTIONS",
+    headers: { ...app, "Access-Control-Request-Headers": "authorization" },
+  });
+  assert.equal(asked.status, 204);
+  assert.equal(
+    asked.headers["access-control-allow-origin"],
+    "capacitor://localhost",
+  );
+  assert.match(asked.headers["access-control-allow-headers"], /Authorization/);
+  for (const Origin of ["https://outside.example", "http://localhost"])
+    assert.equal(
+      (
+        await call("/api/state", {
+          method: "OPTIONS",
+          headers: { ...app, Origin },
+        })
+      ).headers["access-control-allow-origin"],
+      undefined,
+    );
+  assert.equal(
+    (await get("/", { ...app, Origin: "https://localhost" })).headers[
+      "access-control-allow-origin"
+    ],
+    undefined,
+    "the app's own pages are in the app, not on the server",
+  );
+  const locked = await get("/api/state", app);
+  assert.equal(locked.status, 401);
+  assert.equal(
+    locked.headers["access-control-allow-origin"],
+    "capacitor://localhost",
+  );
+  assert.equal((await locked.json()).error, "SIGN_IN");
+  // Links and passkeys are the browser's, whatever token comes with them.
+  const madeUp = { ...app, Authorization: `Bearer ${"0".repeat(64)}` };
+  for (const path of [
+    "link",
+    "link/confirm",
+    "passkey/options",
+    "passkey/signin",
+    "passkey/register/options",
+    "passkey/register",
+  ])
+    for (const headers of [app, madeUp]) {
+      const refused = await post(
+        `/api/auth/${path}`,
+        { email: member },
+        headers,
+      );
+      assert.equal(refused.status, 403, path);
+      assert.equal(refused.cookie, null, path);
+    }
+  assert.equal(box.sent.length, 0);
+
+  assert.equal(
+    (await post("/api/auth/code", { email: "stranger@example.test" }, app))
+      .status,
+    200,
+  );
+  assert.equal(box.sent.length, 0);
+  assert.equal(
+    (await post("/api/auth/code", { email: member }, app)).status,
+    200,
+  );
+  assert.match(box.sent[0].subject, /^Your Kooks code: \d{6}$/);
+  const code = codeIn(box.sent[0]);
+  const wrong = String((Number(code) + 1) % 1000000).padStart(6, "0");
+  const confirm = (guess, from = {}) =>
+    post(
+      "/api/auth/code/confirm",
+      { email: member, code: guess },
+      { ...app, ...from },
+    );
+  const missed = await confirm(wrong);
+  assert.equal(missed.status, 400);
+  assert.equal((await missed.json()).error, "CODE_INVALID");
+  const signed = await confirm(`${code.slice(0, 3)} ${code.slice(3)}`);
+  assert.equal(signed.status, 200);
+  assert.equal(signed.cookie, null, "the device keeps a token, not a cookie");
+  const { token, account } = await signed.json();
+  assert.match(token, /^[a-f0-9]{64}$/);
+  assert.deepEqual(account, { email: member, method: "code" });
+  assert.equal((await confirm(code)).status, 400, "a code works once");
+
+  const device = { ...app, Authorization: `Bearer ${token}` };
+  const state = await get("/api/state", device);
+  assert.equal(state.status, 200);
+  assert.deepEqual((await state.json()).account, account);
+  assert.equal(
+    (
+      await post(
+        "/api/tools/recipe_save",
+        { request_id: "phone-1", recipe: { title: "Phone soup" } },
+        device,
+      )
+    ).status,
+    200,
+  );
+  assert.equal(
+    (
+      await post(
+        "/api/tools/recipe_save",
+        { request_id: "phone-2", recipe: { title: "Stray soup" } },
+        app,
+      )
+    ).status,
+    401,
+  );
+  // The same token as a cookie counts in the browser and never from the app.
+  const cookie = { Cookie: `kooks_session=${token}` };
+  assert.equal(
+    (await get("/api/state", { ...browser, ...cookie })).status,
+    200,
+  );
+  assert.equal((await get("/api/state", { ...app, ...cookie })).status, 401);
+
+  // Five wrong guesses spend a code, and codes expire.
+  await post("/api/auth/code", { email: member }, app);
+  const second = codeIn(box.sent[1]);
+  for (let i = 0; i < 5; i++)
+    assert.equal((await confirm("000000")).status, 400);
+  assert.equal((await confirm(second)).status, 400);
+  await post("/api/auth/code", { email: member }, app);
+  clock += 10 * 60 * 1000 + 1;
+  assert.equal((await confirm(codeIn(box.sent[2]))).status, 400);
+  // However many codes are asked for, and from wherever, an address takes
+  // twenty wrong guesses a day; eight so far, since the right one.
+  const from = (i) => ({ "X-Forwarded-For": `198.51.100.${i}` });
+  for (let i = 0; i < 12; i++)
+    assert.equal((await confirm("000000", from(i))).status, 400);
+  await post("/api/auth/code", { email: member }, app);
+  const capped = await confirm(codeIn(box.sent[3]), from(99));
+  assert.equal(capped.status, 429);
+  assert.equal((await capped.json()).error, "RATE_LIMITED");
+
+  const out = await post("/api/auth/signout", {}, device);
+  assert.equal(out.status, 200);
+  assert.equal(out.cookie, null);
+  assert.equal((await get("/api/state", device)).status, 401);
+});
+
+test("wrong codes count per address, strangers' alike, and what is not an address is never kept", async (t) => {
+  const { server, post } = await setup(t, {
+    host: "0.0.0.0",
+    publicOrigin: "https://kooks.example",
+    members: [member],
+    mailer: mailbox(),
+  });
+  const app = { Host: "kooks.example", Origin: "capacitor://localhost" };
+  const guess = (email, i) =>
+    post(
+      "/api/auth/code/confirm",
+      { email, code: "000000" },
+      { ...app, "X-Forwarded-For": `198.51.100.${i}` },
+    );
+  for (const [i, email] of [
+    "x".repeat(60000),
+    `${"x".repeat(300)}@example.test`,
+    "not an address",
+    42,
+  ].entries()) {
+    const refused = await guess(email, i);
+    assert.equal(refused.status, 400);
+    assert.equal((await refused.json()).error, "CODE_INVALID");
+  }
+  assert.deepEqual(server.wrongCodes(), { members: 0, others: 0 });
+  // A stranger gets the same answers a member would.
+  for (let i = 0; i < 20; i++)
+    assert.equal((await guess("stranger@example.test", 10 + i)).status, 400);
+  assert.equal((await guess("stranger@example.test", 99)).status, 429);
+  assert.deepEqual(server.wrongCodes(), { members: 0, others: 1 });
+});
+
+test("a kitchen at https://localhost is a browser's, not the phone app's", async (t) => {
+  const box = mailbox();
+  const { call, post } = await setup(t, {
+    host: "0.0.0.0",
+    publicOrigin: "https://localhost",
+    members: [member],
+    mailer: box,
+  });
+  const browser = { Host: "localhost", Origin: "https://localhost" };
+  assert.equal(
+    (await post("/api/auth/link", { email: member }, browser)).status,
+    200,
+  );
+  const login = await post(
+    "/api/auth/link/confirm",
+    { token: tokenIn(box.sent[0]) },
+    browser,
+  );
+  assert.equal(login.status, 200);
+  const cookie = { Cookie: sessionCookie(login) };
+  const state = await call("/api/state", {
+    headers: { ...browser, ...cookie },
+  });
+  assert.equal(state.status, 200);
+  assert.equal(state.headers["access-control-allow-origin"], undefined);
+});
+
+test("without sign-in, nothing is open to the phone app's origins", async (t) => {
+  const { call, get } = await setup(t, { clientRoot: fakeBuild(t) });
+  const app = { Origin: "capacitor://localhost" };
+  const asked = await call("/api/state", { method: "OPTIONS", headers: app });
+  assert.equal(asked.headers["access-control-allow-origin"], undefined);
+  const state = await get("/api/state", app);
+  assert.equal(state.headers["access-control-allow-origin"], undefined);
 });
 
 test("sign-in requests are throttled per address", async (t) => {
