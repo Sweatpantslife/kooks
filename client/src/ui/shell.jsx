@@ -94,10 +94,6 @@ export function Shell({ children }) {
       </header>
       <main id="main" class="main" tabIndex={-1}>
         <div class="page">
-          <p class="preview-note">
-            You’re trying the new Kooks while it’s being built.
-            <a href="../">Back to the current app</a>
-          </p>
           <NowCooking />
           {children}
         </div>

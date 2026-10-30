@@ -264,5 +264,4 @@ test("the browser server serves asset bytes separately from state and hides inte
   assert.equal(missing.status, 404);
   assert.equal((await missing.json()).error, "NOT_FOUND");
   assert.equal((await fetch(`${origin}/icons.svg`)).status, 404);
-  assert.equal((await fetch(`${origin}/style.css`)).status, 200);
 });

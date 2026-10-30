@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { scan } from "../axe-scan.js";
 
-// Ideas, techniques and books in the redesigned app, against the server
+// Ideas, techniques and books in the app, against the server
 // without sign-in. Other suites share this database, so every name carries
 // this run's tag.
 const origin = "http://127.0.0.1:4318";
@@ -64,7 +64,7 @@ test("an idea is marked tried, edited, and written up as a recipe that points ba
       },
     })
   ).record;
-  await page.goto(`/next/#/recipes/idea/${encodeURIComponent(idea.id)}`);
+  await page.goto(`/#/recipes/idea/${encodeURIComponent(idea.id)}`);
   await expect(title(page)).toHaveText(bowls);
   await expect(page.getByText("From Noa’s dinner")).toBeVisible();
   await expect(more(page, "Links and videos")).toContainText("Noa’s notes");
@@ -114,7 +114,7 @@ test("a technique is kept from the Add page with the recipes that use it, and le
   page,
 }) => {
   const poach = named("Poaching eggs");
-  await page.goto("/next/#/recipes/add");
+  await page.goto("/#/recipes/add");
   await page.getByRole("link", { name: /^Keep a technique/ }).click();
   await expect(title(page)).toHaveText("New technique");
   await page.getByLabel("Name").fill(poach);
@@ -168,7 +168,7 @@ test("a book goes on the shelf from a file, keeps bookmarks and its recipes, and
   page,
 }) => {
   const salt = named("Salt Fat Acid Heat");
-  await page.goto("/next/#/recipes/book/new");
+  await page.goto("/#/recipes/book/new");
   await expect(title(page)).toHaveText("Add a book");
   await page.getByLabel("The book").setInputFiles({
     name: "notes.txt",
@@ -244,15 +244,15 @@ test("the previous app's idea, technique and book addresses open their new pages
       inspiration: { title: named("Old idea") },
     })
   ).record;
-  await page.goto(`/next/#/inspiration/${encodeURIComponent(idea.id)}`);
+  await page.goto(`/#/inspiration/${encodeURIComponent(idea.id)}`);
   await expect(page).toHaveURL(/#\/recipes\/idea\/[^/]+$/);
   await expect(title(page)).toHaveText(named("Old idea"));
-  await page.goto("/next/#/techniques/new");
+  await page.goto("/#/techniques/new");
   await expect(page).toHaveURL(/#\/recipes\/technique\/new$/);
   await expect(title(page)).toHaveText("New technique");
-  await page.goto("/next/#/inspiration/new");
+  await page.goto("/#/inspiration/new");
   await expect(page).toHaveURL(/#\/recipes\/add\/idea$/);
-  await page.goto("/next/#/library/nothing-here");
+  await page.goto("/#/library/nothing-here");
   await expect(title(page)).toHaveText("Not found");
   await expectAccessible(page, "Missing book");
 });

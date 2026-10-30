@@ -110,6 +110,26 @@ function moved([first, second, ...rest]) {
     return first === "inspiration" && second === "new"
       ? "recipes/add/idea"
       : path(["recipes", library[first], second, ...rest]);
+  // Pages about one record keep it.
+  const [third, fourth] = rest;
+  if (first === "imports" && second) return path(["recipes", "draft", second]);
+  if (first === "meals" && second) return path(["recipes", "meal", second]);
+  if (first === "plan" && second === "meals" && third)
+    return path(["recipes", "meal", third]);
+  if (
+    first === "shop" &&
+    second === "review" &&
+    (third === "recipe" || third === "meal") &&
+    fourth
+  )
+    return path(["groceries", "add", third, fourth]);
+  if (first === "recipes" && second === "new" && third === "inspiration")
+    return fourth ? path(["recipes", "idea", fourth, "write"]) : "recipes";
+  if (first === "recipes" && second && third === "variant")
+    return path(["recipes", second, "variation"]);
+  // Cooking notes are written when the cooking finishes.
+  if (first === "recipes" && second && third === "memory")
+    return path(["recipes", second]);
   return Object.hasOwn(legacy, first) ? legacy[first] : null;
 }
 

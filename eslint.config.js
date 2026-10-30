@@ -31,13 +31,13 @@ export default [
     languageOptions: { globals: globals.node },
   },
   {
-    files: ["web/public/**", "app/**"],
+    files: ["app/**"],
     languageOptions: {
       globals: { ...globals.browser, __KOOKS_VERSION__: "readonly" },
     },
   },
   {
-    // The redesigned app: Preact components written in JSX, bundled by Vite.
+    // The browser app: Preact components written in JSX, bundled by Vite.
     files: ["client/**/*.{js,jsx}"],
     languageOptions: {
       globals: { ...globals.browser, __KOOKS_VERSION__: "readonly" },

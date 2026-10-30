@@ -1,9 +1,11 @@
-# The redesigned app is built here; only its output reaches the image.
+# The browser app is built here; only its output reaches the image.
 FROM node:22-bookworm-slim AS client
 WORKDIR /build
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY client ./client
+# The app imports the unit, ingredient, link and taxonomy modules from here.
+COPY shared ./shared
 RUN npm run build:client
 
 FROM node:22-bookworm-slim

@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { scan } from "../axe-scan.js";
 
-// The Recipes tab of the redesigned app, against the server without sign-in.
+// The Recipes tab of the app, against the server without sign-in.
 // Other suites share this database, so every name carries this run's tag.
 const origin = "http://127.0.0.1:4318";
 const tag = `R${Date.now().toString(36)}`;
@@ -117,7 +117,7 @@ const tile = (page, title) =>
 test("the cookbook can be searched by ingredient and narrowed to a kind, and keeps the search after a visit", async ({
   page,
 }) => {
-  await page.goto("/next/#/recipes");
+  await page.goto("/#/recipes");
   const search = page.getByRole("searchbox", { name: "Search recipes" });
   // Ingredients count: only the salad has lettuce.
   await search.fill(`lettuce ${tag}`);
@@ -166,7 +166,7 @@ test("the cookbook can be searched by ingredient and narrowed to a kind, and kee
 test("a favorite is marked from its tile and can be undone", async ({
   page,
 }) => {
-  await page.goto("/next/#/recipes");
+  await page.goto("/#/recipes");
   await page.getByRole("searchbox", { name: "Search recipes" }).fill(tag);
   const heart = page.getByRole("button", {
     name: `Favorite: Chickpea stew ${tag}`,
@@ -189,7 +189,7 @@ test("a favorite is marked from its tile and can be undone", async ({
 test("“What can I make?” puts recipes whose ingredients are at home first and says what is missing", async ({
   page,
 }) => {
-  await page.goto("/next/#/recipes");
+  await page.goto("/#/recipes");
   await page.getByRole("searchbox", { name: "Search recipes" }).fill(tag);
   await page.getByRole("button", { name: "What can I make?" }).click();
   await expect(page.getByRole("status").first()).toContainText(
@@ -210,7 +210,7 @@ test("“What can I make?” puts recipes whose ingredients are at home first an
 test("a recipe page scales its ingredients, shows what is at home and links its family", async ({
   page,
 }) => {
-  await page.goto(`/next/#/recipes/${encodeURIComponent(orzo.id)}`);
+  await page.goto(`/#/recipes/${encodeURIComponent(orzo.id)}`);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(
     `Lemon orzo ${tag}`,
   );
@@ -256,7 +256,7 @@ test("a recipe page scales its ingredients, shows what is at home and links its 
 test("a meal page lists its dishes, and a missing recipe says so", async ({
   page,
 }) => {
-  await page.goto(`/next/#/recipes/meal/${encodeURIComponent(meal.id)}`);
+  await page.goto(`/#/recipes/meal/${encodeURIComponent(meal.id)}`);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(
     `Sunday supper ${tag}`,
   );
@@ -264,7 +264,7 @@ test("a meal page lists its dishes, and a missing recipe says so", async ({
   await expect(tile(page, `Green salad ${tag}`)).toContainText("Side");
   await expectAccessible(page, "Meal");
 
-  await page.goto("/next/#/recipes/recipe-that-is-not-here");
+  await page.goto("/#/recipes/recipe-that-is-not-here");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Not found");
   await expect(
     page.getByRole("heading", { name: "That recipe isn’t in the kitchen" }),
@@ -275,7 +275,7 @@ test("a meal is put together from the Add page, changed, and removed with Undo",
   page,
 }) => {
   const lunch = `Picnic lunch ${tag}`;
-  await page.goto("/next/#/recipes/add");
+  await page.goto("/#/recipes/add");
   await page.getByRole("link", { name: /^Put a meal together/ }).click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("New meal");
   await page.getByLabel("Name").fill(lunch);

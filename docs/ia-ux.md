@@ -1,182 +1,128 @@
 # Kooks information architecture and experience design
 
-Adopted October 9, 2026. This document is the design authority for both interfaces: the browser household app in `web/` and the Capacitor mobile app in `app/`. It replaces the navigation and page structure described in the archived product brief. Where an older document describes a different layout, this one wins.
+Adopted October 30, 2026, when the redesigned app replaced the previous browser app. This document is the design authority for the app in `client/` (Preact, built by Vite and served by `web/server.js` at `/`). The Capacitor mobile app in `app/` still has the previous structure (Today, Recipes, Plan, Shop, Cook and a Settings gear) until it moves onto this client; where the two differ, this document describes where the mobile app is going.
 
 ## Principles
 
-1. **One mental model.** The browser app and the mobile app share the same destinations, labels, verbs, components and visual tokens. A person who learns one can use the other.
-2. **Titles are labels, voice lives below them.** Every page title is the same word as its navigation item. Warmth belongs in subtitles, empty states and confirmations, never in wayfinding.
-3. **Five destinations, then depth.** Daily jobs get a tab. Everything else sits one level down behind a section tab or the Settings gear. Nothing is more than two taps from a tab.
-4. **Show, then edit.** Lists open as lists. Creating a record with four or more fields gets its own page; quick one-to-three field actions are inline disclosures. No page keeps a blank form permanently open beside its content.
-5. **One verb per job.** Cook, Shop and Plan mean the same thing on every screen and carry the same icon.
-6. **Kitchen first.** Cooking is a focused mode with large text and the timers in view, reachable in one tap from anywhere.
-7. **Progressive, reversible, honest.** Destructive or shared changes confirm or offer undo. Unknown values stay visibly unknown. Nothing claims a capability the code does not have.
+1. **Three places for the week's work.** Week is what the household eats, Recipes what it knows how to make, Groceries what it needs and has. Household holds the people, money and settings behind them. Nothing else is a destination.
+2. **The title says where you are.** Every page has one `h1`, and the browser tab reads "Title · Kooks". A small eyebrow above it carries context, such as a count or the dish's course.
+3. **Cooking is a mode, not a place.** It fills the screen, one step at a time, and a Now cooking bar on every other page leads back to it.
+4. **Show, then edit.** Pages show records; every form is a page of its own with its own address, and a form with unsaved changes asks before it is left.
+5. **Reversible and honest.** Removing something offers Undo. Unknown amounts, prices and times stay visibly unknown, and totals that miss something say "at least".
+6. **Reach, not hunt.** Everything is at most two taps from a tab, and pages link to the next thing a cook needs (a recipe to its book, a missing price to its form).
 
-## What the audit found
+## Navigation
 
-- The browser app exposed nine flat destinations (Today, Recipes, Meals & plan, Pantry, Leftovers, Household, Spending, Shopping, Cooking). Supporting records sat beside daily jobs, and on phones the sidebar collapsed into a nine-item horizontal strip without a tab bar.
-- Cooking is a mode entered from a recipe, meal or plan entry, yet it occupied a destination. The mobile app already handled this better with a resume banner.
-- The mobile app gave one of its five tabs to an Assistant that is explicitly not connected.
-- Pantry, Household, Meals and Spending each rendered a permanent form beside the list they manage.
-- Page titles were taglines (“Pick up something good.” for Shopping, “Something good for later.” for Leftovers), so the title never confirmed where you were.
-- The same action had different names: “Review groceries” on a recipe, “Shop” on a plan entry and on a meal. Rare actions (variation, cooked batch) had the same weight as Cook.
-- Each app had its own navigation, class vocabulary, icon set and colour values.
+| Destination   | Icon                            | Holds                                                                                     |
+| ------------- | ------------------------------- | ----------------------------------------------------------------------------------------- |
+| **Week**      | calendar-days                   | This week's days with their plans, leftovers set aside and the week's cost; other weeks   |
+| **Recipes**   | book-open                       | The cookbook: recipes, meals, ideas to try, techniques and books, with search and filters |
+| **Groceries** | shopping-basket                 | To buy (by aisle, with the basket), shopping for the week, At home (pantry and leftovers) |
+| **Household** | house, or the member's initials | People at the table, prices and budget, look and units, sign-in, backup                   |
 
-## Navigation model
+- At 840 px and wider a rail on the inline-start side carries the brand, the three tabs and Household at its foot. Below 840 px a top bar carries the brand and Household, and the three tabs sit at the bottom. Never both.
+- The current tab and the Household link carry `aria-current="page"`.
+- Cooking (`#/cook/<session>`) hides all navigation. Leaving it keeps the session, and the Now cooking bar at the top of every page shows its step or next timer and goes back.
 
-| Destination  | Icon            | Contents                                                                                                                                   | Section tabs (browser)                                                | Section tabs (mobile)                     |
-| ------------ | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------- | ----------------------------------------- |
-| **Today**    | house           | What is on the stove, today’s and tomorrow’s plan, use-soon pantry, drafts, find dinner                                                    | —                                                                     | —                                         |
-| **Recipes**  | book-open       | Library with search and facet filters, add recipe, recipe detail, editor, draft review; the techniques, ideas and books around the recipes | Recipes · Techniques · Ideas · Books                                  | —                                         |
-| **Plan**     | calendar-days   | The week, reusable meals, cooked batches and leftovers                                                                                     | Week · Meals · Leftovers                                              | Week · Meals                              |
-| **Shop**     | shopping-basket | Shopping list(s), the review step that adds a recipe, meal or plan entry, the pantry                                                       | List · Pantry                                                         | —                                         |
-| **Cook**     | flame           | Active cooking sessions, the focused cooking view, finished sessions                                                                       | —                                                                     | —                                         |
-| **Settings** | settings (gear) | Household people and tastes, prices and budget, backup, preferences, sharing, sign-in, assistant                                           | Household · Prices · Backup · Preferences · Sign-in (while signed in) | Backup · Preferences · Timers · Assistant |
+### Routes
 
-- The five destinations appear as a left sidebar at 840 px and wider and as a bottom tab bar below that, on both apps. The sidebar also carries the brand, an **Add recipe** button and the Settings link. Narrow layouts put the brand, Add recipe and Settings in a compact top bar.
-- The Cook tab shows a badge with the number of active sessions. Today repeats the active sessions as its first section so a returning cook never hunts for them.
-- Section tabs are a segmented control directly under the page title. The first tab is the destination’s default.
-- Household and Spending are supporting records. They move under Settings, and the places that need them link there: Today’s “Who’s eating?” links to Settings › Household; a recipe’s cost line and the week’s cost line link to Settings › Prices.
-- The mobile Assistant demonstration moves to Settings › Assistant, labelled as a preview with no connected provider.
-- Techniques, ideas and books are the know-how, intentions and sources around the recipes, so they are section tabs of Recipes rather than destinations of their own. Their routes stay `#/techniques`, `#/inspiration` and `#/library`.
-- When the household server asks members to sign in, the member's passkeys and sign-out live under Settings › Sign-in (`#/account`), and the desktop sidebar carries a Sign-in link beside Settings.
+Hash routes, noun first. The address after `#` is the whole state of the page, so every page can be bookmarked, shared and reloaded.
 
-### Browser routes
+| Route                                                                   | Page                                                         |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------ |
+| `#/week` · `#/week/<date>`                                              | This week, or the week holding that date                     |
+| `#/week/add/<date>`                                                     | Add a dish to a day                                          |
+| `#/week/when/recipe/<id>` · `/meal/<id>` · `#/week/move/<plan>`         | Choose a day for a recipe or meal, or move a plan            |
+| `#/recipes`                                                             | The cookbook                                                 |
+| `#/recipes/add` · `/paste` · `/photo` · `/idea`                         | Add to the cookbook, and each way of adding                  |
+| `#/recipes/new` · `#/recipes/draft/<id>`                                | Write a recipe; check a pasted or photographed draft         |
+| `#/recipes/<id>` · `/edit` · `/variation`                               | A recipe, its editor, and your own version of it             |
+| `#/recipes/meal/<id>`                                                   | A meal and its dishes                                        |
+| `#/recipes/idea/<id>` · `/edit` · `/write`                              | An idea to try, its form, writing it up as a recipe          |
+| `#/recipes/technique/new` · `/<id>` · `/<id>/edit`                      | A technique and its forms                                    |
+| `#/recipes/book/new` · `/<id>` · `/<id>/edit`                           | A book on the shelf and its forms                            |
+| `#/groceries` · `#/groceries/put-away`                                  | To buy; putting the basket away                              |
+| `#/groceries/week` · `/week/<date>` · `/add/recipe/<id>` · `/meal/<id>` | Pick through a week's plans, a recipe or a meal for the list |
+| `#/groceries/home`                                                      | At home                                                      |
+| `#/cook/<session>` · `/done`                                            | Cooking, and finishing it                                    |
+| `#/household` · `/people` · `/prices` · `/look` · `/signin` · `/backup` | Household and its pages                                      |
+| `#/household/people/new` · `/<id>` · `#/household/prices/new` · `/<id>` | Person and price forms                                       |
+| `#/signin/<token>`                                                      | An emailed sign-in link                                      |
 
-Hash routes, lower-case, noun first. Legacy routes redirect so bookmarks keep working.
+An unknown address shows a Not found page with a way to this week.
 
-| Route                                           | Page                                  | Legacy route                                        |
-| ----------------------------------------------- | ------------------------------------- | --------------------------------------------------- |
-| `#/today`                                       | Today                                 | `#/today`                                           |
-| `#/recipes`                                     | Recipes library                       | `#/recipes`                                         |
-| `#/recipes/add`                                 | Add a recipe (paste, photo, write)    | `#/capture`                                         |
-| `#/recipes/new`                                 | New recipe editor                     | `#/new-recipe`                                      |
-| `#/recipes/:id`                                 | Recipe                                | `#/recipes/:id`                                     |
-| `#/recipes/:id/edit` · `/variant` · `/memory`   | Edit, make a variation, cooking note  | `#/edit/:id` · `#/variant/:id` · `#/memory/:id`     |
-| `#/recipes/new/inspiration/:id`                 | New recipe written up from an idea    | `#/new-recipe/inspiration/:id`                      |
-| `#/imports/:id`                                 | Review a draft                        | `#/imports/:id`                                     |
-| `#/techniques` · `/new` · `/:id` · `/:id/edit`  | Recipes › Techniques, technique, form | —                                                   |
-| `#/inspiration` · `/new` · `/:id` · `/:id/edit` | Recipes › Ideas, idea, form           | —                                                   |
-| `#/library` · `/new` · `/:id` · `/:id/edit`     | Recipes › Books, book, forms          | —                                                   |
-| `#/account` · `#/signin/:token`                 | Settings › Sign-in, an emailed link   | —                                                   |
-| `#/plan`                                        | Plan › Week                           | `#/plan`                                            |
-| `#/plan/meals` · `/new` · `/:id`                | Plan › Meals, meal form               | `#/meals` · `#/meals/:id`                           |
-| `#/plan/leftovers` · `/new/…` · `/:id`          | Plan › Leftovers, batch form, batch   | `#/leftovers` · `#/new-batch/…` · `#/leftovers/:id` |
-| `#/shop` · `#/shop/list/:id`                    | Shop › List                           | `#/shop` · `#/shop/:id`                             |
-| `#/shop/pantry` · `/new` · `/:id`               | Shop › Pantry, pantry form            | `#/pantry` · `#/pantry/:id`                         |
-| `#/shop/review/:kind/:id`                       | Shop for a recipe, meal or plan entry | `#/review/:kind/:id`                                |
-| `#/cook` · `#/cook/:id`                         | Cook, cooking session                 | `#/cooking` · `#/cooking/:id`                       |
-| `#/settings/household` · `/new` · `/:id`        | Settings › Household, person form     | `#/household` · `#/household/:id`                   |
-| `#/settings/prices` · `/new` · `/:id`           | Settings › Prices, price form         | `#/spending` · `#/spending/:id`                     |
-| `#/settings/backup` · `#/settings/preferences`  | Settings › Backup, Preferences        | —                                                   |
+### Addresses from the previous app
 
-### Mobile views
-
-The mobile app keeps its persisted `state.view`. Views map to tabs as follows: `today` → Today; `library`, `detail`, `capture`, `editor`, `finished` → Recipes; `plan`, `meals`, `meal`, `meal-editor` → Plan; `shop` → Shop; `cook` → Cook; `review` → the tab it was opened from; `settings`, `byk` → Settings. `today` is new; older backups without it still restore because every other view remains valid.
+The previous browser app's addresses open the page that replaced them, so bookmarks keep working: `#/today` and `#/plan` open Week; `#/capture`, `#/imports/<id>` and `#/new-recipe` open adding, the draft or the editor; `#/techniques/<id>`, `#/inspiration/<id>` and `#/library/<id>` (with `/edit`) open the technique, idea or book; `#/recipes/<id>/variant` opens your own version and `/memory` the recipe; `#/meals/<id>` and `#/plan/meals/<id>` open the meal; `#/shop`, `#/pantry` and `#/leftovers` open Groceries, and `#/shop/review/<kind>/<id>` picks through that recipe or meal; `#/settings/…` and `#/account` open the Household page that took each tab's place. The server sends `/next/…`, where the app was tried out before the swap, to `/`.
 
 ## Pages
 
-Each page has one title (the navigation label), an optional warm subtitle, at most one primary action in its header, and secondary actions in a quieter row. The “Primary” column is what the page exists to let you do.
-
-| Page                   | Primary action                                      | Secondary actions                                                                                                            | Notes                                                                                                                                                          |
-| ---------------------- | --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Today                  | Find dinner                                         | Continue cooking, Cook/Shop a planned entry, Add recipe                                                                      | Filters beyond ingredients and eaters sit in a “More filters” disclosure. Shows up to 12 suggestions until a filter is applied.                                |
-| Recipes                | Add recipe                                          | Live search; Show (Favorites, 30 minutes or less, Needs review), Course, Cuisine, Diet and Tag chips built from the cookbook | The card title is the link. Favorite is a toggle on the card. Chips on a card narrow the cookbook to that value.                                               |
-| Recipes › Techniques   | Add technique                                       | Live search, Edit, Archive                                                                                                   | Steps, tips, photos, click-to-play videos and the recipes that use the technique.                                                                              |
-| Recipes › Ideas        | Add idea                                            | We tried it, Write it up as a recipe, Edit, Archive                                                                          | An idea becomes a recipe through the editor and stays linked to it.                                                                                            |
-| Recipes › Books        | Add a book                                          | Download, Open in a new tab, Read here, bookmarks, Edit details, Remove from shelf                                           | PDF or EPUB files on the household server; the reader frame is created only on request.                                                                        |
-| Add a recipe           | Review pasted recipe / Read photo / Write it myself | —                                                                                                                            | One method visible at a time via a segmented choice. The original text or photo stays with the recipe.                                                         |
-| Review a draft         | Save reviewed recipe                                | Cancel                                                                                                                       | Editor beside the original text or photo; the review confirmation stays required.                                                                              |
-| Recipe                 | Cook                                                | Shop, Plan, Edit, Make a variation, Record cooked batch, Favorite, Add cooking note                                          | Plan opens an inline date and meal disclosure. Ingredients and method sit side by side on wide screens.                                                        |
-| Edit recipe            | Save recipe                                         | Cancel                                                                                                                       | Fields grouped: Basics, Ingredients, Method, Equipment, Effort and spice (disclosure), Notes, source and links (disclosure).                                   |
-| Plan › Week            | Add to a day (per day)                              | Cook, Shop, Remove per entry; previous/next/this week                                                                        | Today is highlighted. Leftover allocations appear as “Already cooked”. A cost line appears when prices or a budget exist.                                      |
-| Plan › Meals           | New meal                                            | Cook, Shop, Edit per meal                                                                                                    | The meal form has its own page.                                                                                                                                |
-| Plan › Leftovers       | Record a batch                                      | Open batch                                                                                                                   | The batch page shows allocations beside the allocation form.                                                                                                   |
-| Shop › List            | Add an item                                         | Bought checkbox, Remove recipe contribution                                                                                  | Unchecked items first; checked items collapse under “In the basket”.                                                                                           |
-| Shop › Pantry          | Add ingredient                                      | Have checkbox, Use soon toggle, Edit                                                                                         | Use-soon items sort first.                                                                                                                                     |
-| Shop for …             | Add to shopping list                                | Update preview                                                                                                               | Untick what you already have; the preview shows the diff before anything changes.                                                                              |
-| Cook                   | Continue (per active session)                       | Pick a recipe, Open this week                                                                                                | Recently finished sessions keep their notes-and-leftovers entry point.                                                                                         |
-| Cooking session        | Done, next step                                     | Previous step, add task, start timer, Finish cooking                                                                         | Large current step per dish, progress, ingredients and full method behind a disclosure, tasks and timers in view. Requests a screen wake lock where supported. |
-| Cooking finished       | Record leftovers (per dish)                         | Remember what worked                                                                                                         | —                                                                                                                                                              |
-| Settings › Household   | Add person                                          | Edit                                                                                                                         | Explains that profiles are tastes and task owners, not accounts.                                                                                               |
-| Settings › Prices      | Add price                                           | Set or change this week’s budget, change currency/week                                                                       | Weekly estimate and “On the menu” summary live here; the Plan week shows a one-line summary.                                                                   |
-| Settings › Backup      | Export cookbook                                     | —                                                                                                                            | States the sharing mode (this computer only, or shared on the household server).                                                                               |
-| Settings › Preferences | —                                                   | Theme (System, Light, Dark), currency                                                                                        | Version and licence.                                                                                                                                           |
-
-Mobile pages follow the same table for the features the mobile app has: Today (resume, today’s plan, favorites, add recipe), Recipes, Plan › Week and Meals, Shop, Cook, and Settings › Backup, Preferences (theme, measurement display, palette, layout, spacing), Timers and Assistant (preview).
+| Page                  | For                                                                                                                                    | Primary action          |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
+| Week                  | Seven days with their plans and leftovers; today first on phones. One line with the week's food cost against the budget.               | Add to a day            |
+| Recipes               | Search by name or ingredient; chips for kind (recipes, meals, ideas, techniques, books) and for favorites and facets; What can I make? | Add                     |
+| Add                   | Paste, photograph, write, save an idea, keep a technique, add a book                                                                   | One link per way        |
+| Recipe                | Ingredients (scaled, converted, marked when at home), method, who at the table likes it, its family and sources                        | Cook                    |
+| Editor                | Basics, ingredients read back line by line, method, facets, links; a draft sits beside its original                                    | Save recipe             |
+| Meal                  | Its dishes                                                                                                                             | Cook                    |
+| Idea, technique, book | Notes, steps and tips, files and bookmarks, links and the recipes they touch                                                           | Edit, or open the book  |
+| To buy                | The list by aisle, the basket, and putting it away                                                                                     | Add, Shop for the week  |
+| At home               | What is in, what to use soon, leftovers                                                                                                | Add                     |
+| Cooking               | One step at a time in large type, the dish's ingredients, every step, timers                                                           | Next                    |
+| Finishing             | How it went per dish: rating, next time, notes, portions left over                                                                     | Done                    |
+| Household pages       | People and tastes; prices, budget and currency; colors and units; passkeys; backup                                                     | Add a person or a price |
 
 ## Key flows
 
-- **Add a recipe:** Recipes → Add recipe → choose Paste, Photo or Write → review the draft beside its source → Save → the recipe page. Two taps to the capture screen from any tab.
-- **Cook tonight:** Today → “Find dinner” → recipe → Cook. Or Plan › Week → Cook on today’s entry. The session appears under Cook with a badge until it is finished.
-- **Shop:** Recipe, meal or plan entry → Shop → untick what you have → Add to shopping list → Shop › List. Repeating the same source replaces its contribution instead of duplicating it.
-- **Plan:** Recipe → Plan → pick a day and meal → Plan › Week. Or Plan › Week → Add on a day.
-- **Leftovers:** Cook → Finish cooking → Record leftovers → allocate portions to dated meals → they appear in Plan › Week as already cooked.
+- **Add a recipe:** Recipes → Add → Paste or Photo → check the draft beside its original → Save → the recipe.
+- **Plan the week:** Week → Add on a day → pick a recipe or meal. Or a recipe → Add to the week → pick a day.
+- **Shop:** Groceries → Shop for the week → untick what you have → the list by aisle → tick into the basket → Put it all away, which fills At home.
+- **Cook:** a recipe, meal or today's plan → Cook → steps and timers → Finish → leftovers go to At home and the note shows as "Last time" on the recipe.
+- **Write up an idea:** the idea → Write it up as a recipe → the editor starts from it → Save → the idea points at the recipe.
 
 ## Components
 
-Both apps load `shared/tokens.css` and `shared/ui.css` and use the same class vocabulary; each app keeps a small stylesheet for its own quirks (`web/public/style.css`, `app/styles.css`). Icons come from `shared/icons.js`, generated from Lucide by `scripts/icons.mjs`.
+Components live in `client/src/ui/`, styles in `client/src/styles/` (`tokens.css` for every color, size and font; `base.css` for elements; `components.css` for the rest). Icons are imported one by one from `lucide`.
 
-| Component        | Class                                                                       | Use                                                                  |
-| ---------------- | --------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| App shell        | `.app`, `.sidebar`, `.topbar`, `.tabbar`, `.main`                           | Sidebar at ≥ 840 px, top bar and bottom tabs below. Safe-area aware. |
-| Page header      | `.page-header`, `.page-title`, `.page-subtitle`, `.page-actions`            | Title equals nav label; one primary button.                          |
-| Section tabs     | `.segmented`                                                                | Links with `aria-current="page"`.                                    |
-| Buttons          | `.btn`, `.btn-primary`, `.btn-quiet`, `.btn-danger`, `.btn-sm`, `.btn-icon` | 44 px minimum height; icons 18 px.                                   |
-| Fields           | `.field`, `.input`, `.select`, `.textarea`, `.check`, `.help`, `.error`     | Explicit labels; errors `role="alert"`.                              |
-| Chips            | `.chip`, `.chip-input`                                                      | Filters and multi-select eaters.                                     |
-| Cards and panels | `.card`, `.panel`                                                           | Cards for collections, panels for grouped content and forms.         |
-| Lists            | `.list`, `.list-item`, `.list-body`, `.list-actions`                        | Rows with a leading control, body and trailing actions.              |
-| Tags and badges  | `.tag`, `.tag-warm`, `.tag-neutral`, `.badge`                               | Short status labels; the badge counts sessions.                      |
-| Callouts         | `.callout`, `.callout-warning`, `.callout-success`                          | Inline notices; never for form errors.                               |
-| Empty state      | `.empty`                                                                    | Icon, one-line title, one sentence, one action.                      |
-| Toast            | `.toast`                                                                    | `role="status"`, polite; Undo when available; pauses while in use.   |
-| Cooking          | `.step-current`, `.progress`, `.timer`, `.task`                             | Large current step, deterministic countdown text.                    |
-| Embeds           | `.embed`, `.embed-load`                                                     | Video players load only when play is pressed.                        |
-| Disclosure       | `details.disclosure`                                                        | Inline secondary forms and long content.                             |
+| Component     | Where                                                          | Use                                                                |
+| ------------- | -------------------------------------------------------------- | ------------------------------------------------------------------ |
+| Shell         | `ui/shell.jsx`: `.app`, `.rail`, `.topbar`, `.tabbar`, `.main` | Navigation, skip link, Now cooking bar                             |
+| Page header   | `ui/page.jsx`: `.page-header`, `.eyebrow`                      | The `h1`, which takes focus on every page change                   |
+| Empty state   | `ui/page.jsx`: `.empty`                                        | Icon, one line, one sentence, one action                           |
+| Tiles         | `ui/tile.jsx`: `.tile`                                         | Cookbook grid; the favorite toggle sits beside the link            |
+| Forms         | `ui/form.jsx`: `.field`, `.input`, `.hint`, `.segmented`       | Visible labels, hints below, errors as `role="alert"`              |
+| Chips         | `.chips`, `.chip`, `.check-chip`                               | Filters (`aria-pressed`) and multi-select                          |
+| Related links | `ui/more.jsx`: `.more`                                         | Places to go from a page; external links say they open a new tab   |
+| Recipe picker | `ui/recipe-picker.jsx`                                         | Search and tick recipes in a form                                  |
+| Messages      | `ui/toast.jsx`, `lib/toast.js`: `.toast-region`, `.toast`      | One message at a time, with Undo when the change can be taken back |
+| Cooking       | `pages/cook.jsx`, `ui/now-cooking.jsx`                         | Full-screen steps and timers; the bar that leads back              |
 
 ## Visual system
 
-- **Tokens** live in `shared/tokens.css`: paper, surface, ink, muted, line, field-line, brand, brand-strong, on-brand, soft, warm, warm-ink, danger, danger-soft, focus; a type scale from 13 to 36 px; a 4 px spacing scale; radii 6, 10, 14 and 20 px; two shadows.
-- **Type.** Georgia for titles (h1, h2, card titles), the system sans for everything else. Body 15 px / 1.55. Minimum 13 px for secondary text.
-- **Dark mode** follows the system by default and can be forced in Settings › Preferences; every colour comes from a token so both themes stay in step. Contrast stays at or above 4.5:1 for text, and at or above 3:1 for the focus ring and form-field borders (`field-line`), in both themes and both mobile palettes.
-- **Windows contrast themes** (`forced-colors`) show selected chips, section tabs, toggles and the current destination in the system highlight colours, and outline the surfaces that only a background sets apart.
-- **Direction**: layout CSS uses logical properties (`inline-start` and `inline-end`, `text-align: start`), so setting `dir="rtl"` mirrors the shell, lists, forms and cooking footer without a second stylesheet. A unit test in `test/shared.test.js` rejects physical left and right; a declaration that must stay physical carries a `/* physical: … */` note. A right-to-left language would still need translated strings, a language setting and mirrored directional icons (chevrons and arrows).
-- **Motion** is limited to short transitions and honours `prefers-reduced-motion`.
+- **Tokens** in `client/src/styles/tokens.css`: ground, surface, raised, sunken, lines, ink and muted; tomato for actions (`--accent`), herb for what is at home and done, saffron, plum, sky and stone for kinds of things; danger and focus. A type scale from 13 to 40 px, radii of 10, 16 and 22 px and pills, a 44 px target.
+- **Type.** Bricolage Grotesque for titles, the system sans for everything else.
+- **Dark mode** follows the device, and Household › Look and units can fix it to light or dark for this browser. Text keeps at least 4.5:1 contrast and focus rings and field borders 3:1, in both themes.
+- **Windows contrast themes** (`forced-colors`) frame the selected tab, chip and choice.
+- **Direction.** Layout uses logical properties, so `dir="rtl"` mirrors it.
+- **Motion** is short and honours `prefers-reduced-motion`.
 
 ## Copy
 
-- Page title = navigation label. Subtitle carries the voice: “Thursday, 9 October. What sounds good today?”
-- Buttons start with a verb: Cook, Shop, Plan, Add recipe, Save recipe, Finish cooking.
-- Confirmations are short and past tense: “Recipe saved.” “Added to your week.”
-- Empty states name the next step: “Nothing on the stove. Pick a recipe or open this week’s plan.”
-- Unknowns are explicit: “Yield not set”, “Time not set”, “availability unknown”.
+- Titles name the page: "This week", "To buy", "People at the table".
+- Buttons start with a verb: Cook, Add to the week, Save recipe, Put it all away.
+- Messages say what happened, in the household's words: "Chickpea stew is a favorite." "Ada is at the table." "Undone."
+- Empty states say what to do next. Unknowns say so: "No price yet", "at least $42".
 
 ## Accessibility
 
-- Checked automatically: each Playwright project runs axe-core against WCAG 2.2 A and AA and axe's best practices in both themes (every web route at desktop and phone widths, every mobile view in both palettes, the sign-in screens), so a regression in names, labels, headings, landmarks or contrast fails CI. Focus order, announcements and keyboard paths have their own end-to-end tests.
-- Landmarks: one `header`, one `nav` per navigation (labelled), one `main` that receives focus on every route change, the page title as the only `h1`, including on pages that only say a record is missing. Headings below it do not skip a level; `.h-sub` styles an `h2` as a small section label.
-- A skip link to the main content.
-- `aria-current="page"` on the active destination and section tab; `aria-pressed` on toggles.
-- Every control has a visible or programmatic label; icon-only buttons carry `aria-label`.
-- Focus rings use the focus token and are never removed.
-- Touch targets are at least 44 × 44 px. Text inputs are 16 px on narrow screens to stop iOS zooming.
-- Redraws keep your place. Both apps redraw a page by replacing its markup, after another cook's change (the browser app checks every 3 seconds) or after a button on the page. `keepPlace` in `shared/a11y.js` restores the focused control, the caret in a text box, open disclosures, expanded toggles and the scroll position; when the focused control is gone, focus goes to `main`, never to the page body. Moving to another page starts at its top with `main` focused.
-- Live regions: the toast is `role="status"`; storage errors are `role="alert"`; a visually hidden polite region (`#announcer`) reads how many results a list shows once a search or filter settles, and reads the new step when cooking moves to another one (the step changes beside the button that moved it, which keeps the focus). The browser app's toast says when a timer runs out while the cooking page is open, as the mobile app's does.
-- Messages stay 7 seconds; errors and messages offering Undo stay 20 seconds. The countdown pauses while the pointer or keyboard focus is on the message, Escape dismisses it (unless a text field has the focus), and focus that was on the message returns to where it came from. On the mobile cooking view messages sit above the Previous and Next bar rather than over it.
-- Control names start with their visible words (“Play on YouTube: Folding the dough”), and every file picker has a label.
-- Colour is never the only carrier of meaning; tags carry words.
-
-## Responsive behaviour
-
-| Width        | Navigation            | Columns                                                                     |
-| ------------ | --------------------- | --------------------------------------------------------------------------- |
-| < 600 px     | Top bar + bottom tabs | One column everywhere; recipe ingredients above the method.                 |
-| 600 – 839 px | Top bar + bottom tabs | Two-column grids; forms two fields per row.                                 |
-| ≥ 840 px     | Sidebar               | Recipe ingredients beside the method; three-column card grids at ≥ 1100 px. |
-
-No page scrolls horizontally at 320 px. Both Playwright suites assert this.
+- **Checked automatically.** The `web` Playwright project runs axe against WCAG 2.2 A and AA and axe's best practices, in light and dark, on every tab and Household at phone and desktop widths and on each page its tests visit, including sign-in; a violation fails CI. Keyboard paths, focus and announcements have their own tests.
+- **Landmarks.** A skip link, one labelled main navigation, one `main`; the page title is the only `h1` and takes focus when the page changes, so a screen reader starts at the new page's title.
+- **Your place is kept.** Other cooks' changes arrive every 3 seconds while the tab is in view (at once when it comes back), and redraw the page without moving the focus or the caret: typing in a search carries on. A button that removes its own row passes the focus to the next row first.
+- **Messages** are a polite live region. Plain messages stay 7 seconds, errors and messages with Undo 20, counted from when they appear; the pointer or the focus on a message holds it. Escape or the close button dismisses it, and focus that was on it goes back where it was before the message (the button Undo reversed, for example), or else to `main`.
+- **Names.** Every control has a visible or programmatic name that starts with its visible words; icon-only buttons are labelled; toggles use `aria-pressed`; result counts and the cooking step are announced.
+- **Targets** are at least 44 × 44 px, and text fields are 16 px on phones so iOS does not zoom.
+- **No sideways scrolling.** Every page fits 320, 390, 768 and 1280 px without scrolling sideways; a test checks each one.
 
 ## Out of scope
 
-This redesign changes structure, navigation, labels, layout and the visual system. It does not change storage, validation, the MCP tools, the data contracts between the two apps, or the unfinished items in the handoff (native verification, shared cookbook, accounts, live assistance).
+The redesign changes the browser app's structure, pages and look. It does not change the MCP tools, storage or the data contracts; the mobile app's move onto this client and the unfinished items in the [handoff](handoff.md) (native verification, a shared cookbook on phones, live assistance) come next.

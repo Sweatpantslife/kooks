@@ -2,13 +2,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 import net from "node:net";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { Store } from "../mcp/store.js";
 import { createWebServer } from "../web/server.js";
 import { embedOrigins } from "../shared/links.js";
 import { createAuthenticator } from "./helpers/authenticator.js";
+import { fakeBuild } from "./helpers/build.js";
 
 const DAY = 24 * 60 * 60 * 1000;
 const member = "cook@example.test";
@@ -79,7 +79,7 @@ async function setup(t, options = {}) {
 }
 
 test("browser API shares persistent actions, reports revisions and rejects stale writes and cross-site posts", async (t) => {
-  const { origin, post } = await setup(t);
+  const { origin, post } = await setup(t, { clientRoot: fakeBuild(t) });
   const page = await fetch(origin);
   assert.equal(page.status, 200);
   assert.match(await page.text(), /<title>Kooks<\/title>/);
@@ -97,22 +97,8 @@ test("browser API shares persistent actions, reports revisions and rejects stale
         policy.includes(embedOrigin),
       `CSP allows ${embedOrigin}`,
     );
-  const shared = await fetch(`${origin}/shared/links.js`);
-  assert.equal(shared.status, 200);
-  assert.match(shared.headers.get("content-type"), /javascript/);
-  assert.match(await shared.text(), /export function describeLink/);
-  const taxonomy = await fetch(`${origin}/shared/taxonomy.js`);
-  assert.equal(taxonomy.status, 200);
-  assert.match(await taxonomy.text(), /export function matchesFacets/);
-  assert.equal((await fetch(`${origin}/shared/quantities.js`)).status, 200);
-  const a11y = await fetch(`${origin}/shared/a11y.js`);
-  assert.equal(a11y.status, 200);
-  assert.match(await a11y.text(), /export function keepPlace/);
-  const ingredients = await fetch(`${origin}/shared/ingredients.js`);
-  assert.equal(ingredients.status, 200);
-  assert.match(await ingredients.text(), /export function editedIngredients/);
-  // Only the listed modules are served, never the rest of the repository.
-  assert.equal((await fetch(`${origin}/shared/missing.js`)).status, 404);
+  // The app's build is served, never the rest of the repository.
+  assert.equal((await fetch(`${origin}/shared/links.js`)).status, 404);
   assert.equal((await fetch(`${origin}/mcp/store.js`)).status, 404);
   const initial = await (await fetch(`${origin}/api/state`)).json();
   assert.equal(initial.sharing, false);
@@ -906,11 +892,9 @@ test("sign-in link requests get the same immediate answer for members and strang
   );
 });
 
-test("the redesigned app is served at /next/ from its build folder and nothing outside it", async (t) => {
-  const folder = mkdtempSync(join(tmpdir(), "kooks-client-"));
-  t.after(() => rmSync(folder, { recursive: true, force: true }));
-  const build = join(folder, "dist");
-  writeFileSync(join(folder, "secret.json"), '{"secret":true}');
+test("the app is served at / from its build folder and nothing outside it, and /next/ leads there", async (t) => {
+  const build = fakeBuild(t, {});
+  writeFileSync(join(build, "..", "secret.json"), '{"secret":true}');
   const { origin } = await setup(t, { clientRoot: build });
   // Raw requests, so the paths reach the server exactly as written.
   const { hostname, port } = new URL(origin);
@@ -931,7 +915,7 @@ test("the redesigned app is served at /next/ from its build folder and nothing o
         .on("error", reject),
     );
 
-  const unbuilt = await get("/next/");
+  const unbuilt = await get("/");
   assert.equal(unbuilt.status, 404);
   assert.match(JSON.parse(unbuilt.body).message, /npm run build:client/);
 
@@ -946,40 +930,51 @@ test("the redesigned app is served at /next/ from its build folder and nothing o
   );
   writeFileSync(join(build, "notes.txt"), "not a served type");
 
-  const bare = await get("/next");
-  assert.equal(bare.status, 308);
-  assert.equal(bare.headers.location, "/next/");
-
-  const page = await get("/next/");
+  const page = await get("/");
   assert.equal(page.status, 200);
   assert.match(page.headers["content-type"], /^text\/html/);
   assert.equal(page.headers["cache-control"], "no-cache");
   assert.match(page.headers["content-security-policy"], /script-src 'self'/);
   assert.match(page.body, /<title>Kooks<\/title>/);
+  assert.equal((await get("/index.html")).body, page.body);
 
-  const script = await get("/next/assets/index-Ab12.js");
+  const script = await get("/assets/index-Ab12.js");
   assert.equal(script.status, 200);
   assert.match(script.headers["content-type"], /^text\/javascript/);
   assert.equal(
     script.headers["cache-control"],
     "public, max-age=31536000, immutable",
   );
-  const packed = await get("/next/assets/index-Ab12.js", {
+  const packed = await get("/assets/index-Ab12.js", {
     "Accept-Encoding": "br",
   });
   assert.equal(packed.headers["content-encoding"], "br");
   assert.ok(Number(packed.headers["content-length"]) < 1000);
-  const again = await get("/next/", { "If-None-Match": page.headers.etag });
+  const again = await get("/", { "If-None-Match": page.headers.etag });
   assert.equal(again.status, 304);
 
-  assert.equal((await get("/next/notes.txt")).status, 404);
-  assert.equal((await get("/next/assets/missing.js")).status, 404);
+  // Addresses from when the app was tried out at /next/ lead to the same
+  // file; a page's own address after # is kept by the browser.
+  for (const [from, to] of [
+    ["/next", "/"],
+    ["/next/", "/"],
+    ["/next/assets/index-Ab12.js", "/assets/index-Ab12.js"],
+  ]) {
+    const moved = await get(from);
+    assert.equal(moved.status, 308, from);
+    assert.equal(moved.headers.location, to, from);
+  }
+  assert.equal((await get("/nextdoor.js")).status, 404);
+
+  assert.equal((await get("/notes.txt")).status, 404);
+  assert.equal((await get("/assets/missing.js")).status, 404);
   for (const path of [
+    "/../secret.json",
+    "/%2e%2e/secret.json",
+    "/..%2fsecret.json",
+    "/..%5csecret.json",
+    "/assets/../../secret.json",
     "/next/../secret.json",
-    "/next/%2e%2e/secret.json",
-    "/next/..%2fsecret.json",
-    "/next/..%5csecret.json",
-    "/next/assets/../../secret.json",
   ]) {
     const response = await get(path);
     assert.notEqual(response.status, 200, path);

@@ -88,19 +88,21 @@ test("record and item ids are the shapes Kooks makes, while request ids and sour
   }
 });
 
-// The server only hands out safe ids, and both apps still escape every id
-// they put into an attribute, so a record that predates the rule cannot
-// break out of the markup.
-test("both apps escape the ids they write into markup attributes", () => {
-  for (const file of ["web/public/app.js", "app/cookbook.js"]) {
-    const source = readFileSync(new URL(`../${file}`, import.meta.url), "utf8");
-    const raw = [
-      ...source.matchAll(
-        /(?<![[\w-])[\w-]+="[^"$]*\$\{((?:\w*[iI]d|[\w?.]+\.\w*[iI]d)(?: \?\? "")?)\}/g,
-      ),
-    ].map((match) => match[0]);
-    assert.deepEqual(raw, [], `${file} writes ids into markup unescaped`);
-  }
+// The server only hands out safe ids, and the mobile app still escapes every
+// id it puts into an attribute, so a record that predates the rule cannot
+// break out of the markup. (The browser app's Preact components never write
+// markup as text.)
+test("the mobile app escapes the ids it writes into markup attributes", () => {
+  const source = readFileSync(
+    new URL("../app/cookbook.js", import.meta.url),
+    "utf8",
+  );
+  const raw = [
+    ...source.matchAll(
+      /(?<![[\w-])[\w-]+="[^"$]*\$\{((?:\w*[iI]d|[\w?.]+\.\w*[iI]d)(?: \?\? "")?)\}/g,
+    ),
+  ].map((match) => match[0]);
+  assert.deepEqual(raw, [], "app/cookbook.js writes ids into markup unescaped");
 });
 
 test("the mobile app runs under a content security policy that allows exactly the video players", () => {

@@ -19,33 +19,7 @@ import { embedOrigins } from "../shared/links.js";
 import { AuthError, createAuth, normalizeEmail, parseMembers } from "./auth.js";
 import { createMailer, isEmail } from "./mail.js";
 
-const publicRoot = fileURLToPath(new URL("./public/", import.meta.url));
-// The browser client is these files and the shared modules it imports: the
-// link module, the facet taxonomy and the unit module the taxonomy builds on,
-// the ingredient-line module the recipe editor reads lines back with, the icon
-// module, the accessibility helpers, and the design tokens and components both
-// apps use.
-const staticFiles = new Map([
-  ...["/index.html", "/app.js", "/style.css", "/favicon.svg"].map((path) => [
-    path,
-    resolve(publicRoot, `.${path}`),
-  ]),
-  ...[
-    "links.js",
-    "taxonomy.js",
-    "quantities.js",
-    "ingredients.js",
-    "icons.js",
-    "a11y.js",
-    "tokens.css",
-    "ui.css",
-  ].map((name) => [
-    `/shared/${name}`,
-    fileURLToPath(new URL(`../shared/${name}`, import.meta.url)),
-  ]),
-]);
-// The redesigned app, built by `npm run build:client`, is served at /next/
-// beside this one until it replaces it.
+// The app, built by `npm run build:client`, is the files in client/dist.
 const builtClient = fileURLToPath(new URL("../client/dist/", import.meta.url));
 const mime = {
   ".html": "text/html; charset=utf-8",
@@ -625,12 +599,20 @@ export function createWebServer({
           largeUploads--;
         }
       }
-      if (req.method === "GET" && url.pathname === "/next") {
-        res.writeHead(308, { Location: "/next/" });
+      // The app was tried out at /next/ before it replaced the previous one;
+      // bookmarks from then land on the same page, since the address after
+      // # survives the redirect.
+      if (
+        req.method === "GET" &&
+        (url.pathname === "/next" || url.pathname.startsWith("/next/"))
+      ) {
+        res.writeHead(308, {
+          Location: url.pathname.slice("/next".length) || "/",
+        });
         return res.end();
       }
-      if (req.method === "GET" && url.pathname.startsWith("/next/")) {
-        const name = url.pathname.slice("/next/".length) || "index.html";
+      if (req.method === "GET") {
+        const name = url.pathname.slice(1) || "index.html";
         const file = resolve(clientDir, name);
         if (!file.startsWith(clientDir) || !mime[extname(file)])
           return send(res, 404, { message: "Not found." });
@@ -650,20 +632,9 @@ export function createWebServer({
           return send(res, 404, {
             message:
               name === "index.html"
-                ? "The new Kooks app is not built yet. Run npm run build:client."
+                ? "The Kooks app is not built yet. Run npm run build:client."
                 : "Not found.",
           });
-        }
-      }
-      if (req.method === "GET") {
-        const path = url.pathname === "/" ? "/index.html" : url.pathname;
-        if (staticFiles.has(path)) {
-          try {
-            return await sendStatic(req, res, staticFiles.get(path));
-          } catch (error) {
-            if (error.code !== "ENOENT") throw error;
-            return send(res, 404, { message: "Not found." });
-          }
         }
       }
       send(res, 404, { message: "Not found." });

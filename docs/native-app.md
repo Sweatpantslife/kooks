@@ -42,7 +42,7 @@ For a physical iPhone, select your Apple development team in Xcode's Signing & C
 
 ## Included experience
 
-- The same navigation as the browser app: Today, Recipes, Plan (Week and Meals), Shop and Cook, with backup, preferences, timer alerts and the assistant preview under the Settings gear. See [the IA and UX guide](ia-ux.md).
+- The previous browser app's navigation: Today, Recipes, Plan (Week and Meals), Shop and Cook, with backup, preferences, timer alerts and the assistant preview under the Settings gear. The redesigned browser app ([the IA and UX guide](ia-ux.md)) replaces it when the mobile app moves onto the same client.
 - Recipe library, ingredient search, favorites, manual/paste entry, editing, original recipe text, serving adjustments, required equipment, cooking notes, and links and videos: YouTube, Vimeo, Facebook, Instagram and TikTok players load from the provider only when play is pressed; other links open in the browser.
 - Composed meals with independent dish portions and combined equipment. Reviewed shopping contributions combine matching ingredients, avoid duplicate additions, and clear checkmarks when amounts change.
 - A simple Monday–Sunday plan with saved dish portions.

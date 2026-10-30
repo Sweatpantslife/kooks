@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { scan } from "../axe-scan.js";
 
-// The Week tab of the redesigned app, against the server without sign-in.
+// The Week tab of the app, against the server without sign-in.
 // Other suites share this database, so every name carries this run's tag.
 const origin = "http://127.0.0.1:4318";
 const tag = `W${Date.now().toString(36)}`;
@@ -84,7 +84,7 @@ test("a dish is added to today, moved to tomorrow, and taken off with Undo", asy
 }) => {
   const today = day(),
     tomorrow = day(1);
-  await page.goto("/next/#/week");
+  await page.goto("/#/week");
   await expect(title(page)).toHaveText("This week");
   await expect(dayCard(page, today)).toContainText("Today");
   await dayCard(page, today)
@@ -142,7 +142,7 @@ test("a dish is added to today, moved to tomorrow, and taken off with Undo", asy
 
 test("a recipe or a meal is planned from its own page", async ({ page }) => {
   const today = day();
-  await page.goto(`/next/#/recipes/${encodeURIComponent(stew.id)}`);
+  await page.goto(`/#/recipes/${encodeURIComponent(stew.id)}`);
   await page.getByRole("link", { name: "Add to the week" }).click();
   await expect(title(page)).toHaveText("Which day?");
   await expect(page.getByRole("radio", { name: "Dinner" })).toBeChecked();
@@ -153,7 +153,7 @@ test("a recipe or a meal is planned from its own page", async ({ page }) => {
     `Stew ${tag} is on ${weekday(today)}.`,
   );
 
-  await page.goto(`/next/#/recipes/meal/${encodeURIComponent(meal.id)}`);
+  await page.goto(`/#/recipes/meal/${encodeURIComponent(meal.id)}`);
   await page.getByRole("link", { name: "Add to the week" }).click();
   await page.getByRole("button", { name: /^Today/ }).click();
   await expect(title(page)).toHaveText(`Friday supper ${tag}`);
@@ -181,7 +181,7 @@ test("leftovers set aside for a day show on it", async ({ page, request }) => {
     allocation: { portions: 2, date: day(), slot: "Lunch" },
   });
   // Today is always on this week's page; tomorrow may be next week's.
-  await page.goto("/next/#/week");
+  await page.goto("/#/week");
   await expect(
     dayCard(page, day())
       .getByRole("listitem")
@@ -193,7 +193,7 @@ test("leftovers set aside for a day show on it", async ({ page, request }) => {
 test("the weeks page forward and back, and each has its own address", async ({
   page,
 }) => {
-  await page.goto("/next/#/week");
+  await page.goto("/#/week");
   await page.getByRole("link", { name: "Next week" }).click();
   await expect(title(page)).toHaveText("Next week");
   await expect(page).toHaveURL(new RegExp(`#/week/${monday(7)}$`));
