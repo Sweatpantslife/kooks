@@ -1324,7 +1324,7 @@ async function settingsPage(tab, id) {
     return {
       title: "Settings",
       active: "settings",
-      content: `${header("Keep a portable copy of your cookbook, and see how this kitchen is shared.")}<div class="grid-2"><section class="panel stack"><h2>Backup</h2><p class="small muted">Export everything as one portable Kooks file, including photos, leftovers and prices. Keep it somewhere safe outside this computer.</p><div>${button("Export cookbook", "export", "", "btn-primary", "download")}</div><p class="small muted">Restoring replaces an empty cookbook through the MCP tools; see the household guide.</p></section><section class="panel stack"><h2>Sharing</h2>${callout(sharing ? "<strong>Shared household server.</strong> Everyone with the household key sees the same cookbook, plan and cooking progress." : "<strong>This computer only.</strong> The server accepts connections from this computer. A trusted-network key can share it with the household.", { ico: sharing ? "wifi" : "lock" })}<p class="small muted">One shared household, one key. Person profiles are tastes and task owners, not accounts.</p></section></div>`,
+      content: `${header("Keep a portable copy of your cookbook, and see how this kitchen is shared.")}<div class="grid-2"><section class="panel stack"><h2>Backup</h2><p class="small muted">Export everything as one portable Kooks file, including photos, leftovers and prices. Keep it somewhere safe outside this computer.</p><div>${button("Export cookbook", "export", "", "btn-primary", "download")}</div><p class="small muted">Restoring fills an empty cookbook from the command line or through the MCP tools; see the household guide.</p></section><section class="panel stack"><h2>Sharing</h2>${callout(sharing ? "<strong>Shared household server.</strong> Everyone with the household key sees the same cookbook, plan and cooking progress." : "<strong>This computer only.</strong> The server accepts connections from this computer. A trusted-network key can share it with the household.", { ico: sharing ? "wifi" : "lock" })}<p class="small muted">One shared household, one key. Person profiles are tastes and task owners, not accounts.</p></section></div>`,
     };
   const status = await api("kooks_status").catch(() => null);
   return {
@@ -2899,17 +2899,13 @@ document.addEventListener("click", async (event) => {
       signin = { step: "start", email: signin.email, error: "" };
       renderLogin();
     } else if (a === "export") {
-      const result = await api("backup_export");
-      const blob = new Blob([JSON.stringify(result.backup, null, 2)], {
-        type: "application/json",
-      });
-      const url = URL.createObjectURL(blob),
-        anchor = document.createElement("a");
-      anchor.href = url;
+      // The server streams the backup straight into the download, whatever
+      // the size of the shelf.
+      const anchor = document.createElement("a");
+      anchor.href = "/api/backup";
       anchor.download = `kooks-${today()}.json`;
       anchor.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-      toast("Cookbook exported with photos, books and leftovers.");
+      toast("Exporting your cookbook with photos, books and leftovers.");
     }
   } catch (error) {
     toast(error.message, true);

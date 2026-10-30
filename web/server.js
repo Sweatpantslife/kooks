@@ -1,7 +1,11 @@
 import http from "node:http";
 import { isIPv4, isIPv6 } from "node:net";
 import { randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
+import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
+import { promisify } from "node:util";
+import { brotliCompress, constants, gzip } from "node:zlib";
 import { fileURLToPath } from "node:url";
 import { resolve, extname, sep } from "node:path";
 import { ZodError } from "zod";
@@ -9,6 +13,7 @@ import { Store, KooksError } from "../mcp/store.js";
 import { createTools } from "../mcp/tools.js";
 import { kind } from "../mcp/schemas.js";
 import { batchView } from "../mcp/features.js";
+import { backupChunks } from "../mcp/backup.js";
 import { shoppingItems } from "../mcp/shopping.js";
 import { embedOrigins } from "../shared/links.js";
 import { AuthError, createAuth, normalizeEmail, parseMembers } from "./auth.js";
@@ -51,6 +56,72 @@ const mime = {
   ".woff2": "font/woff2",
   ".webmanifest": "application/manifest+json",
 };
+// Text larger than this travels compressed when the browser accepts it.
+// Brotli at quality 5 shrinks app.js to a quarter and a 7.8 MB cookbook to
+// about 160 KB in some 50 ms, off the main thread.
+const compressFrom = 32 * 1024;
+const compressors = {
+  br: (body) =>
+    promisify(brotliCompress)(body, {
+      params: {
+        [constants.BROTLI_PARAM_QUALITY]: 5,
+        [constants.BROTLI_PARAM_SIZE_HINT]: body.length,
+      },
+    }),
+  gzip: (body) => promisify(gzip)(body),
+};
+function acceptedEncoding(req) {
+  const accepted = String(req.headers["accept-encoding"] ?? "")
+    .split(",")
+    .map((part) =>
+      part
+        .trim()
+        .toLowerCase()
+        .split(/\s*;\s*/),
+    )
+    .filter(([, weight]) => !/^q=0(\.0*)?$/.test(weight ?? ""))
+    .map(([name]) => name);
+  return ["br", "gzip"].find((name) => accepted.includes(name)) ?? null;
+}
+// Static files revalidate on every load against a tag of their size and
+// modification time: an unchanged file costs a 304, and an edited one shows
+// at once without restarting the server. Each version is read and encoded
+// once; fonts and images are already compressed and travel as they are.
+const compressible = new Set([".html", ".js", ".css", ".svg", ".webmanifest"]);
+const staticCache = new Map();
+async function staticFile(file, encoding) {
+  const info = await stat(file);
+  const tag = `W/"${info.size}-${Math.floor(info.mtimeMs)}"`;
+  let entry = staticCache.get(file);
+  if (entry?.tag !== tag) {
+    entry = { tag, identity: await readFile(file) };
+    staticCache.set(file, entry);
+  }
+  if (
+    encoding &&
+    compressible.has(extname(file)) &&
+    entry.identity.length > 1024
+  )
+    entry[encoding] ??= await compressors[encoding](entry.identity);
+  else encoding = null;
+  return { tag, encoding, data: entry[encoding ?? "identity"] };
+}
+async function sendStatic(req, res, file, cacheControl = "no-cache") {
+  const found = await staticFile(file, acceptedEncoding(req));
+  res.setHeader("Cache-Control", cacheControl);
+  res.setHeader("ETag", found.tag);
+  res.setHeader("Vary", "Accept-Encoding");
+  if (req.headers["if-none-match"] === found.tag) {
+    res.writeHead(304);
+    return res.end();
+  }
+  res.writeHead(200, {
+    "Content-Type": mime[extname(file)],
+    "Content-Length": found.data.length,
+    ...(found.encoding ? { "Content-Encoding": found.encoding } : {}),
+  });
+  return res.end(found.data);
+}
 const MINUTE = 60000;
 // A tab that is this many actions behind gets everything again instead of
 // the changed records.
@@ -216,11 +287,22 @@ export function createWebServer({
   const policy = `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; connect-src 'self'; frame-src 'self' ${embedOrigins.join(" ")}; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'`;
   let importsInProgress = 0,
     largeUploads = 0;
-  function send(res, status, data) {
-    res.writeHead(status, {
-      "Content-Type": "application/json; charset=utf-8",
-    });
-    res.end(JSON.stringify(data));
+  // A large reply, such as a cookbook's first load, is compressed when the
+  // browser accepts it.
+  async function send(res, status, data) {
+    const headers = { "Content-Type": "application/json; charset=utf-8" };
+    let body = Buffer.from(JSON.stringify(data));
+    const encoding = body.length > compressFrom && acceptedEncoding(res.req);
+    if (encoding)
+      try {
+        body = await compressors[encoding](body);
+        headers["Content-Encoding"] = encoding;
+        headers.Vary = "Accept-Encoding";
+      } catch (error) {
+        console.error(error);
+      }
+    res.writeHead(status, headers);
+    res.end(body);
   }
   const tooLarge = () =>
     Object.assign(new KooksError("TOO_LARGE", "Request is too large."), {
@@ -491,6 +573,22 @@ export function createWebServer({
         });
         return res.end(asset.bytes);
       }
+      // The portable backup streams as it is written, so a shelf of large
+      // ebooks downloads like a small cookbook; the page names the file.
+      if (url.pathname === "/api/backup" && req.method === "GET") {
+        res.writeHead(200, {
+          "Content-Type": "application/json; charset=utf-8",
+          "Content-Disposition": "attachment",
+        });
+        try {
+          await pipeline(Readable.from(backupChunks(store)), res);
+        } catch (error) {
+          // A dropped connection is not a failure worth logging.
+          if (error.code !== "ERR_STREAM_PREMATURE_CLOSE") console.error(error);
+          res.destroy();
+        }
+        return;
+      }
       if (url.pathname.startsWith("/api/tools/") && req.method === "POST") {
         const tool = tools.get(
           decoded(url.pathname.slice("/api/tools/".length)),
@@ -536,9 +634,17 @@ export function createWebServer({
         const file = resolve(clientDir, name);
         if (!file.startsWith(clientDir) || !mime[extname(file)])
           return send(res, 404, { message: "Not found." });
-        let data;
         try {
-          data = await readFile(file);
+          // Built files carry a content hash in their name, so they never
+          // change; the page that names them revalidates.
+          return await sendStatic(
+            req,
+            res,
+            file,
+            name.startsWith("assets/")
+              ? "public, max-age=31536000, immutable"
+              : "no-cache",
+          );
         } catch (error) {
           if (error.code !== "ENOENT") throw error;
           return send(res, 404, {
@@ -548,24 +654,16 @@ export function createWebServer({
                 : "Not found.",
           });
         }
-        // Built files carry a content hash in their name, so they never change.
-        if (name.startsWith("assets/"))
-          res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
-        res.writeHead(200, { "Content-Type": mime[extname(file)] });
-        return res.end(data);
       }
       if (req.method === "GET") {
         const path = url.pathname === "/" ? "/index.html" : url.pathname;
         if (staticFiles.has(path)) {
-          let data;
           try {
-            data = await readFile(staticFiles.get(path));
+            return await sendStatic(req, res, staticFiles.get(path));
           } catch (error) {
             if (error.code !== "ENOENT") throw error;
             return send(res, 404, { message: "Not found." });
           }
-          res.writeHead(200, { "Content-Type": mime[extname(path)] });
-          return res.end(data);
         }
       }
       send(res, 404, { message: "Not found." });

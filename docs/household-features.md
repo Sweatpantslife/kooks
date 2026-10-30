@@ -68,7 +68,14 @@ Members are known by email address; person profiles remain taste preferences and
 
 ## Data, compatibility and checks
 
-All mutations use the same validated tools, SQLite transactions, optimistic versions, request keys and reversible history as the original MCP implementation. `backup_export` now emits schema version 2 and includes the new records, photos, recipe links, recipe facets, techniques, ideas and books together with their PDF and EPUB files, so a large shelf makes exports large; exports made before the facets restore with them unset. Restore accepts both versions 1 and 2 and still requires an empty database. It rejects invalid references and over-allocated batches atomically. Settings › Backup › Export cookbook downloads this portable JSON.
+All mutations use the same validated tools, SQLite transactions, optimistic versions, request keys and reversible history as the original MCP implementation. `backup_export` now emits schema version 2 and includes the new records, photos, recipe links, recipe facets, techniques, ideas and books together with their PDF and EPUB files, so a large shelf makes exports large; exports made before the facets restore with them unset. Restore accepts both versions 1 and 2 and still requires an empty database. It rejects invalid references and over-allocated batches atomically. Settings › Backup › Export cookbook downloads this portable JSON as the server writes it, so a shelf of large ebooks downloads like a small cookbook. On the computer that keeps the cookbook, a backup of any size can also be written and restored from the command line; both read and write one record at a time:
+
+```sh
+node scripts/backup.mjs export kooks-backup.json
+KOOKS_DB_PATH=/path/to/empty.sqlite node scripts/backup.mjs restore kooks-backup.json
+```
+
+`KOOKS_DB_PATH` selects the database as it does for the servers, and the backup file is created readable by its owner only. Through MCP, `backup_export` and `backup_restore` carry the whole backup in one message, so `backup_export` refuses a cookbook whose photos and ebooks exceed 64 MB and names these two ways instead.
 
 ```sh
 npm test

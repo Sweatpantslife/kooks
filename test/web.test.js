@@ -914,10 +914,10 @@ test("the redesigned app is served at /next/ from its build folder and nothing o
   const { origin } = await setup(t, { clientRoot: build });
   // Raw requests, so the paths reach the server exactly as written.
   const { hostname, port } = new URL(origin);
-  const get = (path) =>
+  const get = (path, headers = {}) =>
     new Promise((resolve, reject) =>
       http
-        .get({ hostname, port, path }, (response) => {
+        .get({ hostname, port, path, headers }, (response) => {
           let body = "";
           response.on("data", (chunk) => (body += chunk));
           response.on("end", () =>
@@ -940,7 +940,10 @@ test("the redesigned app is served at /next/ from its build folder and nothing o
     join(build, "index.html"),
     "<!doctype html><title>Kooks</title>",
   );
-  writeFileSync(join(build, "assets", "index-Ab12.js"), "export {};");
+  writeFileSync(
+    join(build, "assets", "index-Ab12.js"),
+    `export const words = ${JSON.stringify("kooks ".repeat(1000))};`,
+  );
   writeFileSync(join(build, "notes.txt"), "not a served type");
 
   const bare = await get("/next");
@@ -950,7 +953,7 @@ test("the redesigned app is served at /next/ from its build folder and nothing o
   const page = await get("/next/");
   assert.equal(page.status, 200);
   assert.match(page.headers["content-type"], /^text\/html/);
-  assert.equal(page.headers["cache-control"], "no-store");
+  assert.equal(page.headers["cache-control"], "no-cache");
   assert.match(page.headers["content-security-policy"], /script-src 'self'/);
   assert.match(page.body, /<title>Kooks<\/title>/);
 
@@ -961,6 +964,13 @@ test("the redesigned app is served at /next/ from its build folder and nothing o
     script.headers["cache-control"],
     "public, max-age=31536000, immutable",
   );
+  const packed = await get("/next/assets/index-Ab12.js", {
+    "Accept-Encoding": "br",
+  });
+  assert.equal(packed.headers["content-encoding"], "br");
+  assert.ok(Number(packed.headers["content-length"]) < 1000);
+  const again = await get("/next/", { "If-None-Match": page.headers.etag });
+  assert.equal(again.status, 304);
 
   assert.equal((await get("/next/notes.txt")).status, 404);
   assert.equal((await get("/next/assets/missing.js")).status, 404);

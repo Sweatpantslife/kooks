@@ -1,0 +1,22 @@
+# Weekly version updates. Security updates arrive as soon as an advisory is
+# published, independent of this schedule.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # Capacitor's core, platform and CLI packages move together.
+      capacitor:
+        patterns: ["@capacitor/*"]
+      npm-minor-and-patch:
+        update-types: [minor, patch]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]

@@ -11,6 +11,8 @@ npm ci
 npm run dev:mobile
 ```
 
+The Capacitor packages are development dependencies: Vite bundles them into the mobile app and the native projects read them from `node_modules`, so build from a full `npm ci`. `npm ci --omit=dev`, which the server's Docker image uses, leaves them out.
+
 Open `http://127.0.0.1:5173` to preview the mobile interface in a browser. This uses IndexedDB for browser data. The packaged native apps use Capacitor Filesystem in the app's private data directory.
 
 ```sh
