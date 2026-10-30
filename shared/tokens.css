@@ -10,9 +10,11 @@
   --surface: #fffef9;
   --surface-2: #f0f1e8;
   --ink: #283c30;
-  --muted: #5f6b5d;
+  --muted: #5a6658;
   --line: #dfe2d6;
   --line-strong: #c3c9b8;
+  /* Form fields are told apart by their border, so it keeps 3:1. */
+  --field-line: #7f8a79;
   --brand: #3c5d45;
   --brand-strong: #2d4935;
   --on-brand: #fffef9;
@@ -23,7 +25,7 @@
   --danger: #a6392c;
   --danger-soft: #fbe9de;
   --danger-ink: #7f2a20;
-  --focus: #6f9a5a;
+  --focus: #557d43;
   --embed-bg: #22312a;
   --embed-ink: #fffef7;
   --scrim: rgb(40 60 48 / 0.08);
@@ -87,6 +89,7 @@
     --muted: #a4ad9d;
     --line: #30392f;
     --line-strong: #46513f;
+    --field-line: #737e6c;
     --brand: #a3c4a2;
     --brand-strong: #bdd9ba;
     --on-brand: #14201a;
@@ -115,6 +118,7 @@
   --muted: #a4ad9d;
   --line: #30392f;
   --line-strong: #46513f;
+  --field-line: #737e6c;
   --brand: #a3c4a2;
   --brand-strong: #bdd9ba;
   --on-brand: #14201a;

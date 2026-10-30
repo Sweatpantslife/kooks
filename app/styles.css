@@ -180,7 +180,7 @@
   --on-brand: #fffaf4;
   --soft: #efe0d6;
   --soft-ink: #5a3425;
-  --focus: #b27a5c;
+  --focus: #93593f;
 }
 @media (prefers-color-scheme: dark) {
   :root[data-palette="clay"]:not([data-theme="light"]) {

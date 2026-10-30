@@ -130,16 +130,17 @@ Both apps load `shared/tokens.css` and `shared/ui.css` and use the same class vo
 | Tags and badges  | `.tag`, `.tag-warm`, `.tag-neutral`, `.badge`                               | Short status labels; the badge counts sessions.                      |
 | Callouts         | `.callout`, `.callout-warning`, `.callout-success`                          | Inline notices; never for form errors.                               |
 | Empty state      | `.empty`                                                                    | Icon, one-line title, one sentence, one action.                      |
-| Toast            | `.toast`                                                                    | `role="status"`, polite; Undo when available.                        |
+| Toast            | `.toast`                                                                    | `role="status"`, polite; Undo when available; pauses while in use.   |
 | Cooking          | `.step-current`, `.progress`, `.timer`, `.task`                             | Large current step, deterministic countdown text.                    |
 | Embeds           | `.embed`, `.embed-load`                                                     | Video players load only when play is pressed.                        |
 | Disclosure       | `details.disclosure`                                                        | Inline secondary forms and long content.                             |
 
 ## Visual system
 
-- **Tokens** live in `shared/tokens.css`: paper, surface, ink, muted, line, brand, brand-strong, on-brand, soft, warm, warm-ink, danger, danger-soft, focus; a type scale from 13 to 36 px; a 4 px spacing scale; radii 6, 10, 14 and 20 px; two shadows.
+- **Tokens** live in `shared/tokens.css`: paper, surface, ink, muted, line, field-line, brand, brand-strong, on-brand, soft, warm, warm-ink, danger, danger-soft, focus; a type scale from 13 to 36 px; a 4 px spacing scale; radii 6, 10, 14 and 20 px; two shadows.
 - **Type.** Georgia for titles (h1, h2, card titles), the system sans for everything else. Body 15 px / 1.55. Minimum 13 px for secondary text.
-- **Dark mode** follows the system by default and can be forced in Settings › Preferences; every colour comes from a token so both themes stay in step. Contrast stays at or above 4.5:1 for body text in both themes.
+- **Dark mode** follows the system by default and can be forced in Settings › Preferences; every colour comes from a token so both themes stay in step. Contrast stays at or above 4.5:1 for text, and at or above 3:1 for the focus ring and form-field borders (`field-line`), in both themes and both mobile palettes.
+- **Windows contrast themes** (`forced-colors`) show selected chips, section tabs, toggles and the current destination in the system highlight colours, and outline the surfaces that only a background sets apart.
 - **Motion** is limited to short transitions and honours `prefers-reduced-motion`.
 
 ## Copy
@@ -152,13 +153,16 @@ Both apps load `shared/tokens.css` and `shared/ui.css` and use the same class vo
 
 ## Accessibility
 
-- Landmarks: one `header`, one `nav` per navigation (labelled), one `main` that receives focus on every route change, the page title as the only `h1`.
+- Landmarks: one `header`, one `nav` per navigation (labelled), one `main` that receives focus on every route change, the page title as the only `h1`, including on pages that only say a record is missing. Headings below it do not skip a level; `.h-sub` styles an `h2` as a small section label.
 - A skip link to the main content.
 - `aria-current="page"` on the active destination and section tab; `aria-pressed` on toggles.
 - Every control has a visible or programmatic label; icon-only buttons carry `aria-label`.
 - Focus rings use the focus token and are never removed.
 - Touch targets are at least 44 × 44 px. Text inputs are 16 px on narrow screens to stop iOS zooming.
-- Live regions: the toast is `role="status"`; storage errors are `role="alert"`.
+- Redraws keep your place. Both apps redraw a page by replacing its markup, after another cook's change (the browser app checks every 3 seconds) or after a button on the page. `keepPlace` in `shared/a11y.js` restores the focused control, the caret in a text box, open disclosures, expanded toggles and the scroll position; when the focused control is gone, focus goes to `main`, never to the page body. Moving to another page starts at its top with `main` focused.
+- Live regions: the toast is `role="status"`; storage errors are `role="alert"`; a visually hidden polite region (`#announcer`) reads how many results a list shows once a search or filter settles. The browser app's toast says when a timer runs out while the cooking page is open, as the mobile app's does.
+- Messages stay 7 seconds; errors and messages offering Undo stay 20 seconds. The countdown pauses while the pointer or keyboard focus is on the message, Escape dismisses it (unless a text field has the focus), and focus that was on the message returns to where it came from.
+- Control names start with their visible words (“Play on YouTube: Folding the dough”), and every file picker has a label.
 - Colour is never the only carrier of meaning; tags carry words.
 
 ## Responsive behaviour
