@@ -4,7 +4,7 @@ import {
   formatLinkLines,
   parseLinkLines,
 } from "/shared/links.js";
-import { findPlace, keepPlace, placeOf } from "/shared/a11y.js";
+import { announce, findPlace, keepPlace, placeOf } from "/shared/a11y.js";
 import { icon } from "/shared/icons.js";
 import { unitLabel } from "/shared/quantities.js";
 import {
@@ -1245,7 +1245,7 @@ function sessionPage(id) {
       .filter((t) => !t.cancelled)
       .map(
         (t) =>
-          `<div class="timer" data-timer-row="${esc(t.id)}"><div><strong>${esc(t.label)}</strong><br><small class="muted">${t.dish_id ? `${esc(d.dishes.find((d) => d.dish_id === t.dish_id)?.title)} · ` : ""}${esc(person(t.member_id))}</small></div><span class="timer-time" data-deadline="${esc(t.deadline)}">—</span>${button("", "timer-cancel", `data-id="${esc(id)}" data-timer="${esc(t.id)}" aria-label="Cancel ${esc(t.label)} timer"`, "btn-quiet btn-icon btn-sm", "x")}</div>`,
+          `<div class="timer" data-timer-row="${esc(t.id)}"><div><strong>${esc(t.label)}</strong><br><small class="muted">${t.dish_id ? `${esc(d.dishes.find((d) => d.dish_id === t.dish_id)?.title)} · ` : ""}${esc(person(t.member_id))}</small></div><span class="timer-time" data-deadline="${esc(t.deadline)}" data-label="${esc(t.label)}">—</span>${button("", "timer-cancel", `data-id="${esc(id)}" data-timer="${esc(t.id)}" aria-label="Cancel ${esc(t.label)} timer"`, "btn-quiet btn-icon btn-sm", "x")}</div>`,
       )
       .join("") || '<p class="small muted">No timers running.</p>'
   }</div><form data-form="timer" class="stack-sm" data-id="${esc(id)}" data-version="${s.version}"><div class="form-grid">${field("Timer name", "label", "", "text", 'required placeholder="Orzo"')}${field("Minutes", "minutes", "", "number", 'required min="0.016667" max="10080" step="any"')}${select("Dish", "dish_id", dishOptions)}${select("Who’s watching it?", "member_id", ownerOptions)}</div>${errorSlot()}<div>${submit("Start timer", "timer")}</div><p class="small muted">Use a device alarm for reliable alerts when the screen is locked.</p></form></section></div><form data-form="finish" class="panel stack spacer" data-id="${esc(id)}" data-version="${s.version}"><h2>Ready for the table?</h2>${area("A note about this meal", "notes", "", 'rows="2" placeholder="Crispy top. Next time, a little more lemon."')}${errorSlot()}<div class="form-footer">${submit("Finish cooking", "check")}</div></form>`;
@@ -2083,17 +2083,24 @@ async function render({ focus = false } = {}) {
   void manageWakeLock(Boolean(view.wakeLock));
   if (focus) $("#main")?.focus({ preventScroll: true });
 }
+// The seconds each timer showed last, so that one reaching zero in view is
+// announced once, however often the page redraws.
+const timerSeconds = new Map();
 function updateTimers() {
   document.querySelectorAll("[data-deadline]").forEach((el) => {
     const seconds = Math.max(
       0,
       Math.ceil((Date.parse(el.dataset.deadline) - Date.now()) / 1000),
     );
+    const row = el.closest(".timer");
     el.textContent =
       seconds === 0
         ? "Ready"
         : `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
-    el.closest(".timer").classList.toggle("ready", seconds === 0);
+    row.classList.toggle("ready", seconds === 0);
+    if (seconds === 0 && timerSeconds.get(row.dataset.timerRow) > 0)
+      toast(`${el.dataset.label} timer is ready.`);
+    timerSeconds.set(row.dataset.timerRow, seconds);
   });
 }
 
@@ -2201,6 +2208,21 @@ const listResults = {
   inspiration: () => ideaResults(),
   library: () => bookResults(),
 };
+// Typing or pressing a filter changes a list out of a screen reader's sight;
+// once it settles, say what the list now shows.
+let resultsAnnouncement;
+function announceResults() {
+  clearTimeout(resultsAnnouncement);
+  resultsAnnouncement = setTimeout(() => {
+    const results = $("#list-results");
+    if (!results) return;
+    announce(
+      results.querySelector(".empty h2")?.textContent ??
+        results.querySelector(".section-header .small")?.textContent ??
+        plural(results.querySelectorAll(".card").length, "result"),
+    );
+  }, 500);
+}
 document.addEventListener("input", (event) => {
   const form = event.target.closest("form");
   if (form) form.dataset.dirty = "true";
@@ -2208,7 +2230,10 @@ document.addEventListener("input", (event) => {
   if (scope) {
     searches[scope] = event.target.value;
     const results = $("#list-results");
-    if (results && listResults[scope]) results.innerHTML = listResults[scope]();
+    if (results && listResults[scope]) {
+      results.innerHTML = listResults[scope]();
+      announceResults();
+    }
   }
   if (form?.dataset.form === "shopping-review") {
     const apply = $('[data-action="shopping-apply"]');
@@ -2615,6 +2640,7 @@ document.addEventListener("click", async (event) => {
   if (a === "library-toggle") {
     library[el.dataset.key] = !library[el.dataset.key];
     navigate("recipes");
+    announceResults();
     return;
   }
   if (a === "library-facet") {
@@ -2628,11 +2654,13 @@ document.addEventListener("click", async (event) => {
     } else library[facet] = !add && same(library[facet]) ? "" : value;
     if (add) library.drafts = false;
     navigate("recipes");
+    announceResults();
     return;
   }
   if (a === "library-clear") {
     library = noLibraryFilters();
     navigate("recipes");
+    announceResults();
     return;
   }
   if (a === "append-tag") {

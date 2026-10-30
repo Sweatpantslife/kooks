@@ -32,7 +32,7 @@ import {
   taxonomy,
 } from "../shared/taxonomy.js";
 import { icon } from "../shared/icons.js";
-import { keepPlace } from "../shared/a11y.js";
+import { announce, keepPlace } from "../shared/a11y.js";
 import { clone as structuredClone, randomId } from "./compat.js";
 import { defaultDesign, snapshot, parseBackup } from "./model.js";
 import { createCookbookStorage } from "./storage.js";
@@ -484,6 +484,22 @@ async function boot() {
   }
 
   // ---------- Recipes ----------
+  // Typing or pressing a filter changes the list out of a screen reader's
+  // sight; once it settles, say how many recipes it now shows.
+  let resultsAnnouncement;
+  function announceResults() {
+    clearTimeout(resultsAnnouncement);
+    resultsAnnouncement = setTimeout(() => {
+      const results = root.querySelector("#results");
+      if (!results) return;
+      const count = results.querySelectorAll(".card").length;
+      announce(
+        count
+          ? `${count} recipe${count === 1 ? "" : "s"} shown`
+          : "No recipes found",
+      );
+    }, 500);
+  }
   function libraryCards() {
     const term = state.query.trim().toLowerCase();
     const found = allRecipes().filter(
@@ -1132,8 +1148,10 @@ async function boot() {
       state.favorites = state.favorites.includes(id)
         ? state.favorites.filter((x) => x !== id)
         : [...state.favorites, id];
-    } else if (a === "filter") state.filter = target.dataset.value;
-    else if (a === "facet") {
+    } else if (a === "filter") {
+      state.filter = target.dataset.value;
+      announceResults();
+    } else if (a === "facet") {
       const { facet, value } = target.dataset,
         same = (v) => labelKey(v) === labelKey(value);
       if (Array.isArray(facets[facet]))
@@ -1141,10 +1159,12 @@ async function boot() {
           ? facets[facet].filter((v) => !same(v))
           : [...facets[facet], value];
       else facets[facet] = same(facets[facet]) ? "" : value;
+      announceResults();
     } else if (a === "clear-search") {
       state.query = "";
       state.filter = "all";
       facets = noFacets();
+      announceResults();
     } else if (a === "servings") {
       const r = recipe();
       state.servings[r.id] = Math.min(
@@ -1383,6 +1403,7 @@ async function boot() {
     if (input.id === "search") {
       state.query = input.value;
       root.querySelector("#results").innerHTML = libraryCards();
+      announceResults();
     }
     if (input.id === "recipe-note") state.notes[state.selected] = input.value;
     if (input.closest("#editor-form") && draft) {
