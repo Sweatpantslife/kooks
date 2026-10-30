@@ -23,6 +23,7 @@ import { Empty, PageHeader } from "../ui/page.jsx";
 import { Field, FormError, hint, numberOrNull, useWork } from "../ui/form.jsx";
 import { Icon } from "../ui/icon.jsx";
 import { Missing } from "./recipe.jsx";
+import { linkIdea } from "./library.jsx";
 
 const BLANK = {
   title: "",
@@ -101,13 +102,16 @@ const exitOf = (mode, id) =>
     ? `recipes/${encodeURIComponent(id)}`
     : mode === "draft"
       ? "recipes/add"
-      : "recipes";
+      : mode === "idea"
+        ? `recipes/idea/${encodeURIComponent(id)}`
+        : "recipes";
 
 const WORDS = {
   new: { title: "New recipe", save: "Save recipe" },
   edit: { title: "Edit recipe", save: "Save changes" },
   variation: { title: "Your own version", save: "Save your version" },
   draft: { title: "Check the draft", save: "Save recipe" },
+  idea: { title: "Write up the idea", save: "Save recipe" },
 };
 
 // How the ingredient lines will be stored, so a misread amount shows before
@@ -184,15 +188,27 @@ function Spent({ draft }) {
   );
 }
 
-// One editor for a new recipe, a change, a variation and an imported draft.
+// An idea to try, as the start of its recipe.
+const fromIdea = (idea) =>
+  idea && {
+    ...BLANK,
+    title: idea.data.title,
+    notes: idea.data.notes,
+    links: idea.data.links,
+    tags: idea.data.tags,
+  };
+
+// One editor for a new recipe, a change, a variation, an imported draft and
+// an idea written up.
 export function Editor({ mode, id }) {
   const draft = mode === "draft" ? record("import", id) : null;
   const recipe =
     mode === "edit" || mode === "variation" ? record("recipe", id) : null;
+  const idea = mode === "idea" ? record("inspiration", id) : null;
   // What the editor opened with, kept while others change the kitchen.
   const [start] = useState(() => ({
-    data: draft?.data.recipe ?? recipe?.data ?? BLANK,
-    version: draft?.version ?? recipe?.version,
+    data: draft?.data.recipe ?? recipe?.data ?? fromIdea(idea) ?? BLANK,
+    version: draft?.version ?? recipe?.version ?? idea?.version,
     draft,
   }));
   const [f, setF] = useState(() => fieldsOf(start.data, mode));
@@ -225,7 +241,11 @@ export function Editor({ mode, id }) {
   }, []);
 
   if (mode !== "new" && !start.version)
-    return <Missing what={mode === "draft" ? "draft" : "recipe"} />;
+    return (
+      <Missing
+        what={mode === "draft" ? "draft" : mode === "idea" ? "idea" : "recipe"}
+      />
+    );
   if (start.draft && start.draft.data.status !== "draft")
     return <Spent draft={start.draft} />;
 
@@ -329,6 +349,7 @@ export function Editor({ mode, id }) {
         { recipe },
         { done: `${title} is in your cookbook.`, undo: false },
       );
+    if (mode === "idea") await linkIdea(id, result.record.id);
     dirty.current = false;
     leave(`recipes/${encodeURIComponent(result.record.id)}`);
   }

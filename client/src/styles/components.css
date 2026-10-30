@@ -1872,3 +1872,35 @@ a.plan-title:hover {
 .inline-form .hint {
   flex-basis: 100%;
 }
+
+/* ---------- Ideas, techniques and books ---------- */
+.photos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.photos img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border-radius: var(--radius-md);
+  object-fit: cover;
+}
+.book-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 20px;
+}
+.book-head > .stack {
+  flex: 1 1 18em;
+}
+.book-cover {
+  flex: none;
+  width: 140px;
+  aspect-ratio: 2 / 3;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+}

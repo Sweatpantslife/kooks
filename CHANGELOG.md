@@ -52,6 +52,12 @@ Household is now a menu of its own pages at `/next/#/household`. People at the t
 
 `npm run format:check`, `npm run lint`, `npm test` (120 passed, 1 skipped; 2 new for converted amounts and tastes) and `npm run test:e2e` (72 passed; 3 new for Household, with axe scans of the menu, people, the person form, prices, the price form, look and units, backup and the Week's cost line).
 
+### Ideas, techniques and books in the redesigned app
+
+Ideas to try, techniques and books now open in the new app instead of the current one, at `/next/#/recipes/idea/<id>`, `/technique/<id>` and `/book/<id>`. An idea shows where it came from, its notes, photos and links, and is marked as tried, edited, removed with Undo, or written up as a recipe in the recipe editor, which starts from its title, notes, links and tags and then points the idea at the new recipe. A technique shows its summary, steps, tips, photos, links and the recipes that use it. A book shows its cover and author, opens a PDF in a new tab or downloads the file, keeps page bookmarks (a PDF opens at the bookmarked page), and lists the recipes written up from it. The Add page now also keeps a technique and adds a book from a PDF or EPUB, and each has an edit form with a recipe picker. A recipe's "More about this recipe" now also lists the book it is from and the idea it grew from. Addresses from the current app (`#/inspiration/<id>`, `#/techniques/new`, `#/library/<id>/edit`) open the new pages, and the Recipes tab keeps a kind's chip when its last item is removed.
+
+`npm run format:check`, `npm run lint`, `npm test` (120 passed, 1 skipped) and `npm run test:e2e` (76 passed; 4 new for ideas, techniques and books, with axe scans of an idea, the idea form, a technique, the technique form, a book, the book form and a missing book).
+
 ### A failed passkey suggestion stays silent on the sign-in screen
 
 When the browser turns down the quiet passkey suggestion in the email field (no authenticator, nothing saved, or the request abandoned), both apps now say nothing, instead of putting the browser's raw message ("Resident credentials or empty 'allowCredentials' lists are not supported at this time.") in the sign-in alert, where it replaced a real reason such as "This sign-in link has expired or was already used." Only the kitchen turning down a passkey the person picked is shown. The quiet request's own failure to load its options is silent too.

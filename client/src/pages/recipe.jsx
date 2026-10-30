@@ -4,7 +4,6 @@ import {
   CalendarPlus,
   Clock,
   CopyPlus,
-  ExternalLink,
   Flame,
   Heart,
   Minus,
@@ -15,7 +14,6 @@ import {
   UtensilsCrossed,
 } from "lucide";
 import { courseLabel, dietLabel } from "../../../shared/taxonomy.js";
-import { displayLinks, describeLink } from "../../../shared/links.js";
 import { record, records } from "../lib/store.js";
 import { dateLabel, plural } from "../lib/format.js";
 import { nameKey } from "../lib/aisles.js";
@@ -24,6 +22,7 @@ import {
   measure,
   atHome,
   family,
+  hrefOf,
   memories,
   minutes,
   toggleFavorite,
@@ -32,6 +31,7 @@ import { Art } from "../ui/tile.jsx";
 import { Empty, PageHeader } from "../ui/page.jsx";
 import { Icon } from "../ui/icon.jsx";
 import { CookButton } from "../ui/cook-button.jsx";
+import { MoreList, linkItems } from "../ui/more.jsx";
 
 const back = (
   <a class="back" href="#/recipes">
@@ -247,10 +247,6 @@ function More({ r }) {
   const meals = records("meal").filter((m) =>
     m.data.dishes.some((dish) => dish.recipe_id === r.id),
   );
-  const techniques = records("technique").filter((t) =>
-    t.data.recipe_ids?.includes(r.id),
-  );
-  const links = displayLinks(d);
   const items = [
     ...relatives.map((x) => ({
       href: `#/recipes/${encodeURIComponent(x.id)}`,
@@ -267,63 +263,30 @@ function More({ r }) {
       title: m.data.title,
       note: "A meal it’s part of",
     })),
-    ...techniques.map((t) => ({
-      href: `../#/techniques/${encodeURIComponent(t.id)}`,
-      title: t.data.title,
-      note: "Technique",
-    })),
-    ...links.map((link) => {
-      const info = describeLink(link.url);
-      return {
-        href: link.url,
-        external: true,
-        title: link.title || info?.label || link.url,
-        note: info?.provider
-          ? `Video on ${info.label}`
-          : (info?.site ?? "Link"),
-      };
-    }),
-    ...(d.source_url && !links.some((link) => link.url === d.source_url)
-      ? [
-          {
-            href: d.source_url,
-            external: true,
-            title: `From ${describeLink(d.source_url)?.site ?? d.source_url}`,
-            note: "Where this recipe came from",
-          },
-        ]
-      : []),
+    ...records("technique")
+      .filter((t) => t.data.recipe_ids?.includes(r.id))
+      .map((t) => ({
+        href: hrefOf("technique", t.id),
+        title: t.data.title,
+        note: "Technique",
+      })),
+    ...records("book")
+      .filter((b) => b.data.recipe_ids?.includes(r.id))
+      .map((b) => ({
+        href: hrefOf("book", b.id),
+        title: b.data.title,
+        note: "The book it’s from",
+      })),
+    ...records("inspiration")
+      .filter((i) => i.data.recipe_id === r.id)
+      .map((i) => ({
+        href: hrefOf("inspiration", i.id),
+        title: i.data.title,
+        note: "The idea it grew from",
+      })),
+    ...linkItems(d),
   ];
-  if (!items.length) return null;
-  return (
-    <section aria-labelledby="more" class="stack">
-      <h2 id="more">More about this recipe</h2>
-      <ul class="more" role="list">
-        {items.map((item) => (
-          <li key={item.href}>
-            <a
-              href={item.href}
-              {...(item.external
-                ? { target: "_blank", rel: "noopener noreferrer" }
-                : {})}
-            >
-              <span class="more-title">
-                {item.title}
-                {item.external && (
-                  <Icon
-                    icon={ExternalLink}
-                    class="icon-sm"
-                    label="opens in a new tab"
-                  />
-                )}
-              </span>
-              <span class="muted small">{item.note}</span>
-            </a>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
+  return <MoreList id="more" title="More about this recipe" items={items} />;
 }
 
 export function Recipe({ id }) {

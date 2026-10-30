@@ -163,17 +163,18 @@ export function Recipes() {
           >
             All
           </Chip>
-          {KINDS.filter(({ kind: k }) => k === "recipe" || counts[k] > 0).map(
-            ({ kind: k, label }) => (
-              <Chip
-                key={k}
-                pressed={kind.value === k}
-                onClick={() => (kind.value = kind.value === k ? "all" : k)}
-              >
-                {label} <span class="chip-count">{counts[k]}</span>
-              </Chip>
-            ),
-          )}
+          {KINDS.filter(
+            ({ kind: k }) =>
+              k === "recipe" || counts[k] > 0 || kind.value === k,
+          ).map(({ kind: k, label }) => (
+            <Chip
+              key={k}
+              pressed={kind.value === k}
+              onClick={() => (kind.value = kind.value === k ? "all" : k)}
+            >
+              {label} <span class="chip-count">{counts[k]}</span>
+            </Chip>
+          ))}
         </div>
         <div class="chips" role="group" aria-label="Recipes that are">
           <Chip

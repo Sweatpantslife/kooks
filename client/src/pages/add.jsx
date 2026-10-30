@@ -1,7 +1,9 @@
 import { useEffect, useState } from "preact/hooks";
 import {
   ArrowLeft,
+  BookOpen,
   Camera,
+  ChefHat,
   ClipboardPaste,
   Lightbulb,
   PenLine,
@@ -46,6 +48,20 @@ const WAYS = [
     tone: "saffron",
     title: "Save an idea",
     text: "A dish to try one day: a link, a photo or a few words.",
+  },
+  {
+    href: "#/recipes/technique/new",
+    icon: ChefHat,
+    tone: "stone",
+    title: "Keep a technique",
+    text: "A method worth remembering, with the videos that taught you.",
+  },
+  {
+    href: "#/recipes/book/new",
+    icon: BookOpen,
+    tone: "plum",
+    title: "Add a book",
+    text: "A cookbook you own, as a PDF or EPUB, with its bookmarks.",
   },
 ];
 
