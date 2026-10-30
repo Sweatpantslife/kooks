@@ -29,15 +29,61 @@ define(["metric_tbsp"], "volume", 15, "mL");
 define(["metric_tsp"], "volume", 5, "mL");
 define(["count", "each", "piece", "pieces"], "count", 1, "each");
 
+// Unit words without a fixed size, each with one spelling and its plural, so
+// that "2 cans" and "1 can" compare as the same unit. A bare cup or spoon is
+// one of them and stays unconverted, as above.
+const spellings = new Map();
+const plurals = new Map();
+function word(singular, plural, ...others) {
+  for (const name of [singular, plural, ...others])
+    spellings.set(name, singular);
+  plurals.set(singular, plural);
+}
+word("cup", "cups");
+word("tbsp", "tbsp", "tablespoon", "tablespoons");
+word("tsp", "tsp", "teaspoon", "teaspoons");
+word("piece", "pieces");
+for (const singular of [
+  "can",
+  "clove",
+  "sprig",
+  "stalk",
+  "stick",
+  "slice",
+  "head",
+  "handful",
+  "package",
+  "packet",
+  "jar",
+  "tin",
+  "bottle",
+])
+  word(singular, `${singular}s`);
+for (const singular of ["bunch", "pinch", "dash"])
+  word(singular, `${singular}es`);
+
 export const normalize = (value) =>
   value.normalize("NFKC").trim().toLowerCase().replace(/\s+/g, " ");
 export const round = (number) => Number(number.toPrecision(12));
-export const unitInfo = (name) => units.get(normalize(name)) ?? null;
+// "tbsp." and "oz." are the same units as "tbsp" and "oz".
+const unitKey = (name) => normalize(name).replace(/\.$/, "");
+export const unitInfo = (name) => units.get(unitKey(name)) ?? null;
+// The one spelling of a unit word, lowercased; other units come back
+// lowercased as written.
+export const unitSpelling = (name) =>
+  spellings.get(unitKey(name)) ?? unitKey(name);
+// How a unit reads beside an amount already rounded for display: "½ cup",
+// "1 can", "2 cans". Symbols, abbreviations and unknown units stay as written.
+export function unitLabel(unit, quantity) {
+  const singular = spellings.get(unitKey(unit));
+  if (!singular) return unit;
+  return quantity > 1 ? plurals.get(singular) : singular;
+}
 
 export function canonicalQuantity(quantity, unit) {
-  const known = units.get(normalize(unit));
+  const known = units.get(unitKey(unit));
   if (!known || quantity === null)
-    return { quantity, unit: known?.unit ?? normalize(unit) };
+    return { quantity, unit: known?.unit ?? unitSpelling(unit) };
   return { quantity: round(quantity * known.factor), unit: known.unit };
 }
 
@@ -47,8 +93,8 @@ const fahrenheit = ["f", "°f", "fahrenheit"];
 // Convert between compatible units, or return null when the conversion would
 // need information that is not available (density, an unstated convention).
 export function convertUnits(quantity, from, to) {
-  const a = normalize(from),
-    b = normalize(to);
+  const a = unitKey(from),
+    b = unitKey(to);
   if (a === b) return { quantity, unit: to };
   if (celsius.includes(a) && fahrenheit.includes(b))
     return { quantity: round((quantity * 9) / 5 + 32), unit: to };

@@ -4,6 +4,8 @@ import {
   canonicalQuantity,
   convertUnits,
   unitInfo,
+  unitLabel,
+  unitSpelling,
 } from "../shared/quantities.js";
 import { parseQuantity, splitIngredientLine } from "../shared/ingredients.js";
 import {
@@ -54,6 +56,26 @@ test("shared ingredient lines split into quantity, unit token, name and preparat
   assert.equal(splitIngredientLine("1 lbs beef").unitToken, "lbs");
   assert.equal(splitIngredientLine("3 eggs").unitToken, "");
   assert.equal(splitIngredientLine("3 eggs").name, "eggs");
+  const sugar = splitIngredientLine("2 tbsp. sugar");
+  assert.equal(sugar.unitToken, "tbsp.");
+  assert.equal(sugar.name, "sugar");
+  assert.equal(splitIngredientLine("1 lb. beef").name, "beef");
+  for (const [line, unit, name] of [
+    ["1 bunch parsley", "bunch", "parsley"],
+    ["2 bunches parsley", "bunches", "parsley"],
+    ["1 pinch salt", "pinch", "salt"],
+    ["3 sprigs thyme", "sprigs", "thyme"],
+    ["2 sticks butter", "sticks", "butter"],
+    ["4 slices bread", "slices", "bread"],
+    ["1 head garlic", "head", "garlic"],
+    ["2 stalks celery", "stalks", "celery"],
+    ["1 tin tomatoes", "tin", "tomatoes"],
+    ["1 jar tahini", "jar", "tahini"],
+  ]) {
+    const parts = splitIngredientLine(line);
+    assert.equal(parts.unitToken, unit, line);
+    assert.equal(parts.name, name, line);
+  }
   const salt = splitIngredientLine("Salt to taste");
   assert.equal(salt.quantity, null);
   assert.equal(salt.name, "Salt to taste");
@@ -76,6 +98,44 @@ test("shared conversions stay within a dimension and report ambiguity as null", 
   });
   assert.equal(unitInfo("Litres").unit, "mL");
   assert.equal(unitInfo("cup"), null);
+});
+
+test("shared unit words keep one spelling, so plurals and abbreviations compare as one unit", () => {
+  assert.equal(unitSpelling("Cans"), "can");
+  assert.equal(unitSpelling("cloves"), "clove");
+  assert.equal(unitSpelling("Tablespoons"), "tbsp");
+  assert.equal(unitSpelling("tbsp."), "tbsp");
+  assert.equal(unitSpelling("bunches"), "bunch");
+  assert.equal(unitSpelling("mL"), "ml");
+  assert.equal(unitSpelling(""), "");
+  assert.deepEqual(canonicalQuantity(2, "cans"), { quantity: 2, unit: "can" });
+  assert.deepEqual(canonicalQuantity(1, "Cups"), { quantity: 1, unit: "cup" });
+  assert.deepEqual(canonicalQuantity(3, "teaspoons"), {
+    quantity: 3,
+    unit: "tsp",
+  });
+  assert.deepEqual(canonicalQuantity(1, "lb."), {
+    quantity: 453.59237,
+    unit: "g",
+  });
+  assert.equal(unitInfo("oz.").unit, "g");
+  // A bare cup or spoon still has no size.
+  assert.equal(unitInfo("cups"), null);
+  assert.equal(convertUnits(1, "cups", "mL"), null);
+});
+
+test("shared unit labels read in the plural only above one", () => {
+  assert.equal(unitLabel("cup", 1), "cup");
+  assert.equal(unitLabel("cup", 0.5), "cup");
+  assert.equal(unitLabel("cup", 2), "cups");
+  assert.equal(unitLabel("cans", 1), "can");
+  assert.equal(unitLabel("can", 1.5), "cans");
+  assert.equal(unitLabel("bunch", 3), "bunches");
+  assert.equal(unitLabel("tbsp", 2), "tbsp");
+  assert.equal(unitLabel("g", 200), "g");
+  assert.equal(unitLabel("mL", 30), "mL");
+  assert.equal(unitLabel("us_cup", 2), "us_cup");
+  assert.equal(unitLabel("", 3), "");
 });
 
 test("shared link lines accept an address with an optional title in either order", () => {

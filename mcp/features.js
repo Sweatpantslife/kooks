@@ -236,19 +236,21 @@ export class Features {
       facets: 0,
     };
     const results = [];
-    for (const record of this.store.list("recipe")) {
+    const query = args.query ? normalize(args.query) : "";
+    const recipes = this.store.list("recipe");
+    for (const record of recipes) {
       const r = record.data;
       if (!r.ingredients.length || !r.steps.length) {
         skipped.incomplete++;
         continue;
       }
       if (
-        args.query &&
+        query &&
         !normalize(
           [r.title, ...r.ingredients.map((i) => i.name), facetText(r)].join(
             " ",
           ),
-        ).includes(normalize(args.query))
+        ).includes(query)
       )
         continue;
       if (!matchesFacets(r, args)) {
@@ -314,7 +316,6 @@ export class Features {
           coverage.use_soon.length * 5 +
           likes.length * 2 -
           conflicts.length * 8,
-        memory: this.memory(record.id),
       });
     }
     results.sort(
@@ -324,9 +325,16 @@ export class Features {
         a.check_quantities.length - b.check_quantities.length ||
         a.record.data.title.localeCompare(b.record.data.title),
     );
+    // Only the returned suggestions carry their cooking memory.
+    const shown = results.slice(0, args.limit);
+    const memories = this.memories(
+      shown.map((result) => result.record.id),
+      recipes,
+    );
+    shown.forEach((result, index) => (result.memory = memories[index]));
     return {
       total: results.length,
-      results: results.slice(0, args.limit),
+      results: shown,
       skipped,
       matching:
         "Ingredient names and preparation must match. Checklist entries confirm presence; check their quantities. Unknown effort is excluded when a corresponding filter is active, as is an unrecorded course or cuisine.",
@@ -334,31 +342,63 @@ export class Features {
   }
 
   memory(recipeId) {
-    const recipe = this.store.get("recipe", recipeId, true);
-    const root = recipe.data.original_recipe_id ?? recipe.id;
-    const family = this.store
-      .list("recipe")
-      .filter((r) => r.id === root || r.data.original_recipe_id === root);
-    const ids = new Set([root, ...family.map((r) => r.id)]);
-    const notes = this.store
-      .list("note")
-      .filter((n) => ids.has(n.data.recipe_id))
-      .sort(
-        (a, b) =>
-          (b.data.cooked_on ?? b.created_at.slice(0, 10)).localeCompare(
-            a.data.cooked_on ?? a.created_at.slice(0, 10),
-          ) ||
-          b.created_at.localeCompare(a.created_at) ||
-          b.id.localeCompare(a.id),
-      );
-    return {
-      recipe_id: recipeId,
-      original_recipe_id: root,
-      preferred_recipe: family.find((r) => r.data.preferred) ?? null,
-      variants: family.filter((r) => r.id !== root),
-      notes,
-      latest: notes[0] ?? null,
-    };
+    return this.memories([recipeId])[0];
+  }
+
+  // The memories of several recipes from one read of the active recipes and
+  // notes, so suggestions and multi-dish sessions stay linear in cookbook
+  // size. Families and notes keep the order of those lists.
+  memories(recipeIds, recipes) {
+    if (!recipeIds.length) return [];
+    recipes ??= this.store.list("recipe");
+    const byId = new Map(recipes.map((r) => [r.id, r]));
+    const position = new Map(recipes.map((r, index) => [r.id, index]));
+    const variantsOf = new Map();
+    for (const r of recipes) {
+      const original = r.data.original_recipe_id;
+      if (!original) continue;
+      if (!variantsOf.has(original)) variantsOf.set(original, []);
+      variantsOf.get(original).push(r);
+    }
+    const notes = this.store.list("note");
+    const notePosition = new Map(notes.map((n, index) => [n.id, index]));
+    const notesOf = new Map();
+    for (const note of notes) {
+      const key = note.data.recipe_id;
+      if (!notesOf.has(key)) notesOf.set(key, []);
+      notesOf.get(key).push(note);
+    }
+    return recipeIds.map((recipeId) => {
+      const recipe =
+        byId.get(recipeId) ?? this.store.get("recipe", recipeId, true);
+      const root = recipe.data.original_recipe_id ?? recipe.id;
+      const family = [
+        ...new Set([
+          ...(byId.has(root) ? [byId.get(root)] : []),
+          ...(variantsOf.get(root) ?? []),
+        ]),
+      ].sort((a, b) => position.get(a.id) - position.get(b.id));
+      const ids = new Set([root, ...family.map((r) => r.id)]);
+      const familyNotes = [...ids]
+        .flatMap((id) => notesOf.get(id) ?? [])
+        .sort((a, b) => notePosition.get(a.id) - notePosition.get(b.id))
+        .sort(
+          (a, b) =>
+            (b.data.cooked_on ?? b.created_at.slice(0, 10)).localeCompare(
+              a.data.cooked_on ?? a.created_at.slice(0, 10),
+            ) ||
+            b.created_at.localeCompare(a.created_at) ||
+            b.id.localeCompare(a.id),
+        );
+      return {
+        recipe_id: recipeId,
+        original_recipe_id: root,
+        preferred_recipe: family.find((r) => r.data.preferred) ?? null,
+        variants: family.filter((r) => r.id !== root),
+        notes: familyNotes,
+        latest: familyNotes[0] ?? null,
+      };
+    });
   }
 
   variant(args) {

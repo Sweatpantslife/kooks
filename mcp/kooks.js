@@ -379,8 +379,8 @@ export class Kooks {
     return {
       record,
       equipment: overview,
-      memories: resolved.dishes.map((d) =>
-        new Features(this.store, this).memory(d.recipe_id),
+      memories: new Features(this.store, this).memories(
+        resolved.dishes.map((d) => d.recipe_id),
       ),
     };
   }

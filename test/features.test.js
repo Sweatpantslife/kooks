@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { performance } from "node:perf_hooks";
 import { Store } from "../mcp/store.js";
+import * as s from "../mcp/schemas.js";
 import { createTools } from "../mcp/tools.js";
 import { extractRecipe, parseIngredient, imageBytes } from "../mcp/imports.js";
 
@@ -68,6 +70,46 @@ test("pantry matching subtracts a known stock only once, preserves unknown amoun
     30,
   );
   assert.equal(call("kooks_list", { kind: "pantry" }).total, 3);
+});
+
+test("pantry stock and prices match units written in the plural", (t) => {
+  const { call } = setup(t);
+  const r = call("recipe_save", {
+    recipe: recipe("Chickpea stew", {
+      ingredients: [
+        parseIngredient("3 cans chickpeas"),
+        parseIngredient("2 cloves garlic"),
+      ],
+    }),
+  }).record;
+  call("pantry_save", {
+    pantry: { name: "chickpeas", quantity: 1, unit: "can" },
+  });
+  call("pantry_save", {
+    pantry: { name: "garlic", quantity: 6, unit: "Cloves" },
+  });
+  const result = call("recipe_suggest").results.find(
+    (s) => s.record.id === r.id,
+  );
+  assert.deepEqual(
+    result.missing.map((i) => [i.name, i.quantity, i.unit]),
+    [["chickpeas", 2, "can"]],
+  );
+  assert.deepEqual(result.check_quantities, []);
+  for (const price of [
+    { name: "chickpeas", package_quantity: 1, unit: "can", price: 2 },
+    { name: "garlic", package_quantity: 10, unit: "cloves", price: 5 },
+  ])
+    call("price_save", {
+      price: { ...price, currency: "USD", purchased_on: "2026-09-14" },
+    });
+  const cost = call("cost_estimate", {
+    source: { kind: "recipe", id: r.id },
+    currency: "USD",
+    as_of: "2026-09-19",
+  });
+  assert.equal(cost.complete, true);
+  assert.equal(cost.total, 7);
 });
 
 test("dinner suggestions respect selected eaters and effort limits without assuming unknowns are quick", (t) => {
@@ -412,6 +454,11 @@ test("recipe drafts require review, preserve source wording and ambiguous units,
   assert.equal(parsed.recipe.ingredients[2].quantity, null);
   assert.ok(parsed.warnings.some((w) => w.includes("conventions")));
   assert.equal(parseIngredient("1/0 cup nonsense").quantity, null);
+  // The writer's unit is kept, lowercased and singular.
+  assert.equal(parseIngredient("2 Cans chickpeas").unit, "can");
+  assert.equal(parseIngredient("3 tablespoons oil").unit, "tbsp");
+  assert.equal(parseIngredient("2 tbsp. sugar").unit, "tbsp");
+  assert.equal(parseIngredient("500 grams rice").unit, "grams");
   const draft = call("recipe_import_text", { text }).record;
   const args = {
     id: draft.id,
@@ -740,4 +787,71 @@ test("recipe facets are normalized, filter listings and suggestions, and are cou
   assert.deepEqual(legacy.call("recipe_taxonomy").tags, [
     { name: "Family", count: 1 },
   ]);
+});
+
+// A cookbook of a thousand recipes, a note on every third, written in one
+// action so the setup itself stays quick.
+function largeCookbook(store, count = 1000) {
+  const ingredients = ["Rice", "Onion", "Garlic", "Lemon", "Feta", "Carrot"];
+  const ids = [];
+  store.mutate("seed", { request_id: "seed" }, () => {
+    for (let i = 0; i < count; i++) {
+      const data = s.recipe.parse(
+        recipe(`Recipe ${i}`, {
+          ingredients: Array.from({ length: 12 }, (_, k) => ({
+            name: ingredients[(i + k) % ingredients.length],
+            quantity: 10 + k,
+            unit: "g",
+          })),
+          steps: Array.from({ length: 8 }, (_, k) => ({
+            text: `Step ${k + 1}.`,
+          })),
+        }),
+      );
+      const id = store.put("recipe", data).id;
+      ids.push(id);
+      if (i % 3 === 0)
+        store.put("note", {
+          recipe_id: id,
+          session_id: null,
+          text: `Cooked ${i}.`,
+          cooked_on: "2026-10-01",
+        });
+    }
+    return {};
+  });
+  return ids;
+}
+
+test("suggestions and cooking memories stay fast for a thousand recipes", (t) => {
+  const { store, call } = setup(t);
+  const ids = largeCookbook(store);
+  call("pantry_save", { pantry: { name: "Rice", use_soon: true } });
+  const variant = call("recipe_variant_save", {
+    original_recipe_id: ids[0],
+    recipe: recipe("Recipe 0, my way"),
+  }).record;
+  let start = performance.now();
+  const result = call("recipe_suggest", { limit: 12 });
+  // Reading every recipe and note once per suggestion took 12 s here.
+  assert.ok(performance.now() - start < 1000);
+  assert.equal(result.total, 1001);
+  assert.equal(result.results.length, 12);
+  for (const suggestion of result.results)
+    assert.equal(suggestion.memory.recipe_id, suggestion.record.id);
+  const meal = call("meal_save", {
+    meal: {
+      title: "Feast",
+      dishes: ids.slice(0, 50).map((recipe_id) => ({ recipe_id })),
+    },
+  }).record;
+  start = performance.now();
+  const session = call("cooking_start", {
+    source: { kind: "meal", id: meal.id },
+  });
+  assert.ok(performance.now() - start < 1000);
+  assert.equal(session.memories.length, 50);
+  assert.equal(session.memories[0].preferred_recipe.id, variant.id);
+  assert.equal(session.memories[0].notes[0].data.text, "Cooked 0.");
+  assert.equal(session.memories[1].notes.length, 0);
 });

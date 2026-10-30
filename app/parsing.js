@@ -4,6 +4,7 @@
 import { ingredient } from "./sample-data.js";
 import { formatNumber, originalText } from "./units.js";
 import { splitIngredientLine } from "../shared/ingredients.js";
+import { unitSpelling } from "../shared/quantities.js";
 import { formatLinkLines } from "../shared/links.js";
 import { formatLabels } from "../shared/taxonomy.js";
 
@@ -20,7 +21,7 @@ export function parseIngredient(line, known = []) {
   if (parts.quantity === null || parts.quantity <= 0) return asWritten(raw);
   let q = parts.quantity,
     u = "";
-  const token = parts.unitToken.toLowerCase();
+  const token = unitSpelling(parts.unitToken);
   if (token) {
     if (/^(g|grams?)$/.test(token)) u = "g";
     else if (/^(kg|kilograms?)$/.test(token)) {
