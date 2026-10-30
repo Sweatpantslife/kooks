@@ -16,7 +16,8 @@ import { createMailer, isEmail } from "./mail.js";
 const publicRoot = fileURLToPath(new URL("./public/", import.meta.url));
 // The browser client is these files and the shared modules it imports: the
 // link module, the facet taxonomy and the unit module the taxonomy builds on,
-// the icon module, and the design tokens and components both apps use.
+// the icon module, the accessibility helpers, and the design tokens and
+// components both apps use.
 const staticFiles = new Map([
   ...["/index.html", "/app.js", "/style.css", "/favicon.svg"].map((path) => [
     path,
@@ -27,6 +28,7 @@ const staticFiles = new Map([
     "taxonomy.js",
     "quantities.js",
     "icons.js",
+    "a11y.js",
     "tokens.css",
     "ui.css",
   ].map((name) => [

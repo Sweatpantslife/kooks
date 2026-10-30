@@ -238,7 +238,7 @@ test("links and videos save with a recipe, play on request and survive a reload"
   await page.getByRole("button", { name: "Save recipe" }).click();
   await expect(h1(page, "Lemon & chickpea orzo")).toBeVisible();
   const play = page.getByRole("button", {
-    name: "Play Watch the method on YouTube",
+    name: "Play on YouTube: Watch the method",
   });
   await expect(play).toBeVisible();
   await expect(
@@ -326,4 +326,35 @@ test("the finished view leads back to the recipe", async ({ page }) => {
   await page.getByRole("button", { name: "Recipe", exact: true }).click();
   await expect(h1(page, "Lemon & chickpea orzo")).toBeVisible();
   await expect(action(page, "Cook")).toBeVisible();
+});
+
+test("buttons that redraw the page keep the focus, and filters announce what they show", async ({
+  page,
+}) => {
+  await nav(page, "Recipes").click();
+  await page.getByRole("searchbox").fill("orzo");
+  await expect(page.locator("#announcer")).toHaveText(/^\d+ recipes? shown$/);
+  await page.getByRole("searchbox").fill("no such dish");
+  await expect(page.locator("#announcer")).toHaveText("No recipes found");
+  await page.getByRole("button", { name: "Clear everything" }).click();
+  // A filter chip stays focused and pressed after the library redraws.
+  const favorites = page.getByRole("button", {
+    name: "Favorites",
+    exact: true,
+  });
+  await favorites.focus();
+  await page.keyboard.press("Enter");
+  await expect(favorites).toHaveAttribute("aria-pressed", "true");
+  await expect(favorites).toBeFocused();
+  await page.keyboard.press("Enter");
+  // The servings stepper can be pressed again without finding it anew.
+  await openRecipe(page, "Lemon & chickpea orzo");
+  const more = page.getByRole("button", { name: "More servings" });
+  const count = page.locator(".stepper strong");
+  const before = Number(await count.textContent());
+  await more.focus();
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Enter");
+  await expect(count).toHaveText(String(before + 2));
+  await expect(more).toBeFocused();
 });

@@ -376,14 +376,14 @@ test("links and videos save with a recipe, play on request and round-trip throug
     "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?start=65&autoplay=1",
   );
   await expect(
-    section.getByRole("button", { name: "Play Original source on YouTube" }),
+    section.getByRole("button", { name: "Play on YouTube: Original source" }),
   ).toBeVisible();
   await expect(
     section.getByRole("link", { name: "The written recipe" }),
   ).toHaveAttribute("href", "https://example.com/orzo");
   await expect(section.locator("iframe")).toHaveCount(0);
   await section
-    .getByRole("button", { name: "Play Vimeo version on Vimeo" })
+    .getByRole("button", { name: "Play on Vimeo: Vimeo version" })
     .click();
   await expect(section.locator("iframe")).toHaveCount(1);
   await expect(section.locator("iframe")).toHaveAttribute(
@@ -406,7 +406,7 @@ test("links and videos save with a recipe, play on request and round-trip throug
   await page.getByRole("button", { name: "Save recipe" }).click();
   await expect(h1(page, dish.title)).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Play Folding the dough on Instagram" }),
+    page.getByRole("button", { name: "Play on Instagram: Folding the dough" }),
   ).toBeVisible();
   await expect(section.getByRole("button", { name: /on Vimeo/ })).toHaveCount(
     0,
@@ -577,7 +577,7 @@ test("techniques, ideas and books: a video technique, an idea written up as a re
   await expect(h1(page, technique)).toBeVisible();
   // The video waits for play, exactly as on a recipe page.
   await expect(
-    page.getByRole("button", { name: "Play Watch it on YouTube" }),
+    page.getByRole("button", { name: "Play on YouTube: Watch it" }),
   ).toBeVisible();
   await expect(page.locator(".links iframe")).toHaveCount(0);
   await page.getByRole("link", { name: dish.title }).click();
@@ -596,7 +596,7 @@ test("techniques, ideas and books: a video technique, an idea written up as a re
   await expect(h1(page, idea)).toBeVisible();
   await expect(page.locator(".tag", { hasText: "Want to try" })).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Play The reel on Instagram" }),
+    page.getByRole("button", { name: "Play on Instagram: The reel" }),
   ).toBeVisible();
   await page.getByRole("button", { name: "We tried it" }).click();
   await expect(page.locator(".tag", { hasText: "Tried it" })).toBeVisible();
@@ -749,4 +749,123 @@ test("every page that opens from another page offers a way back to it", async ({
   expect(page.url()).toContain(`#/cook/${session}`);
   await back.click();
   await expect(h1(page, "Cook")).toBeVisible();
+});
+
+// Marks an element so a test can wait for the redraw that replaces it.
+const replaced = async (page, locator) => {
+  const handle = await locator.elementHandle();
+  await handle.evaluate((el) => (el.stale = true));
+  await page.waitForFunction((el) => !el.isConnected, handle);
+};
+
+test("focus, typing and open sections survive another cook's change and the page's own buttons", async ({
+  page,
+  request,
+  baseURL,
+}) => {
+  const dish = recipe("Focus soup");
+  await seed(request, baseURL, "recipe_save", { recipe: dish });
+  await page.reload();
+  // Typing in a search box carries on through a background redraw.
+  await page.goto("/#/recipes");
+  const search = page.getByRole("searchbox");
+  await search.fill("Focus");
+  await expect(page.locator("#announcer")).toHaveText(/^\d+ of \d+ recipes?$/);
+  const redrawn = replaced(page, search);
+  await seed(request, baseURL, "member_save", {
+    member: { name: title("Poll") },
+  });
+  await redrawn;
+  await expect(search).toBeFocused();
+  await page.keyboard.type(" soup");
+  await expect(search).toHaveValue("Focus soup");
+  // An open disclosure and the focused button outlive the redraw.
+  await page.goto("/#/today");
+  await page.getByText("More filters").click();
+  const favorite = page.getByRole("button", {
+    name: `Add to favorites: ${dish.title}`,
+  });
+  await favorite.focus();
+  const again = replaced(page, favorite);
+  await seed(request, baseURL, "member_save", {
+    member: { name: title("Poll again") },
+  });
+  await again;
+  await expect(
+    page.locator("details", { hasText: "More filters" }),
+  ).toHaveAttribute("open", "");
+  await expect(favorite).toBeFocused();
+  // Pressing it saves and redraws; the focus stays on the same control.
+  await page.keyboard.press("Enter");
+  const pressed = page.getByRole("button", {
+    name: `Remove from favorites: ${dish.title}`,
+  });
+  await expect(pressed).toHaveAttribute("aria-pressed", "true");
+  await expect(pressed).toBeFocused();
+});
+
+test("Undo stays long enough to reach, pauses while focused and hands the focus back", async ({
+  page,
+  request,
+  baseURL,
+}) => {
+  const dish = recipe("Undo stew");
+  const { record } = await seed(request, baseURL, "recipe_save", {
+    recipe: dish,
+  });
+  await page.clock.install();
+  await page.goto(`/#/recipes/${record.id}`);
+  await expect(h1(page, dish.title)).toBeVisible();
+  const favorite = page
+    .getByRole("main")
+    .getByRole("button", { name: /favorites$/ });
+  const toast = page.locator("#toast");
+  const undo = toast.getByRole("button", { name: "Undo" });
+  await favorite.focus();
+  await page.keyboard.press("Enter");
+  await expect(toast).toContainText("Saved to favorites.");
+  await page.clock.fastForward(10_000);
+  await expect(undo).toBeVisible();
+  // While the keyboard is on the message it does not time out.
+  await undo.focus();
+  await page.clock.fastForward(60_000);
+  await expect(undo).toBeVisible();
+  await page.keyboard.press("Enter");
+  await expect(toast).toContainText("Change undone.");
+  await expect(favorite).toHaveAttribute("aria-pressed", "false");
+  await expect(favorite).toBeFocused();
+  // Escape dismisses a message; without focus or a pointer it times out.
+  await page.keyboard.press("Escape");
+  await expect(toast).toBeEmpty();
+  await page.keyboard.press("Enter");
+  await expect(toast).toContainText("Saved to favorites.");
+  await page.clock.fastForward(21_000);
+  await expect(toast).toBeEmpty();
+});
+
+test("a timer that runs out while the cooking page is open is announced", async ({
+  page,
+  request,
+  baseURL,
+}) => {
+  const dish = recipe("Timer rice");
+  const { record } = await seed(request, baseURL, "recipe_save", {
+    recipe: dish,
+  });
+  const { record: session } = await seed(request, baseURL, "cooking_start", {
+    source: { kind: "recipe", id: record.id },
+  });
+  await seed(request, baseURL, "cooking_timer", {
+    id: session.id,
+    expected_version: session.version,
+    label: "Rice",
+    duration_seconds: 5,
+  });
+  await page.goto(`/#/cook/${session.id}`);
+  const timer = page.locator(".timer", { hasText: "Rice" });
+  await expect(timer.locator("[data-deadline]")).toHaveText(/00:0[1-5]/);
+  await expect(page.locator("#toast")).toContainText("Rice timer is ready.", {
+    timeout: 10_000,
+  });
+  await expect(timer).toHaveClass(/ready/);
 });

@@ -32,6 +32,7 @@ import {
   taxonomy,
 } from "../shared/taxonomy.js";
 import { icon } from "../shared/icons.js";
+import { announce, keepPlace } from "../shared/a11y.js";
 import { clone as structuredClone, randomId } from "./compat.js";
 import { defaultDesign, snapshot, parseBackup } from "./model.js";
 import { createCookbookStorage } from "./storage.js";
@@ -320,7 +321,7 @@ async function boot() {
       `<button type="button" class="chip" data-action="facet" ${attrs} aria-pressed="${pressed}">${esc(label)}</button>`;
     const row = (label, chips) =>
       chips.length
-        ? `<div class="facet-row"><span class="facet-label">${label}</span>${chips.join("")}</div>`
+        ? `<div class="facet-row" role="group" aria-label="${label}"><span class="facet-label" aria-hidden="true">${label}</span>${chips.join("")}</div>`
         : "";
     const chosen = (facet, value) =>
       Array.isArray(facets[facet])
@@ -382,7 +383,7 @@ async function boot() {
         ? `<div class="facet-row">${button("Clear filters", "clear-search", "", "btn-quiet btn-sm", "x")}</div>`
         : "");
     return rows
-      ? `<div class="facets" aria-label="Recipe filters">${rows}</div>`
+      ? `<div class="facets" role="group" aria-label="Recipe filters">${rows}</div>`
       : "";
   }
   function cuisineOptions() {
@@ -438,7 +439,7 @@ async function boot() {
           item.title || (info.embed ? `${info.label} video` : item.url);
         const line = `<p class="small"><a href="${esc(item.url)}" target="_blank" rel="noreferrer">${esc(title)}</a> <span class="muted">· ${esc(info.site)}</span></p>`;
         if (!info.embed) return line;
-        return `<div class="link-item"><div class="embed" data-shape="${info.embed.shape}" data-src="${esc(info.embed.autoplay_src)}" data-title="${esc(title)}">${button(`Play on ${info.label}`, "embed-load", `aria-label="${esc(item.title ? `Play ${item.title} on ${info.label}` : `Play on ${info.label}`)}"`, "embed-load", "play")}<small>Loads the video from ${esc(info.label)} when you press play.</small></div>${line}</div>`;
+        return `<div class="link-item"><div class="embed" data-shape="${info.embed.shape}" data-src="${esc(info.embed.autoplay_src)}" data-title="${esc(title)}">${button(`Play on ${info.label}`, "embed-load", item.title ? `aria-label="${esc(`Play on ${info.label}: ${item.title}`)}"` : "", "embed-load", "play")}<small>Loads the video from ${esc(info.label)} when you press play.</small></div>${line}</div>`;
       })
       .join("")}</section>`;
   }
@@ -483,6 +484,22 @@ async function boot() {
   }
 
   // ---------- Recipes ----------
+  // Typing or pressing a filter changes the list out of a screen reader's
+  // sight; once it settles, say how many recipes it now shows.
+  let resultsAnnouncement;
+  function announceResults() {
+    clearTimeout(resultsAnnouncement);
+    resultsAnnouncement = setTimeout(() => {
+      const results = root.querySelector("#results");
+      if (!results) return;
+      const count = results.querySelectorAll(".card").length;
+      announce(
+        count
+          ? `${count} recipe${count === 1 ? "" : "s"} shown`
+          : "No recipes found",
+      );
+    }, 500);
+  }
   function libraryCards() {
     const term = state.query.trim().toLowerCase();
     const found = allRecipes().filter(
@@ -514,7 +531,7 @@ async function boot() {
   }
   function libraryView() {
     const total = allRecipes().length;
-    return `${pageHeader({ title: "Recipes", subtitle: `${total} recipe${total === 1 ? "" : "s"} in your cookbook. The ones you love, ready when you are.`, actions: button("Add recipe", "capture", "", "btn-primary", "plus") })}${resumeBanner()}<div class="toolbar" role="search"><label class="search grow"><span class="sr-only">Search recipes and ingredients</span>${icon("search")}<input id="search" type="search" placeholder="Find a recipe or ingredient…" value="${esc(state.query)}" autocomplete="off"></label><div class="chips" aria-label="Recipe filters">${[
+    return `${pageHeader({ title: "Recipes", subtitle: `${total} recipe${total === 1 ? "" : "s"} in your cookbook. The ones you love, ready when you are.`, actions: button("Add recipe", "capture", "", "btn-primary", "plus") })}${resumeBanner()}<div class="toolbar" role="search"><label class="search grow"><span class="sr-only">Search recipes and ingredients</span>${icon("search")}<input id="search" type="search" placeholder="Find a recipe or ingredient…" value="${esc(state.query)}" autocomplete="off"></label><div class="chips" role="group" aria-label="Show">${[
       ["all", "All"],
       ["favorites", "Favorites"],
       ["quick", "Under 30 min"],
@@ -611,7 +628,7 @@ async function boot() {
   }
   function mealEditorView() {
     const d = mealDraft || { title: "", note: "", components: [] };
-    return `${pageHeader({ title: d.id ? "Edit meal" : "New meal", subtitle: "Choose the dishes and the portions you want to make.", back: { label: "Meals", action: "cancel-meal" } })}<form id="meal-form" class="panel stack">${field("Meal name", "title", d.title, 'required maxlength="100" placeholder="Friday dinner"')}${field("A note for this meal", "note", d.note, 'maxlength="200" placeholder="Something warm, something fresh"')}<div><h3>Dishes</h3><div>${allRecipes()
+    return `${pageHeader({ title: d.id ? "Edit meal" : "New meal", subtitle: "Choose the dishes and the portions you want to make.", back: { label: "Meals", action: "cancel-meal" } })}<form id="meal-form" class="panel stack">${field("Meal name", "title", d.title, 'required maxlength="100" placeholder="Friday dinner"')}${field("A note for this meal", "note", d.note, 'maxlength="200" placeholder="Something warm, something fresh"')}<div><h2 class="h-sub">Dishes</h2><div>${allRecipes()
       .map((r) => {
         const c = d.components.find((c) => c.recipeId === r.id);
         return `<div class="meal-option"><label class="check check-lg"><input type="checkbox" name="recipes" value="${esc(r.id)}" ${c ? "checked" : ""}><span>${esc(r.title)}</span></label><label class="field"><span>Dish role</span><select class="select" name="role-${esc(r.id)}" aria-label="Role of ${esc(r.title)}">${["Main", "Side", "Starter", "Dessert"].map((role) => `<option ${role === (c?.role || "Side") ? "selected" : ""}>${role}</option>`).join("")}</select></label><label class="field"><span>Portions</span><input name="portions-${esc(r.id)}" aria-label="Portions of ${esc(r.title)}" type="number" min="1" max="24" step="1" value="${c?.servings || r.servings || 1}" ${r.servings ? "" : "disabled"}></label></div>`;
@@ -658,7 +675,7 @@ async function boot() {
             .join("")}</div></section>`,
       )
       .join("");
-    return `${pageHeader({ title: "Add to shopping list", subtitle: "Untick anything you already have. Matching ingredients combine; adding the same recipe again updates its quantities.", back: { label: "Back", action: "review-back" } })}<div class="panel stack">${groups}</div><div class="actions spacer">${button(`Add ${count} items to list`, "confirm-list", count ? "" : "disabled", "btn-primary", "shopping-basket")}${button("Select all", "select-all", "", "btn-quiet")}</div>`;
+    return `${pageHeader({ title: "Add to shopping list", subtitle: "Untick anything you already have. Matching ingredients combine; adding the same recipe again updates its quantities.", back: { label: "Back", action: "review-back" } })}<div class="panel stack"><h2>Ingredients to buy</h2>${groups}</div><div class="actions spacer">${button(`Add ${count} items to list`, "confirm-list", count ? "" : "disabled", "btn-primary", "shopping-basket")}${button("Select all", "select-all", "", "btn-quiet")}</div>`;
   }
   function manualForm() {
     return `<form id="manual-form" class="inline-add"><label class="field grow"><span class="sr-only">Add an everyday item</span><input id="manual-input" name="item" required maxlength="100" placeholder="Add milk, coffee, anything…"></label><button type="button" data-local-submit class="btn btn-icon" aria-label="Add item">${icon("plus")}</button></form>`;
@@ -683,7 +700,7 @@ async function boot() {
           : "";
       })
       .join("");
-    return `${header}${resumeBanner()}<section class="panel stack">${manualForm()}${rows}${disclosure(
+    return `${header}${resumeBanner()}<section class="panel stack"><h2 class="sr-only">On the list</h2>${manualForm()}${rows}${disclosure(
       `Recipes on this list · ${Object.keys(state.contributions).length}`,
       `<div class="list">${
         Object.entries(state.contributions)
@@ -910,6 +927,28 @@ async function boot() {
     }
   }
   function render() {
+    // Redrawing the view the person is on keeps their focus, open sections
+    // and scroll; moving to another view starts at its top instead.
+    if (renderedView === state.view)
+      keepPlace(root, paint, { fallback: () => main });
+    else paint();
+    toastElement.textContent = noteMessage;
+    const title =
+      state.view === "detail"
+        ? recipe().title
+        : state.view === "meal"
+          ? (meal()?.title ?? "Meal")
+          : TITLES[state.view] || "Kooks";
+    document.title = `${title} · Kooks`;
+    updateTimers();
+    void manageWakeLock(state.view === "cook" && Boolean(state.session));
+    if (renderedView && renderedView !== state.view) {
+      window.scrollTo(0, 0);
+      main.focus({ preventScroll: true });
+    }
+    renderedView = state.view;
+  }
+  function paint() {
     applyDesign();
     navigation();
     const views = {
@@ -930,21 +969,6 @@ async function boot() {
       settings: settingsView,
     };
     main.innerHTML = `<div class="page">${(views[state.view] || todayView)()}</div>`;
-    toastElement.textContent = noteMessage;
-    const title =
-      state.view === "detail"
-        ? recipe().title
-        : state.view === "meal"
-          ? (meal()?.title ?? "Meal")
-          : TITLES[state.view] || "Kooks";
-    document.title = `${title} · Kooks`;
-    updateTimers();
-    void manageWakeLock(state.view === "cook" && Boolean(state.session));
-    if (renderedView && renderedView !== state.view) {
-      window.scrollTo(0, 0);
-      main.focus({ preventScroll: true });
-    }
-    renderedView = state.view;
   }
   function updateTimers() {
     if (!state.session) return;
@@ -1001,6 +1025,7 @@ async function boot() {
         notify("Finish or remove a timer before adding another.");
         return;
       }
+      const hadFocus = target === document.activeElement;
       target.disabled = true;
       try {
         if (!(await enableTimerAlerts()))
@@ -1011,6 +1036,8 @@ async function boot() {
         noteMessage = "Timer started. Device alerts are unavailable.";
       }
       target.disabled = false;
+      // Disabling the button took the focus off it; the redraw puts it back.
+      if (hadFocus) target.focus({ preventScroll: true });
     }
     if (["favorite", "confirm-list", "cook-next", "finish-cook"].includes(a))
       tap();
@@ -1121,8 +1148,10 @@ async function boot() {
       state.favorites = state.favorites.includes(id)
         ? state.favorites.filter((x) => x !== id)
         : [...state.favorites, id];
-    } else if (a === "filter") state.filter = target.dataset.value;
-    else if (a === "facet") {
+    } else if (a === "filter") {
+      state.filter = target.dataset.value;
+      announceResults();
+    } else if (a === "facet") {
       const { facet, value } = target.dataset,
         same = (v) => labelKey(v) === labelKey(value);
       if (Array.isArray(facets[facet]))
@@ -1130,10 +1159,12 @@ async function boot() {
           ? facets[facet].filter((v) => !same(v))
           : [...facets[facet], value];
       else facets[facet] = same(facets[facet]) ? "" : value;
+      announceResults();
     } else if (a === "clear-search") {
       state.query = "";
       state.filter = "all";
       facets = noFacets();
+      announceResults();
     } else if (a === "servings") {
       const r = recipe();
       state.servings[r.id] = Math.min(
@@ -1372,6 +1403,7 @@ async function boot() {
     if (input.id === "search") {
       state.query = input.value;
       root.querySelector("#results").innerHTML = libraryCards();
+      announceResults();
     }
     if (input.id === "recipe-note") state.notes[state.selected] = input.value;
     if (input.closest("#editor-form") && draft) {
