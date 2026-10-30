@@ -94,8 +94,8 @@ svg {
 
 .skip {
   position: fixed;
-  top: 8px;
-  left: 8px;
+  inset-block-start: 8px;
+  inset-inline-start: 8px;
   z-index: 100;
   padding: 10px 16px;
   border-radius: var(--radius-pill);
