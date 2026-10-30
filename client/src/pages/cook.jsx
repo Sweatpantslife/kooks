@@ -5,14 +5,16 @@ import {
   ChevronRight,
   CircleCheck,
   CookingPot,
+  Plus,
   Timer,
   X,
 } from "lucide";
-import { change, record } from "../lib/store.js";
+import { change, record, records } from "../lib/store.js";
 import { leave, navigate } from "../lib/router.js";
 import { toast } from "../lib/toast.js";
 import { localDay } from "../lib/format.js";
 import { measure, memories } from "../lib/kitchen.js";
+import { byName } from "../lib/people.js";
 import {
   clock,
   edit,
@@ -28,6 +30,7 @@ import {
 import { Field, FormError, numberOrNull, useWork } from "../ui/form.jsx";
 import { Empty, PageHeader } from "../ui/page.jsx";
 import { Icon } from "../ui/icon.jsx";
+import { passFocus } from "../ui/focus.js";
 import { LastTime } from "./recipe.jsx";
 
 const failed = (error) => toast(error.message, { error: true });
@@ -158,6 +161,135 @@ function Timers({ session }) {
         <button type="submit" class="btn">
           <Icon icon={Timer} />
           Start a timer
+        </button>
+      </form>
+    </section>
+  );
+}
+
+// A job changed from here is read again just before it is written, so
+// another cook's tick or name in between is kept.
+function changeJob(session, jobId, patch) {
+  return onSession(session.id, (s) => {
+    const job = s.data.tasks?.find((t) => t.id === jobId);
+    if (!job) return null;
+    const { id: _, ...task } = job;
+    return change("cooking_task_save", {
+      ...edit(s),
+      task_id: jobId,
+      task: { ...task, ...patch },
+    });
+  }).catch(failed);
+}
+
+// The jobs around the cooking that anyone can pick up, like setting the
+// table or rinsing the rice, each with who is on it.
+function Jobs({ session }) {
+  const jobs = session.data.tasks ?? [];
+  const people = records("member").sort(byName);
+  const [text, setText] = useState("");
+  const [said, setSaid] = useState("");
+  const dishOf = (job) =>
+    session.data.dishes.length > 1 &&
+    session.data.dishes.find((d) => d.dish_id === job.dish_id)?.title;
+  const add = (event) => {
+    event.preventDefault();
+    const job = text.trim();
+    if (!job) return;
+    setText("");
+    setSaid(`${job} is on the jobs list.`);
+    void onSession(session.id, (s) =>
+      change("cooking_task_save", {
+        ...edit(s),
+        task: { text: job, dish_id: null, step_index: null, member_id: null },
+      }),
+    ).catch(failed);
+  };
+  const remove = (event, job) => {
+    passFocus(event.currentTarget, "#job-text");
+    void onSession(session.id, (s) =>
+      change(
+        "cooking_task_save",
+        { ...edit(s), task_id: job.id, task: null },
+        { done: `${job.text} is off the jobs list.` },
+      ),
+    ).catch(failed);
+  };
+  return (
+    <section class="cook-card" aria-labelledby="jobs">
+      <h2 id="jobs">Jobs</h2>
+      <p class="sr-only" role="status">
+        {said}
+      </p>
+      {jobs.length > 0 && (
+        <ul class="jobs" role="list" data-rows>
+          {jobs.map((job) => {
+            const dish = dishOf(job);
+            return (
+              <li key={job.id} class={`job${job.completed ? " job-done" : ""}`}>
+                <label class="job-text">
+                  <input
+                    type="checkbox"
+                    checked={job.completed}
+                    onChange={(event) =>
+                      changeJob(session, job.id, {
+                        completed: event.currentTarget.checked,
+                      })
+                    }
+                  />
+                  <span>
+                    {job.text}
+                    {dish && <span class="muted small"> · {dish}</span>}
+                  </span>
+                </label>
+                {people.length > 0 && (
+                  <select
+                    class="input job-who"
+                    aria-label={`Who: ${job.text}`}
+                    value={job.member_id ?? ""}
+                    onChange={(event) =>
+                      changeJob(session, job.id, {
+                        member_id: event.currentTarget.value || null,
+                      })
+                    }
+                  >
+                    <option value="">Anyone</option>
+                    {people.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.data.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <button
+                  type="button"
+                  class="btn btn-quiet btn-icon"
+                  data-row="remove"
+                  aria-label={`Remove ${job.text}`}
+                  onClick={(event) => remove(event, job)}
+                >
+                  <Icon icon={X} />
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      <form class="quick-add" onSubmit={add}>
+        <label for="job-text" class="sr-only">
+          A job
+        </label>
+        <input
+          id="job-text"
+          class="input"
+          maxLength={500}
+          placeholder="Set the table"
+          value={text}
+          onInput={(event) => setText(event.currentTarget.value)}
+        />
+        <button type="submit" class="btn">
+          <Icon icon={Plus} />
+          Add a job
         </button>
       </form>
     </section>
@@ -456,6 +588,7 @@ export function Cook({ id }) {
         />
         <div class="cook-side">
           <Timers session={session} />
+          <Jobs session={session} />
           <Ingredients dish={dish} />
           <AllSteps session={session} dish={dish} />
         </div>

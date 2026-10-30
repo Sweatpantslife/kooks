@@ -404,6 +404,40 @@ test("shared tasks and timer owners use session versions and finish before creat
   );
 });
 
+test("a changed cooking task keeps its place, and removing one leaves the rest in order", (t) => {
+  const { call } = setup(t);
+  const r = call("recipe_save", { recipe: recipe() }).record;
+  let s = call("cooking_start", {
+    source: { kind: "recipe", id: r.id },
+  }).record;
+  const add = (text) => {
+    const saved = call("cooking_task_save", {
+      id: s.id,
+      expected_version: s.version,
+      task: { text },
+    });
+    s = saved.record;
+    return saved.task_id;
+  };
+  const [first] = ["Set the table", "Rinse rice", "Chop herbs"].map(add);
+  const texts = () => s.data.tasks.map((task) => task.text);
+  s = call("cooking_task_save", {
+    id: s.id,
+    expected_version: s.version,
+    task_id: first,
+    task: { text: "Set the table", completed: true },
+  }).record;
+  assert.deepEqual(texts(), ["Set the table", "Rinse rice", "Chop herbs"]);
+  assert.equal(s.data.tasks[0].completed, true);
+  s = call("cooking_task_save", {
+    id: s.id,
+    expected_version: s.version,
+    task_id: s.data.tasks[1].id,
+    task: null,
+  }).record;
+  assert.deepEqual(texts(), ["Set the table", "Chop herbs"]);
+});
+
 test("costs use compatible dated prices, keep unknown totals incomplete, and count leftover meals zero additional times", (t) => {
   const { call } = setup(t);
   const r = call("recipe_save", { recipe: recipe() }).record;

@@ -562,14 +562,18 @@ export class Features {
       );
     if (args.task?.member_id) this.store.get("member", args.task.member_id);
     const taskId = args.task_id ?? randomUUID();
-    data.tasks = data.tasks.filter((t) => t.id !== taskId);
-    if (args.task) data.tasks.push({ ...args.task, id: taskId });
-    else
+    // A changed task keeps its place in the list; a new one goes last.
+    const at = data.tasks.findIndex((t) => t.id === taskId);
+    if (args.task && at >= 0) data.tasks[at] = { ...args.task, id: taskId };
+    else if (args.task) data.tasks.push({ ...args.task, id: taskId });
+    else {
       requireThat(
         args.task_id,
         "INVALID_INPUT",
         "Removing a task requires task_id.",
       );
+      data.tasks.splice(at, 1);
+    }
     requireThat(
       data.tasks.length <= 1000,
       "TOO_MANY_TASKS",

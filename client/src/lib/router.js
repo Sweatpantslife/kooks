@@ -127,9 +127,8 @@ function moved([first, second, ...rest]) {
     return fourth ? path(["recipes", "idea", fourth, "write"]) : "recipes";
   if (first === "recipes" && second && third === "variant")
     return path(["recipes", second, "variation"]);
-  // Cooking notes are written when the cooking finishes.
   if (first === "recipes" && second && third === "memory")
-    return path(["recipes", second]);
+    return path(["recipes", second, "note"]);
   return Object.hasOwn(legacy, first) ? legacy[first] : null;
 }
 

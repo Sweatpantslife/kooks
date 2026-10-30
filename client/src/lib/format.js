@@ -19,6 +19,16 @@ export const monday = (day = localDay()) =>
 export const dateLabel = (day) =>
   at(day).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 
+// A day further back than this year says which year.
+export const pastDayLabel = (day) =>
+  day.slice(0, 4) === localDay().slice(0, 4)
+    ? dateLabel(day)
+    : at(day).toLocaleDateString(undefined, {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
+
 export const weekLabel = (start) =>
   `${dateLabel(start)} – ${dateLabel(addDays(start, 6))}`;
 

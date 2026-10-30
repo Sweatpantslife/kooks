@@ -28,56 +28,56 @@ Adopted October 30, 2026, when the redesigned app replaced the previous browser 
 
 Hash routes, noun first. The address after `#` is the whole state of the page, so every page can be bookmarked, shared and reloaded.
 
-| Route                                                                   | Page                                                         |
-| ----------------------------------------------------------------------- | ------------------------------------------------------------ |
-| `#/week` · `#/week/<date>`                                              | This week, or the week holding that date                     |
-| `#/week/add/<date>`                                                     | Add a dish to a day                                          |
-| `#/week/when/recipe/<id>` · `/meal/<id>` · `#/week/move/<plan>`         | Choose a day for a recipe or meal, or move a plan            |
-| `#/recipes`                                                             | The cookbook                                                 |
-| `#/recipes/add` · `/paste` · `/photo` · `/idea`                         | Add to the cookbook, and each way of adding                  |
-| `#/recipes/new` · `#/recipes/draft/<id>`                                | Write a recipe; check a pasted or photographed draft         |
-| `#/recipes/<id>` · `/edit` · `/variation`                               | A recipe, its editor, and your own version of it             |
-| `#/recipes/meal/<id>`                                                   | A meal and its dishes                                        |
-| `#/recipes/idea/<id>` · `/edit` · `/write`                              | An idea to try, its form, writing it up as a recipe          |
-| `#/recipes/technique/new` · `/<id>` · `/<id>/edit`                      | A technique and its forms                                    |
-| `#/recipes/book/new` · `/<id>` · `/<id>/edit`                           | A book on the shelf and its forms                            |
-| `#/groceries` · `#/groceries/put-away`                                  | To buy; putting the basket away                              |
-| `#/groceries/week` · `/week/<date>` · `/add/recipe/<id>` · `/meal/<id>` | Pick through a week's plans, a recipe or a meal for the list |
-| `#/groceries/home`                                                      | At home                                                      |
-| `#/cook/<session>` · `/done`                                            | Cooking, and finishing it                                    |
-| `#/household` · `/people` · `/prices` · `/look` · `/signin` · `/backup` | Household and its pages                                      |
-| `#/household/people/new` · `/<id>` · `#/household/prices/new` · `/<id>` | Person and price forms                                       |
-| `#/signin/<token>`                                                      | An emailed sign-in link                                      |
+| Route                                                                   | Page                                                                      |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `#/week` · `#/week/<date>`                                              | This week, or the week holding that date                                  |
+| `#/week/add/<date>`                                                     | Add a dish to a day                                                       |
+| `#/week/when/recipe/<id>` · `/meal/<id>` · `#/week/move/<plan>`         | Choose a day for a recipe or meal, or move a plan                         |
+| `#/recipes`                                                             | The cookbook                                                              |
+| `#/recipes/add` · `/paste` · `/photo` · `/idea`                         | Add to the cookbook, and each way of adding                               |
+| `#/recipes/new` · `#/recipes/draft/<id>`                                | Write a recipe; check a pasted or photographed draft                      |
+| `#/recipes/<id>` · `/edit` · `/variation` · `/note`                     | A recipe, its editor, your own version of it, and a note about cooking it |
+| `#/recipes/meal/new` · `/<id>` · `/<id>/edit`                           | A meal and its dishes, and putting one together                           |
+| `#/recipes/idea/<id>` · `/edit` · `/write`                              | An idea to try, its form, writing it up as a recipe                       |
+| `#/recipes/technique/new` · `/<id>` · `/<id>/edit`                      | A technique and its forms                                                 |
+| `#/recipes/book/new` · `/<id>` · `/<id>/edit`                           | A book on the shelf and its forms                                         |
+| `#/groceries` · `#/groceries/put-away`                                  | To buy; putting the basket away                                           |
+| `#/groceries/week` · `/week/<date>` · `/add/recipe/<id>` · `/meal/<id>` | Pick through a week's plans, a recipe or a meal for the list              |
+| `#/groceries/home`                                                      | At home                                                                   |
+| `#/cook/<session>` · `/done`                                            | Cooking, and finishing it                                                 |
+| `#/household` · `/people` · `/prices` · `/look` · `/signin` · `/backup` | Household and its pages                                                   |
+| `#/household/people/new` · `/<id>` · `#/household/prices/new` · `/<id>` | Person and price forms                                                    |
+| `#/signin/<token>`                                                      | An emailed sign-in link                                                   |
 
 An unknown address shows a Not found page with a way to this week.
 
 ### Addresses from the previous app
 
-The previous browser app's addresses open the page that replaced them, so bookmarks keep working: `#/today` and `#/plan` open Week; `#/capture`, `#/imports/<id>` and `#/new-recipe` open adding, the draft or the editor; `#/techniques/<id>`, `#/inspiration/<id>` and `#/library/<id>` (with `/edit`) open the technique, idea or book; `#/recipes/<id>/variant` opens your own version and `/memory` the recipe; `#/meals/<id>` and `#/plan/meals/<id>` open the meal; `#/shop`, `#/pantry` and `#/leftovers` open Groceries, and `#/shop/review/<kind>/<id>` picks through that recipe or meal; `#/settings/…` and `#/account` open the Household page that took each tab's place. The server sends `/next/…`, where the app was tried out before the swap, to `/`.
+The previous browser app's addresses open the page that replaced them, so bookmarks keep working: `#/today` and `#/plan` open Week; `#/capture`, `#/imports/<id>` and `#/new-recipe` open adding, the draft or the editor; `#/techniques/<id>`, `#/inspiration/<id>` and `#/library/<id>` (with `/edit`) open the technique, idea or book; `#/recipes/<id>/variant` opens your own version and `/memory` the form for a cooking note; `#/meals/<id>` and `#/plan/meals/<id>` open the meal; `#/shop`, `#/pantry` and `#/leftovers` open Groceries, and `#/shop/review/<kind>/<id>` picks through that recipe or meal; `#/settings/…` and `#/account` open the Household page that took each tab's place. The server sends `/next/…`, where the app was tried out before the swap, to `/`.
 
 ## Pages
 
-| Page                  | For                                                                                                                                    | Primary action          |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
-| Week                  | Seven days with their plans and leftovers; today first on phones. One line with the week's food cost against the budget.               | Add to a day            |
-| Recipes               | Search by name or ingredient; chips for kind (recipes, meals, ideas, techniques, books) and for favorites and facets; What can I make? | Add                     |
-| Add                   | Paste, photograph, write, save an idea, keep a technique, add a book                                                                   | One link per way        |
-| Recipe                | Ingredients (scaled, converted, marked when at home), method, who at the table likes it, its family and sources                        | Cook                    |
-| Editor                | Basics, ingredients read back line by line, method, facets, links; a draft sits beside its original                                    | Save recipe             |
-| Meal                  | Its dishes                                                                                                                             | Cook                    |
-| Idea, technique, book | Notes, steps and tips, files and bookmarks, links and the recipes they touch                                                           | Edit, or open the book  |
-| To buy                | The list by aisle, the basket, and putting it away                                                                                     | Add, Shop for the week  |
-| At home               | What is in, what to use soon, leftovers                                                                                                | Add                     |
-| Cooking               | One step at a time in large type, the dish's ingredients, every step, timers                                                           | Next                    |
-| Finishing             | How it went per dish: rating, next time, notes, portions left over                                                                     | Done                    |
-| Household pages       | People and tastes; prices, budget and currency; colors and units; passkeys; backup                                                     | Add a person or a price |
+| Page                  | For                                                                                                                                       | Primary action          |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
+| Week                  | Seven days with their plans and leftovers; today first on phones. One line with the week's food cost against the budget.                  | Add to a day            |
+| Recipes               | Search by name or ingredient; chips for kind (recipes, meals, ideas, techniques, books) and for favorites and facets; What can I make?    | Add                     |
+| Add                   | Paste, photograph, write, save an idea, keep a technique, add a book                                                                      | One link per way        |
+| Recipe                | Ingredients (scaled, converted, marked when at home), method, who at the table likes it, every time it was cooked, its family and sources | Cook                    |
+| Editor                | Basics, ingredients read back line by line, method, facets, links; a draft sits beside its original                                       | Save recipe             |
+| Meal                  | Its dishes                                                                                                                                | Cook                    |
+| Idea, technique, book | Notes, steps and tips, files and bookmarks, links and the recipes they touch                                                              | Edit, or open the book  |
+| To buy                | The list by aisle, the basket, and putting it away                                                                                        | Add, Shop for the week  |
+| At home               | What is in, what to use soon, leftovers                                                                                                   | Add                     |
+| Cooking               | One step at a time in large type, the dish's ingredients, every step, timers, and jobs anyone can pick up                                 | Next                    |
+| Finishing             | How it went per dish: rating, next time, notes, portions left over                                                                        | Done                    |
+| Household pages       | People and tastes; prices, budget and currency; colors and units; passkeys; backup                                                        | Add a person or a price |
 
 ## Key flows
 
 - **Add a recipe:** Recipes → Add → Paste or Photo → check the draft beside its original → Save → the recipe.
 - **Plan the week:** Week → Add on a day → pick a recipe or meal. Or a recipe → Add to the week → pick a day.
 - **Shop:** Groceries → Shop for the week → untick what you have → the list by aisle → tick into the basket → Put it all away, which fills At home.
-- **Cook:** a recipe, meal or today's plan → Cook → steps and timers → Finish → leftovers go to At home and the note shows as "Last time" on the recipe.
+- **Cook:** a recipe, meal or today's plan → Cook → steps and timers → Finish → leftovers go to At home and the note shows as "Last time" and under "Cooked before" on the recipe. Cooking without the app? A recipe → Add a note.
 - **Write up an idea:** the idea → Write it up as a recipe → the editor starts from it → Save → the idea points at the recipe.
 
 ## Components

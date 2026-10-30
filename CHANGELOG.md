@@ -72,9 +72,17 @@ Messages now hand the focus back where it was before them: pressing Undo, Escape
 
 The previous app's own tests went with it. Its Playwright projects `web` and `web-auth` are replaced by the new app's suite, which moves from `test/next-e2e` to `test/web-e2e` as the `web` project and now opens the sign-in link exactly as the email gives it. Three of the previous app's checks are carried over in `together.spec.js`: another cook's recipe arriving and leaving while the search keeps the focus and the typing, every page at 320, 390, 768 and 1280 px without sideways scrolling (24 addresses), and Undo's timing and focus. The server tests serve a stand-in build instead of the previous app's files. `docs/ia-ux.md` is rewritten for the new app, and the README, handoff, decisions, contributing, hosting and household guides follow it.
 
-Costs now count per week (Household › Prices and budget, and the Week's line) instead of per recipe. Not in the new app yet, and still available through the MCP tools: shared cooking jobs with owners and the list of past cooking notes under a recipe (the latest note shows as "Last time" on the recipe and in cooking). The mobile app is unchanged.
+Costs now count per week (Household › Prices and budget, and the Week's line) instead of per recipe. Shared cooking jobs and the list of past cooking notes under a recipe came back in the next change. The mobile app is unchanged.
 
 `npm run format:check`, `npm run lint`, `npm test` (120 passed, 1 skipped) and `npm run test:e2e` (58 passed: 14 for the mobile app and 44 for this one, 3 of them new in `together.spec.js`; the 22 tests of the previous app and its sign-in screens are gone with it). A Docker image was not built here; the client stage was checked by building from a folder with only `package.json`, `client/` and `shared/`.
+
+### Cooking jobs and every time a recipe was cooked
+
+Cooking now has a Jobs card beside the timers for the work around the dishes, like setting the table: anyone adds one, ticks it off, says who is on it (or leaves it to anyone), and removes it with Undo, and everyone cooking sees the same list. A recipe now lists every time it or another version of it was cooked under "Cooked before", newest first, with the rating, what was changed and what to do next time, three at a time and the rest behind "N earlier times"; a note left empty at the finish shows only its day. "Add a note" there records a cooking without the stove, at `#/recipes/<id>/note`, which the previous app's `/memory` address now opens. Days from an earlier year say which year. These were the two parts of the previous app the new one did not have yet.
+
+`cooking_task_save` now keeps a changed job in its place instead of moving it to the end of the list, so ticking one or naming who is on it no longer reorders the jobs (the correctness and performance threads that held `mcp/features.js` have finished).
+
+`npm run format:check`, `npm run lint`, `npm test` (122 passed, 1 skipped; 2 new, for the task order, which failed before the fix, and for the year on older days) and `npm run test:e2e` (60 passed: 14 for the mobile app and 46 for this one; 2 new, for jobs with focus, Undo and a reload, and for Cooked before and adding a note, with axe scans of cooking with jobs, a recipe's history and the note form; the recipe page test now reads its Last time note inside that note, as the same words also show under Cooked before).
 
 ### A failed passkey suggestion stays silent on the sign-in screen
 

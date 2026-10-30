@@ -16,6 +16,7 @@ import { AddToDay, ChooseDay, Week } from "./pages/week.jsx";
 import { Recipes } from "./pages/recipes.jsx";
 import { Recipe } from "./pages/recipe.jsx";
 import { Meal, MealForm } from "./pages/meal.jsx";
+import { NoteForm } from "./pages/note.jsx";
 import { Add, Idea, Paste, Photo } from "./pages/add.jsx";
 import { Editor } from "./pages/editor.jsx";
 import {
@@ -128,6 +129,11 @@ function pageFor([first = "week", second, third, fourth]) {
     return {
       title: `${EDIT[third]} · ${named("recipe", second, "Recipe")}`,
       page: <Editor mode={third} id={second} />,
+    };
+  if (first === "recipes" && second && third === "note" && !fourth)
+    return {
+      title: `Add a note · ${named("recipe", second, "Recipe")}`,
+      page: <NoteForm key={second} id={second} />,
     };
   if (first === "recipes" && second && !third)
     return {

@@ -109,7 +109,7 @@ test("addresses from the previous app land on the page that replaced them, and u
   for (const [from, to] of [
     ["imports/d1", "recipes/draft/d1"],
     ["recipes/r1/variant", "recipes/r1/variation"],
-    ["recipes/r1/memory", "recipes/r1"],
+    ["recipes/r1/memory", "recipes/r1/note"],
     ["recipes/new/inspiration/i1", "recipes/idea/i1/write"],
     ["plan/meals/m1", "recipes/meal/m1"],
     ["plan/meals/new", "recipes/meal/new"],
