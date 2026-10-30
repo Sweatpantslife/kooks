@@ -310,17 +310,50 @@ async function write(name, input) {
   lastAction = result.action_id;
   return result;
 }
-function toast(message, error = false, undo = false) {
-  const el = $("#toast");
-  el.className = `toast ${error ? "toast-error" : ""}`;
-  el.innerHTML = `<span>${esc(message)}</span>${undo && lastAction ? '<button type="button" data-action="undo">Undo</button>' : ""}<button type="button" data-action="dismiss-toast" aria-label="Dismiss message">${icon("x", { className: "icon-sm" })}</button>`;
+// Messages stay 7 seconds; errors and messages offering Undo stay 20 so that
+// a keyboard or screen-reader user can reach them. The countdown pauses while
+// the pointer or keyboard focus is on the message, and Escape dismisses it.
+const toastTime = { left: 0, since: 0, hovered: false, focused: false };
+let toastReturn = null;
+function toastCountdown() {
   clearTimeout(toastTimeout);
-  toastTimeout = setTimeout(
-    () => {
-      el.textContent = "";
-    },
-    error ? 20000 : 7000,
-  );
+  if (toastTime.hovered || toastTime.focused || !$("#toast").hasChildNodes())
+    return;
+  toastTime.since = Date.now();
+  toastTimeout = setTimeout(() => dismissToast(), toastTime.left);
+}
+function pauseToast() {
+  if (toastTimeout) toastTime.left -= Date.now() - toastTime.since;
+  clearTimeout(toastTimeout);
+  toastTimeout = null;
+}
+// Focus that was on the message goes back to where it came from, or to the
+// page, instead of being dropped when the message disappears.
+function returnFromToast() {
+  const target = findPlace(toastReturn) ?? $("#main");
+  toastReturn = null;
+  target?.focus({ preventScroll: true });
+}
+function dismissToast() {
+  const el = $("#toast"),
+    hadFocus = el.contains(document.activeElement);
+  clearTimeout(toastTimeout);
+  toastTimeout = null;
+  toastTime.hovered = toastTime.focused = false;
+  el.textContent = "";
+  if (hadFocus) returnFromToast();
+  toastReturn = null;
+}
+function toast(message, error = false, undo = false) {
+  const el = $("#toast"),
+    hadFocus = el.contains(document.activeElement),
+    offersUndo = undo && lastAction;
+  el.className = `toast ${error ? "toast-error" : ""}`;
+  el.innerHTML = `<span>${esc(message)}</span>${offersUndo ? '<button type="button" data-action="undo">Undo</button>' : ""}<button type="button" data-action="dismiss-toast" aria-label="Dismiss message">${icon("x", { className: "icon-sm" })}</button>`;
+  if (hadFocus) returnFromToast();
+  toastTime.focused = el.contains(document.activeElement);
+  toastTime.left = error || offersUndo ? 20000 : 7000;
+  toastCountdown();
 }
 async function loadState({ polling = false } = {}) {
   const response = await fetch(
@@ -2529,7 +2562,7 @@ document.addEventListener("click", async (event) => {
   const a = el.dataset.action,
     id = el.dataset.id;
   if (a === "dismiss-toast") {
-    $("#toast").textContent = "";
+    dismissToast();
     return;
   }
   if (a === "embed-load") {
@@ -2778,6 +2811,8 @@ document.addEventListener("click", async (event) => {
       await loadState();
       await render();
       toast("Change undone.");
+      // Undo removed the button that had the focus; go back to the page.
+      if (toastReturn) returnFromToast();
     } else if (a === "passkey-signin") {
       conditional?.abort();
       conditional = null;
@@ -2888,6 +2923,37 @@ document.addEventListener("change", async (event) => {
   }
 });
 
+{
+  const el = $("#toast");
+  el.addEventListener("pointerenter", () => {
+    toastTime.hovered = true;
+    pauseToast();
+  });
+  el.addEventListener("pointerleave", () => {
+    toastTime.hovered = false;
+    toastCountdown();
+  });
+  el.addEventListener("focusin", (event) => {
+    if (event.relatedTarget && !el.contains(event.relatedTarget))
+      toastReturn = placeOf(event.relatedTarget);
+    toastTime.focused = true;
+    pauseToast();
+  });
+  el.addEventListener("focusout", (event) => {
+    if (el.contains(event.relatedTarget)) return;
+    toastTime.focused = false;
+    toastCountdown();
+  });
+}
+document.addEventListener("keydown", (event) => {
+  // Escape is left to a text field that has the focus (it clears a search).
+  if (
+    event.key === "Escape" &&
+    $("#toast").hasChildNodes() &&
+    !event.target.closest?.("input, textarea, select")
+  )
+    dismissToast();
+});
 window.addEventListener("hashchange", () => {
   window.scrollTo(0, 0);
   void render({ focus: true });
