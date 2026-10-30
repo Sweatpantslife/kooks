@@ -403,6 +403,10 @@ test("idempotency, optimistic edits, dependencies and undo protect later changes
     }).record.archived,
     true,
   );
+  const { counts } = call("kooks_status");
+  assert.equal(counts.recipe, 2);
+  assert.equal(counts.meal, 1);
+  assert.equal(counts.pantry, 0);
 });
 
 test("multi-dish cooking preserves snapshots, independent progress and timer deadlines across restart", (t) => {

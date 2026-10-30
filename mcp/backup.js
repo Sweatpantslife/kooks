@@ -1,4 +1,5 @@
 // @ts-nocheck -- not type checked yet; remove this line to opt the file in.
+import { closeSync, openSync, readSync } from "node:fs";
 import { z } from "zod";
 import {
   recipe,
@@ -155,12 +156,20 @@ const record = z.discriminatedUnion(
     z.object({ ...base, kind: z.literal(kind), data }),
   ),
 );
+const MAX_RECORDS = 10000;
 export const backupSchema = z.object({
   format: z.literal("kooks"),
   schema_version: z.union([z.literal(1), z.literal(2)]),
   exported_at: z.iso.datetime(),
-  records: z.array(record).max(10000),
+  records: z.array(record).max(MAX_RECORDS),
 });
+// One MCP result carries the whole backup as a string, twice; past this many
+// bytes of photos and ebooks, the browser download or scripts/backup.mjs
+// export it instead.
+export const MAX_RESULT_FILE_BYTES = 64 * 1024 * 1024;
+// File bytes are encoded in slices; a multiple of three keeps the base64 of
+// consecutive slices one valid string.
+const BASE64_SLICE = 3 * 1024 * 1024;
 
 // The portable shape of an asset: the bytes travel inside the record again.
 export function portableAsset(store, record) {
@@ -174,85 +183,243 @@ export function portableAsset(store, record) {
   };
 }
 
+const header = () => ({
+  format: "kooks",
+  schema_version: 2,
+  exported_at: new Date().toISOString(),
+});
+
 export function exportBackup(store) {
+  const records = store.all();
+  const fileBytes = records
+    .filter((r) => r.kind === "asset")
+    .reduce((sum, r) => sum + (r.data.byte_length ?? 0), 0);
+  requireThat(
+    fileBytes <= MAX_RESULT_FILE_BYTES,
+    "BACKUP_TOO_LARGE",
+    `This cookbook's photos and ebooks take ${Math.ceil(fileBytes / 1048576)} MB, more than one reply can carry. Download the backup from Settings › Backup in the browser app, or run node scripts/backup.mjs export on the computer that keeps the cookbook.`,
+  );
   return {
-    format: "kooks",
-    schema_version: 2,
-    exported_at: new Date().toISOString(),
-    records: store
-      .all()
-      .map((record) =>
-        record.kind === "asset" ? portableAsset(store, record) : record,
-      ),
+    ...header(),
+    records: records.map((record) =>
+      record.kind === "asset" ? portableAsset(store, record) : record,
+    ),
   };
 }
 
+// The same backup as exportBackup, as text pieces for a stream: records are
+// read in one snapshot and each file's bytes, which never change, when its
+// turn comes. No piece holds more than one record or a slice of a file, so a
+// shelf of large ebooks never meets the engine's string limit.
+export function* backupChunks(store) {
+  const records = store.read(() => store.all());
+  yield `${JSON.stringify(header()).slice(0, -1)},"records":[`;
+  for (const [index, record] of records.entries()) {
+    if (index) yield ",";
+    if (record.kind !== "asset") {
+      yield JSON.stringify(record);
+      continue;
+    }
+    const { name, mime_type } = record.data;
+    const text = JSON.stringify({
+      ...record,
+      data: { name, mime_type, base64: "" },
+    });
+    // Only the key itself can appear unescaped in the record's JSON.
+    const at = text.indexOf('"base64":""') + '"base64":"'.length;
+    yield text.slice(0, at);
+    const bytes = store.read(() => store.blob("asset", record.id));
+    for (let start = 0; start < bytes.length; start += BASE64_SLICE)
+      yield bytes.subarray(start, start + BASE64_SLICE).toString("base64");
+    yield text.slice(at);
+  }
+  yield "]}";
+}
+
+// Parse a backup file one record at a time. Each element of the top-level
+// records array is cut out by its brackets and parsed alone; everything else
+// (format, version, date) is kept, with records emptied, and parsed at the
+// end into out.header. Structural characters are ASCII, so a multi-byte
+// character split between two reads is never misread.
+function* backupFileRecords(path, out, chunkSize) {
+  const notBackup = () =>
+    requireThat(false, "INVALID_BACKUP", "This file is not a Kooks backup.");
+  const fd = openSync(path, "r");
+  const buffer = Buffer.alloc(chunkSize);
+  const header = [];
+  let headerLength = 0,
+    depth = 0,
+    inString = false,
+    escaped = false,
+    inRecords = false,
+    element = null;
+  const keep = (bytes) => {
+    headerLength += bytes.length;
+    if (headerLength > 65536) notBackup();
+    header.push(Buffer.from(bytes));
+  };
+  try {
+    for (let read; (read = readSync(fd, buffer, 0, chunkSize, null)) > 0;) {
+      const chunk = buffer.subarray(0, read);
+      // Bytes from here on are not yet in the header or the current element.
+      let from = 0;
+      for (let i = 0; i < chunk.length; i++) {
+        const c = chunk[i];
+        if (inString) {
+          if (escaped) escaped = false;
+          else if (c === 0x5c) escaped = true;
+          else if (c === 0x22) inString = false;
+          continue;
+        }
+        // Between records only separators may appear, and a record starts.
+        if (inRecords && depth === 2 && !element) {
+          if (c === 0x7b) element = { parts: [], from: i };
+          else if (c === 0x5d) {
+            inRecords = false;
+            from = i;
+          } else if (![0x2c, 0x20, 0x0a, 0x0d, 0x09].includes(c)) notBackup();
+        }
+        if (c === 0x22) inString = true;
+        else if (c === 0x7b || c === 0x5b) {
+          depth++;
+          if (!inRecords && depth === 2 && c === 0x5b) {
+            keep(chunk.subarray(from, i + 1));
+            from = i + 1;
+            inRecords = /"records"\s*:\s*\[$/.test(
+              Buffer.concat(header).toString("utf8"),
+            );
+          }
+        } else if (c === 0x7d || c === 0x5d) {
+          depth--;
+          if (element && depth === 2) {
+            element.parts.push(chunk.subarray(element.from, i + 1));
+            const text = Buffer.concat(element.parts).toString("utf8");
+            element = null;
+            yield JSON.parse(text);
+          }
+        }
+      }
+      if (element) {
+        element.parts.push(Buffer.from(chunk.subarray(element.from)));
+        element.from = 0;
+      } else if (!inRecords) keep(chunk.subarray(from));
+    }
+  } finally {
+    closeSync(fd);
+  }
+  try {
+    out.header = JSON.parse(Buffer.concat(header).toString("utf8"));
+  } catch {
+    notBackup();
+  }
+}
+
+// Restore a backup file of any size into an empty database. Call it inside
+// an action, like the backup_restore tool.
+export function restoreBackupFile(store, path, chunkSize = 1 << 20) {
+  const out = {};
+  const records = (function* () {
+    let count = 0;
+    for (const raw of backupFileRecords(path, out, chunkSize)) {
+      requireThat(
+        ++count <= MAX_RECORDS,
+        "INVALID_BACKUP",
+        "A backup holds at most 10,000 records.",
+      );
+      yield record.parse(raw);
+    }
+  })();
+  const result = restoreRecords(store, records);
+  // The header's records array was emptied while reading.
+  requireThat(
+    backupSchema.safeParse(out.header).success,
+    "INVALID_BACKUP",
+    "This file is not a Kooks backup.",
+  );
+  return result;
+}
+
 export function restoreBackup(store, input) {
-  const backup = backupSchema.parse(input);
+  return restoreRecords(store, backupSchema.parse(input).records);
+}
+
+// Restore validated records one at a time, so a file's bytes leave memory as
+// soon as they are stored, then check the references between them; any
+// failure rolls the whole action back.
+function restoreRecords(store, records) {
   requireThat(
     store.isEmpty(),
     "RESTORE_NOT_EMPTY",
     "Restore requires an empty database. Export the existing cookbook first and use a separate KOOKS_DB_PATH to restore.",
   );
-  const keys = new Set(
-    backup.records.map((record) => `${record.kind}:${record.id}`),
-  );
-  requireThat(
-    keys.size === backup.records.length,
-    "INVALID_BACKUP",
-    "Backup contains duplicate record IDs.",
-  );
-  for (const record of backup.records) {
-    if (record.kind === "asset") fileBytes(record.data);
+  const restored = new Map();
+  for (const { kind, ...record } of records) {
+    const key = `${kind}:${record.id}`;
+    requireThat(
+      !restored.has(key),
+      "INVALID_BACKUP",
+      "Backup contains duplicate record IDs.",
+    );
+    if (kind === "asset") fileBytes(record.data);
+    restored.set(key, { kind, ...store.restoreRecord(kind, record) });
+  }
+  checkReferences(restored);
+  validateFeatureRelations(store);
+  validateLibraryRelations(store);
+  return { restored_records: restored.size };
+}
+
+function checkReferences(restored) {
+  for (const record of restored.values()) {
     if (record.kind === "technique" || record.kind === "book")
       for (const recipeId of record.data.recipe_ids)
         requireThat(
-          keys.has(`recipe:${recipeId}`),
+          restored.has(`recipe:${recipeId}`),
           "INVALID_BACKUP",
           `A ${record.kind} references a missing recipe.`,
         );
     if (record.kind === "technique" || record.kind === "inspiration")
       for (const photoId of record.data.photo_ids)
         requireThat(
-          keys.has(`asset:${photoId}`),
+          restored.has(`asset:${photoId}`),
           "INVALID_BACKUP",
           `A ${record.kind} photo is missing.`,
         );
     if (record.kind === "inspiration" && record.data.recipe_id)
       requireThat(
-        keys.has(`recipe:${record.data.recipe_id}`),
+        restored.has(`recipe:${record.data.recipe_id}`),
         "INVALID_BACKUP",
         "An idea references a missing recipe.",
       );
     if (record.kind === "book") {
       requireThat(
-        keys.has(`asset:${record.data.file_id}`),
+        restored.has(`asset:${record.data.file_id}`),
         "INVALID_BACKUP",
         "A book’s file is missing.",
       );
       requireThat(
         record.data.cover_id === null ||
-          keys.has(`asset:${record.data.cover_id}`),
+          restored.has(`asset:${record.data.cover_id}`),
         "INVALID_BACKUP",
         "A book cover is missing.",
       );
     }
     if (record.kind === "batch" && record.data.session_id)
       requireThat(
-        keys.has(`session:${record.data.session_id}`),
+        restored.has(`session:${record.data.session_id}`),
         "INVALID_BACKUP",
         "A batch references a missing cooking session.",
       );
     if (record.kind === "recipe") {
       if (record.data.original_recipe_id)
         requireThat(
-          keys.has(`recipe:${record.data.original_recipe_id}`),
+          restored.has(`recipe:${record.data.original_recipe_id}`),
           "INVALID_BACKUP",
           "A variant references a missing original.",
         );
       for (const imageId of record.data.source_image_ids ?? [])
         requireThat(
-          keys.has(`asset:${imageId}`),
+          restored.has(`asset:${imageId}`),
           "INVALID_BACKUP",
           "A recipe image is missing.",
         );
@@ -260,13 +427,11 @@ export function restoreBackup(store, input) {
     if (record.kind === "meal")
       for (const part of record.data.dishes) {
         requireThat(
-          keys.has(`recipe:${part.recipe_id}`),
+          restored.has(`recipe:${part.recipe_id}`),
           "INVALID_BACKUP",
           "A meal references a missing recipe.",
         );
-        const recipeRecord = backup.records.find(
-          (r) => r.kind === "recipe" && r.id === part.recipe_id,
-        );
+        const recipeRecord = restored.get(`recipe:${part.recipe_id}`);
         requireThat(
           record.archived || !recipeRecord.archived,
           "INVALID_BACKUP",
@@ -280,20 +445,18 @@ export function restoreBackup(store, input) {
       }
     if (record.kind === "note") {
       requireThat(
-        keys.has(`recipe:${record.data.recipe_id}`),
+        restored.has(`recipe:${record.data.recipe_id}`),
         "INVALID_BACKUP",
         "A note references a missing recipe.",
       );
       requireThat(
         record.data.session_id === null ||
-          keys.has(`session:${record.data.session_id}`),
+          restored.has(`session:${record.data.session_id}`),
         "INVALID_BACKUP",
         "A note references a missing cooking session.",
       );
       if (record.data.session_id) {
-        const session = backup.records.find(
-          (r) => r.kind === "session" && r.id === record.data.session_id,
-        );
+        const session = restored.get(`session:${record.data.session_id}`);
         requireThat(
           session.data.dishes.some(
             (d) => d.recipe_id === record.data.recipe_id,
@@ -306,7 +469,7 @@ export function restoreBackup(store, input) {
     if (record.kind === "plan" || record.kind === "session") {
       const ref = record.data.reference;
       requireThat(
-        keys.has(`${ref.kind}:${ref.id}`),
+        restored.has(`${ref.kind}:${ref.id}`),
         "INVALID_BACKUP",
         "An occurrence references a missing source.",
       );
@@ -318,7 +481,7 @@ export function restoreBackup(store, input) {
       );
       for (const dish of record.data.dishes)
         requireThat(
-          keys.has(`recipe:${dish.recipe_id}`),
+          restored.has(`recipe:${dish.recipe_id}`),
           "INVALID_BACKUP",
           "A snapshot references a missing recipe.",
         );
@@ -389,14 +552,14 @@ export function restoreBackup(store, input) {
       );
       for (const source of record.data.sources) {
         requireThat(
-          keys.has(`${source.reference.kind}:${source.reference.id}`),
+          restored.has(`${source.reference.kind}:${source.reference.id}`),
           "INVALID_BACKUP",
           "Shopping source references a missing record.",
         );
         for (const contribution of source.contributions)
           requireThat(
             contribution.source_key === source.source_key &&
-              keys.has(`recipe:${contribution.recipe_id}`),
+              restored.has(`recipe:${contribution.recipe_id}`),
             "INVALID_BACKUP",
             "Invalid shopping contribution.",
           );
@@ -411,9 +574,4 @@ export function restoreBackup(store, input) {
       );
     }
   }
-  for (const { kind, ...record } of backup.records)
-    store.restoreRecord(kind, record);
-  validateFeatureRelations(store);
-  validateLibraryRelations(store);
-  return { restored_records: backup.records.length };
 }
