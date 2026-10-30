@@ -125,4 +125,4 @@ Components live in `client/src/ui/`, styles in `client/src/styles/` (`tokens.css
 
 ## Out of scope
 
-The redesign changes the browser app's structure, pages and look. It does not change the MCP tools, storage or the data contracts. The unfinished items in the [handoff](handoff.md) (native verification, an offline copy on phones, live assistance) come next.
+The redesign changes the browser app's structure, pages and look. It does not change the MCP tools, storage or the data contracts. The unfinished items in the [handoff](handoff.md) (native verification, more of the phone working offline, live assistance) come next.

@@ -1,6 +1,8 @@
-import { signal } from "@preact/signals";
+import { effect, signal, untracked } from "@preact/signals";
 import * as api from "./api.js";
-import { change, record, records, refresh } from "./store.js";
+import { answered, change, record, records, refresh } from "./store.js";
+import { drop, hold, release, waiting } from "./outbox.js";
+import { toast } from "./toast.js";
 import { amount, number } from "./kitchen.js";
 import { normalize } from "../../../shared/quantities.js";
 
@@ -16,15 +18,15 @@ export const theList = () => {
 // one left, so quick taps never trip over each other. Another cook's change
 // in between costs one retry.
 let queue = Promise.resolve();
-export function onList(work) {
+export function onList(work, which = ensureList) {
   const run = async () => {
     try {
-      return await work(await ensureList());
+      return await work(await which());
     } catch (error) {
       if (error.code !== "STALE_VERSION" && error.code !== "STALE_PREVIEW")
         throw error;
       await refresh({ fresh: true });
-      return work(theList());
+      return work(await which());
     }
   };
   const next = queue.then(run, run);
@@ -43,10 +45,66 @@ async function ensureList() {
 
 const edit = (list) => ({ id: list.id, expected_version: list.version });
 
-export const check = (ids, checked) =>
-  onList((list) =>
-    change("shopping_check", { ...edit(list), item_ids: ids, checked }),
-  );
+// A tick made while the kitchen is out of reach waits on this device, shows
+// as made, and is sent when the kitchen answers again.
+export async function check(ids, checked) {
+  const list = theList();
+  if (list) drop(list.id, ids);
+  try {
+    await onList((now) =>
+      change("shopping_check", { ...edit(now), item_ids: ids, checked }),
+    );
+  } catch (error) {
+    if (error.code !== "OFFLINE" || !list) throw error;
+    hold(list.id, ids, checked);
+  }
+}
+
+// What waited, sent once the kitchen answers: the groceries ticked, then
+// those put back. A grocery that changed meanwhile, such as one whose
+// amount grew, is a new grocery, and the tick on the old one goes.
+let sending = false;
+async function sendWaiting() {
+  if (sending) return;
+  sending = true;
+  try {
+    for (const [listId, ticks] of Object.entries(waiting.value)) {
+      const on = new Set(
+        record("shopping", listId)?.items.map((row) => row.id) ?? [],
+      );
+      release(
+        listId,
+        Object.fromEntries(Object.entries(ticks).filter(([id]) => !on.has(id))),
+      );
+      for (const checked of [true, false]) {
+        const ids = Object.keys(ticks).filter(
+          (id) => on.has(id) && ticks[id] === checked,
+        );
+        if (!ids.length) continue;
+        try {
+          await onList(
+            (list) =>
+              change("shopping_check", {
+                ...edit(list),
+                item_ids: ids,
+                checked,
+              }),
+            () => record("shopping", listId),
+          );
+        } catch (error) {
+          if (error.code === "OFFLINE") return;
+          toast(error.message, { error: true });
+        }
+        release(listId, Object.fromEntries(ids.map((id) => [id, checked])));
+      }
+    }
+  } finally {
+    sending = false;
+  }
+}
+effect(() => {
+  if (answered.value) untracked(() => void sendWaiting());
+});
 
 export const addItem = (item, options) =>
   onList((list) =>

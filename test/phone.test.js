@@ -6,6 +6,14 @@ import {
   notificationIdOf,
 } from "../client/src/lib/native.js";
 import { oldPhoneRecipes } from "../client/src/lib/old-phone.js";
+import {
+  drop,
+  forgetWaiting,
+  hold,
+  release,
+  waiting,
+  waitingCount,
+} from "../client/src/lib/outbox.js";
 import { recipe } from "../mcp/schemas.js";
 
 test("the phone takes the kitchen's address as typed, as an https origin", () => {
@@ -227,4 +235,29 @@ test("only the previous phone app's own file is read, and its limits are the kit
   assert.equal(r.links.length, 50);
   assert.equal(r.links[0].title.length, 500);
   assert.ok(recipe.safeParse(r).success);
+});
+
+test("ticks made out of the kitchen's reach keep only the latest for each grocery", () => {
+  forgetWaiting();
+  hold("list-1", ["a", "b"], true);
+  hold("list-1", ["b"], false);
+  hold("list-2", ["c"], true);
+  assert.deepEqual(waiting.value, {
+    "list-1": { a: true, b: false },
+    "list-2": { c: true },
+  });
+  assert.equal(waitingCount(), 3);
+  // Sent as they were: a tick changed since stays to be sent.
+  hold("list-1", ["a"], false);
+  release("list-1", { a: true, b: false });
+  assert.deepEqual(waiting.value, {
+    "list-1": { a: false },
+    "list-2": { c: true },
+  });
+  // A tick made with the kitchen answering says the last word.
+  drop("list-1", ["a"]);
+  drop("list-3", ["x"]);
+  assert.deepEqual(waiting.value, { "list-2": { c: true } });
+  forgetWaiting();
+  assert.equal(waitingCount(), 0);
 });

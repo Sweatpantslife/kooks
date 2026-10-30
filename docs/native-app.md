@@ -54,11 +54,19 @@ Sign-in links and passkeys stay browser-only: an emailed link would open in the 
 - The status and navigation bars follow the phone's light or dark look, and the layout keeps to the safe areas.
 - Coming back to the app fetches what changed while it was away.
 
+## Without a connection
+
+The phone keeps a copy of the kitchen as it last saw it, in the app's IndexedDB, written a moment after each change arrives. When the app starts, it shows that copy at once and then catches up from it. When the kitchen does not answer, in a shop's basement or on a train, every page says **Can’t reach the kitchen** and since when, and everything stays readable: the week, the recipes, the grocery list.
+
+Ticks on the grocery list still work. A tick made while the kitchen is out of reach shows at once and waits on the phone (in its web storage, the latest tick per grocery), and is sent as soon as the kitchen answers, against whatever version the list has by then: ticking only says "in the basket" or "back on the list", so it cannot overwrite anyone else's change. A grocery that changed meanwhile, for example because its amount grew, is a new grocery on the list, and the old tick is let go. Other changes need the kitchen and say so. Photos are not kept, so they stay blank until the kitchen answers.
+
+Signing out, or the kitchen ending the token, removes the copy and any waiting ticks.
+
 ## Recipes from the previous phone app
 
 The phone app before this one kept a cookbook of its own in `kooks/cookbook.json` in the app's private data folder. When that file is there, Recipes offers **Recipes on this phone**: **Bring them in** saves each recipe written on the phone as a new recipe in the kitchen, with its ingredients, steps, equipment, links, labels and notes, and then renames the file `kooks/cookbook.imported.json`, so nothing is lost and nothing is offered twice. Its six sample recipes, its plans, meals and settings stay behind. **Not now** hides the offer until the app starts again. Each recipe is saved under its own key, so a bring-in that stopped half way carries on without saving any recipe twice.
 
-Android's backup and new-phone transfer rules (`backup_rules.xml`, `data_extraction_rules.xml`) carry that `kooks` folder and nothing else, so the device token, which lives in the app's web storage, never enters Google's backup. On iOS the app's web storage is part of the device backup, like the rest of its data.
+Android's backup and new-phone transfer rules (`backup_rules.xml`, `data_extraction_rules.xml`) carry that `kooks` folder and nothing else, so the device token and the copy of the kitchen, which live in the app's web storage, never enter Google's backup. On iOS the app's web storage is part of the device backup, like the rest of its data.
 
 ## Page policy
 

@@ -2,6 +2,8 @@ import { signal, computed, batch } from "@preact/signals";
 import * as api from "./api.js";
 import { toast } from "./toast.js";
 import { deviceToken, keepToken, phone } from "./device.js";
+import { dropCopies, keepCopy, readCopy } from "./offline.js";
+import { forgetWaiting } from "./outbox.js";
 
 // The kitchen as this tab last saw it: every record by kind, in the server's
 // id order. Pages read it through `records()`; nothing else holds a copy.
@@ -15,7 +17,13 @@ export const account = signal(null);
 export const sharing = signal(false);
 // Why the last sign-in attempt failed, shown on the sign-in page.
 export const signInError = signal("");
+// When the kitchen last answered, while it does not: what the tab shows is
+// the kitchen as it was then. null while the kitchen answers.
+export const offline = signal(null);
+// Counts the kitchen's answers, for what waits to be sent when it answers.
+export const answered = signal(0);
 let revision = "";
+let heard = 0;
 
 export const records = (kind) => db.value[kind] ?? [];
 export const record = (kind, id) => records(kind).find((r) => r.id === id);
@@ -49,43 +57,76 @@ export async function refresh({ fresh = false } = {}) {
   return inFlight;
 }
 // Back to the sign-in page, forgetting what this tab knew. A phone forgets
-// its token too, which the kitchen no longer takes.
+// its token too, which the kitchen no longer takes, and its copy of the
+// kitchen.
 function signedOut() {
   revision = "";
   if (phone) keepToken("");
+  void dropCopies();
+  forgetWaiting();
   batch(() => {
     db.value = {};
     account.value = null;
+    offline.value = null;
     status.value = "signin";
   });
+}
+
+// A phone shows its copy of the kitchen at once, then catches up from the
+// revision the copy was made at.
+async function restore() {
+  const copy = await readCopy();
+  if (!copy || status.value !== "loading") return;
+  batch(() => {
+    db.value = copy.records;
+    sharing.value = copy.sharing;
+    account.value = copy.account;
+    status.value = "ready";
+  });
+  revision = copy.revision;
+  heard = copy.saved_at;
 }
 
 async function load() {
   // A phone that has not signed in has nothing to ask the kitchen yet.
   if (phone && !deviceToken()) return signedOut();
+  if (phone && status.value === "loading") await restore();
   let value;
   try {
     value = await api.state(revision);
   } catch (error) {
-    // A tab that already shows the kitchen keeps it and tries again on the
-    // next poll; only the first load has nothing else to show.
+    // A tab that already shows the kitchen keeps it, says since when, and
+    // tries again on the next poll; only the first load has nothing else to
+    // show.
     if (status.value === "loading") {
       loadError.value = error.message;
       status.value = "error";
-    }
+    } else offline.value = heard || Date.now();
     return;
   }
+  heard = Date.now();
   if (value.signedOut) return signedOut();
-  if (value.unchanged) return;
+  if (!value.unchanged) {
+    batch(() => {
+      db.value = value.changes
+        ? applyChanges(db.value, value.changes)
+        : value.records;
+      sharing.value = value.sharing;
+      account.value = value.account ?? null;
+      status.value = "ready";
+    });
+    revision = value.revision;
+    keepCopy({
+      records: db.value,
+      revision,
+      sharing: sharing.value,
+      account: account.value,
+    });
+  }
   batch(() => {
-    db.value = value.changes
-      ? applyChanges(db.value, value.changes)
-      : value.records;
-    sharing.value = value.sharing;
-    account.value = value.account ?? null;
-    status.value = "ready";
+    offline.value = null;
+    answered.value++;
   });
-  revision = value.revision;
 }
 
 // Other cooks' changes arrive every few seconds while the tab is in view,

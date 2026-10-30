@@ -2,7 +2,7 @@
 
 A household cooking companion for recipes, composed meals, shopping, equipment, and guided cooking. This repository contains the household server with its app, the MCP backend, and the same app packaged for iOS and Android with Capacitor.
 
-**Start here: [Developer handoff and unfinished work](docs/handoff.md).** The project is implemented for local use but is not release-ready. Native device validation, live AI/provider login and offline use on the phone remain outstanding.
+**Start here: [Developer handoff and unfinished work](docs/handoff.md).** The project is implemented for local use but is not release-ready. Native device validation and live AI/provider login remain outstanding.
 
 ## Quick start
 

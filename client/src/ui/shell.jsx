@@ -9,6 +9,7 @@ import { route, section, href } from "../lib/router.js";
 import { account } from "../lib/store.js";
 import { Icon } from "./icon.jsx";
 import { NowCooking } from "./now-cooking.jsx";
+import { Offline } from "./offline.jsx";
 
 const TABS = [
   { id: "week", label: "Week", icon: CalendarDays },
@@ -94,6 +95,7 @@ export function Shell({ children }) {
       </header>
       <main id="main" class="main" tabIndex={-1}>
         <div class="page">
+          <Offline />
           <NowCooking />
           {children}
         </div>
