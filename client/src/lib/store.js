@@ -40,8 +40,10 @@ export function applyChanges(current, changes) {
 }
 
 let inFlight = null;
-// Bring the tab up to date. Concurrent callers share one request.
-export function refresh() {
+// Bring the tab up to date. Concurrent callers share one request, except
+// after a change: a poll already on its way may have left before it.
+export async function refresh({ fresh = false } = {}) {
+  if (fresh) await inFlight;
   inFlight ??= load().finally(() => (inFlight = null));
   return inFlight;
 }
@@ -105,7 +107,7 @@ export function startPolling() {
 export async function change(name, input, { done, undo = true } = {}) {
   try {
     const result = await api.write(name, input);
-    await refresh();
+    await refresh({ fresh: true });
     if (done)
       toast(done, {
         undo:
@@ -121,10 +123,10 @@ export async function change(name, input, { done, undo = true } = {}) {
   }
 }
 
-async function undoAction(action_id) {
+export async function undoAction(action_id) {
   try {
     await api.write("history_undo", { action_id });
-    await refresh();
+    await refresh({ fresh: true });
     toast("Undone.");
   } catch (error) {
     toast(error.message, { error: true });

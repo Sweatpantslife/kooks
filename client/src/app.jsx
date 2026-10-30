@@ -9,7 +9,7 @@ import { Toasts } from "./ui/toast.jsx";
 import { Empty, PageHeader } from "./ui/page.jsx";
 import { SignIn } from "./pages/signin.jsx";
 import { Household } from "./pages/household.jsx";
-import { Groceries } from "./pages/placeholders.jsx";
+import { AtHome, Groceries, PutAway, ShopFor } from "./pages/groceries.jsx";
 import { AddToDay, ChooseDay, Week } from "./pages/week.jsx";
 import { Recipes } from "./pages/recipes.jsx";
 import { Recipe } from "./pages/recipe.jsx";
@@ -87,7 +87,29 @@ function pageFor([first = "week", second, third, fourth]) {
     };
   if (first === "recipes" && !second)
     return { title: "Recipes", page: <Recipes /> };
-  if (first === "groceries") return { title: "Groceries", page: <Groceries /> };
+  if (first === "groceries" && !second)
+    return { title: "To buy", page: <Groceries /> };
+  if (first === "groceries" && second === "home" && !third)
+    return { title: "At home", page: <AtHome /> };
+  if (first === "groceries" && second === "put-away" && !third)
+    return { title: "Put it all away", page: <PutAway /> };
+  if (first === "groceries" && second === "week" && !third)
+    return { title: "Shop for this week", page: <ShopFor week={monday()} /> };
+  if (first === "groceries" && second === "week" && DAY.test(third) && !fourth)
+    return {
+      title: `Shop for the week of ${dateLabel(monday(third))}`,
+      page: <ShopFor week={monday(third)} />,
+    };
+  if (
+    first === "groceries" &&
+    second === "add" &&
+    (third === "recipe" || third === "meal") &&
+    fourth
+  )
+    return {
+      title: `Add to groceries · ${named(third, fourth, "Recipe")}`,
+      page: <ShopFor kind={third} id={fourth} />,
+    };
   if (first === "household") return { title: "Household", page: <Household /> };
   return { title: "Not found", page: <NotFound /> };
 }

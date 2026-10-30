@@ -6,6 +6,7 @@ import {
   ChevronRight,
   Plus,
   Search,
+  ShoppingBasket,
   X,
 } from "lucide";
 import { normalize } from "../../../shared/quantities.js";
@@ -29,7 +30,7 @@ import { Icon } from "../ui/icon.jsx";
 // Meals in the order a day is eaten; anything else the household calls a
 // meal comes after, in its own order.
 const SLOTS = ["Breakfast", "Lunch", "Dinner"];
-const slotOrder = (slot) => {
+export const slotOrder = (slot) => {
   const at = SLOTS.indexOf(slot);
   return at < 0 ? SLOTS.length : at;
 };
@@ -47,7 +48,7 @@ function dayName(day) {
   return weekdayLabel(day);
 }
 
-function weekTitle(start) {
+export function weekTitle(start) {
   const now = monday();
   if (start === now) return "This week";
   if (start === addDays(now, 7)) return "Next week";
@@ -213,6 +214,17 @@ export function Week({ start = monday() }) {
   return (
     <>
       <PageHeader eyebrow={weekLabel(start)} title={weekTitle(start)}>
+        {addDays(start, 6) >= today && (
+          <a
+            class="btn"
+            href={
+              start === now ? "#/groceries/week" : `#/groceries/week/${start}`
+            }
+          >
+            <Icon icon={ShoppingBasket} />
+            Shop for the week
+          </a>
+        )}
         <a
           class="btn btn-icon"
           href={`#/${weekPath(addDays(start, -7))}`}

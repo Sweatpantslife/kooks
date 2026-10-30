@@ -22,6 +22,7 @@ import {
   unitSpelling,
 } from "../../../shared/quantities.js";
 import { records, change } from "./store.js";
+import { nameKey } from "./aisles.js";
 import { toast } from "./toast.js";
 
 // What the household keeps, as the Recipes tab names it.
@@ -152,12 +153,13 @@ export function amount(ingredient, factor = 1) {
   return `${number(q, unit)} ${unitLabel(unit, q)}`.trim();
 }
 
-// Ingredients the household has said are at home, by name.
+// Ingredients the household has said are at home, by name: test with
+// `nameKey` from aisles.js, so "lemons" at home is a recipe's "lemon".
 export function atHome() {
   return new Set(
     records("pantry")
       .filter((p) => p.data.available)
-      .map((p) => normalize(p.data.name)),
+      .map((p) => nameKey(p.data.name)),
   );
 }
 

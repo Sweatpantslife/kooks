@@ -56,3 +56,66 @@ test("the redesigned app writes amounts the way a cook does", async () => {
   assert.equal(minutes(60), "1 hr");
   assert.equal(minutes(95), "1 hr 35 min");
 });
+
+test("groceries find their aisle by the last thing their name says", async () => {
+  const { aisleOf } = await import("../client/src/lib/aisles.js");
+  const cases = {
+    "cherry tomatoes": "Fruit and vegetables",
+    "canned tomatoes": "Pantry",
+    "red pepper": "Fruit and vegetables",
+    "red pepper flakes": "Spices",
+    "black pepper": "Spices",
+    "chicken breasts": "Meat and fish",
+    "chicken stock": "Pantry",
+    "peanut butter": "Pantry",
+    butter: "Dairy and eggs",
+    "egg yolks": "Dairy and eggs",
+    "extra virgin olive oil": "Pantry",
+    "frozen peas": "Frozen",
+    chives: "Fruit and vegetables",
+    "bay leaves": "Spices",
+    "lemon juice": "Fruit and vegetables",
+    coffee: "Drinks",
+    "dish soap": "Household",
+    "Sea Salt": "Spices",
+    "something unusual": "Other",
+  };
+  for (const [name, aisle] of Object.entries(cases))
+    assert.equal(aisleOf({ name }), aisle, name);
+  // A grocery's own aisle wins over its name.
+  assert.equal(aisleOf({ name: "tomatoes", category: "Pantry" }), "Pantry");
+  assert.equal(
+    aisleOf({ name: "tomatoes", category: "Other" }),
+    "Fruit and vegetables",
+  );
+});
+
+test("groceries read as a shop sells them and say what they are for", async () => {
+  const { shopAmount, forWhat } =
+    await import("../client/src/lib/groceries.js");
+  const { nameKey } = await import("../client/src/lib/aisles.js");
+  const row = (quantity, unit) => ({ quantity, unit });
+  assert.equal(shopAmount(row(1500, "g")), "1.5 kg");
+  assert.equal(shopAmount(row(250, "g")), "250 g");
+  assert.equal(shopAmount(row(750, "mL")), "750 ml");
+  assert.equal(shopAmount(row(2000, "mL")), "2 l");
+  assert.equal(shopAmount(row(3, "each")), "3");
+  assert.equal(shopAmount(row(2, "can")), "2 cans");
+  assert.equal(shopAmount(row(null, "")), "");
+  const c = (source_key, recipe_title) => ({ source_key, recipe_title });
+  assert.equal(
+    forWhat({
+      contributions: [
+        c("plan:1", "Dal"),
+        c("manual", null),
+        c("plan:2", "Dal"),
+        c("recipe:3", "Pho"),
+      ],
+    }),
+    "for Dal, Pho",
+  );
+  assert.equal(forWhat({ contributions: [c("manual", null)] }), "");
+  // "Lemons" at home is the "lemon" a recipe asks for.
+  assert.equal(nameKey("Lemons"), nameKey("lemon"));
+  assert.equal(nameKey(" Bay  Leaves "), "bay leaf");
+});

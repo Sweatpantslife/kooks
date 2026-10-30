@@ -53,7 +53,7 @@ for (const [name, viewport] of [
     for (const [tab, heading] of [
       ["Week", "This week"],
       ["Recipes", "Recipes"],
-      ["Groceries", "Groceries"],
+      ["Groceries", "To buy"],
     ]) {
       await nav.getByRole("link", { name: tab }).click();
       await expect(title(page)).toHaveText(heading);
