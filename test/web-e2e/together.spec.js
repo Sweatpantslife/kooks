@@ -85,6 +85,7 @@ test("every page fits a small phone, a phone, a tablet and a wide screen without
     `recipes/${id}`,
     `recipes/${id}/edit`,
     "recipes/add",
+    "recipes/add/link",
     "recipes/add/paste",
     "recipes/add/photo",
     "recipes/add/idea",

@@ -32,7 +32,7 @@ The browser editor shows one ingredient per line and separates steps with a blan
 
 A recipe can carry any number of links (up to 50) beside its source link: the written original, a technique video, a family post. In the editor, **Links and videos** takes one link per line, a web address with an optional title in either order; `youtu.be/…` without a scheme is accepted. YouTube (videos, Shorts, playlists, shared start times), Vimeo (including unlisted links), Facebook videos and reels, Instagram posts and reels, and TikTok videos appear on the recipe page as players; every other link, and short links such as `fb.watch` or `vm.tiktok.com`, opens in a new tab. A video used as the recipe's source link is shown the same way.
 
-Players are not loaded with the page. Each one shows a play button, and only pressing it loads the provider's player, so viewing a recipe sends nothing to a video site. The server stores the addresses and never fetches them; its Content-Security-Policy allows frames only from the five player origins. While a video is playing, other cooks' changes are held back until you leave the page so the video is not restarted. Cooking sessions snapshot the links and show them as plain links beside the steps.
+The recipe lists them, names the video sites, and opens each one in a new tab (on a phone, in the browser), so viewing a recipe sends nothing to a video site. The server stores the addresses; it fetches a page only when someone adds a recipe **From a link**. While a video is playing, other cooks' changes are held back until you leave the page so the video is not restarted. Cooking sessions snapshot the links and show them as plain links beside the steps.
 
 ## Courses, cuisines, diet labels and tags
 

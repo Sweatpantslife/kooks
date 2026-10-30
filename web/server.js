@@ -237,6 +237,7 @@ export function createWebServer({
   mailer = null,
   authOptions = {},
   clientRoot = builtClient,
+  toolOptions = {},
 }) {
   const external = publicOrigin ? parseOrigin(publicOrigin) : null;
   // Kooks speaks plain HTTP, so an HTTPS origin means a proxy in front.
@@ -263,7 +264,9 @@ export function createWebServer({
         ...authOptions,
       })
     : null;
-  const tools = new Map(createTools(store).map((t) => [t.name, t]));
+  const tools = new Map(
+    createTools(store, toolOptions).map((t) => [t.name, t]),
+  );
   const clientDir = resolve(clientRoot) + sep;
   const limits = new Map();
   // Wrong sign-in codes per address, for the day: exact for the household's
@@ -280,6 +283,7 @@ export function createWebServer({
   // PDFs from this origin, which asset responses allow in turn.
   const policy = `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; connect-src 'self'; frame-src 'self' ${embedOrigins.join(" ")}; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'`;
   let importsInProgress = 0,
+    pagesInProgress = 0,
     largeUploads = 0;
   // A large reply, such as a cookbook's first load, is compressed when the
   // browser accepts it.
@@ -685,6 +689,28 @@ export function createWebServer({
         if (!tool) return send(res, 404, { message: "Unknown action." });
         const run = async (limit) => {
           const input = await body(req, limit);
+          // A recipe page is fetched from the web: a few at a time, and a
+          // few dozen an hour from any one address.
+          if (tool.name === "recipe_import_link") {
+            if (limited(`page:${clientAddress(req)}`, 30, 60 * MINUTE))
+              return send(res, 429, {
+                error: "RATE_LIMITED",
+                message:
+                  "That’s a lot of links in a short time. Wait a while, or paste the recipe instead.",
+              });
+            if (pagesInProgress >= 2)
+              return send(res, 429, {
+                error: "BUSY",
+                message:
+                  "Two pages are being read. Try again when one finishes.",
+              });
+            pagesInProgress++;
+            try {
+              return send(res, 200, await tool.execute(input));
+            } finally {
+              pagesInProgress--;
+            }
+          }
           if (tool.name === "recipe_import_image") {
             if (importsInProgress >= 2)
               return send(res, 429, {

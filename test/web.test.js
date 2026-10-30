@@ -1210,3 +1210,42 @@ test("the app is served at / from its build folder and nothing outside it, and /
     assert.doesNotMatch(response.body, /secret/, path);
   }
 });
+
+test("recipe pages are read two at a time, and a few dozen an hour from one address", async (t) => {
+  let started = 0;
+  let release;
+  const held = new Promise((resolve) => (release = resolve));
+  const { post } = await setup(t, {
+    clientRoot: fakeBuild(t),
+    toolOptions: {
+      readPage: async (url) => {
+        started++;
+        await held;
+        return {
+          url,
+          html: '<script type="application/ld+json">{"@type":"Recipe","name":"Toast"}</script>',
+        };
+      },
+    },
+  });
+  const read = (n) =>
+    post("/api/tools/recipe_import_link", {
+      request_id: `read-${n}`,
+      url: `https://recipes.example/${n}`,
+    });
+  const first = [read(1), read(2)];
+  while (started < 2) await new Promise((resolve) => setImmediate(resolve));
+  const third = await read(3);
+  assert.equal(third.status, 429);
+  assert.equal(third.json().error, "BUSY");
+  release();
+  for (const response of await Promise.all(first)) {
+    assert.equal(response.status, 200);
+    assert.equal(response.json().record.data.recipe.title, "Toast");
+  }
+  // Thirty an hour from one address, the refused one included.
+  for (let n = 4; n <= 30; n++) assert.equal((await read(n)).status, 200);
+  const over = await read(31);
+  assert.equal(over.status, 429);
+  assert.equal(over.json().error, "RATE_LIMITED");
+});

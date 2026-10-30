@@ -11,6 +11,7 @@ import {
 } from "./backup.js";
 import { version } from "./version.js";
 import { addFeatureTools } from "./feature-tools.js";
+import { fetchPage } from "./fetch-page.js";
 import { addLibraryTools } from "./library-tools.js";
 import { noteExtras } from "./feature-schemas.js";
 import { batchView } from "./features.js";
@@ -21,7 +22,9 @@ import {
   taxonomy,
 } from "../shared/taxonomy.js";
 
-export function createTools(store) {
+// readPage fetches a recipe page for recipe_import_link; tests pass their
+// own.
+export function createTools(store, { readPage = fetchPage } = {}) {
   const kooks = new Kooks(store);
   const definitions = [];
   // Results are open objects; writes always carry the action key and whether
@@ -31,13 +34,23 @@ export function createTools(store) {
     action_id: z.string().optional(),
     replayed: z.boolean().optional(),
   });
-  function tool(name, description, shape, readOnly, handler, prepare) {
+  // openWorld marks the one tool that reaches beyond this machine.
+  function tool(
+    name,
+    description,
+    shape,
+    readOnly,
+    handler,
+    prepare,
+    { openWorld = false } = {},
+  ) {
     definitions.push({
       name,
       description,
       schema: z.strictObject(shape),
       outputSchema: readOnly ? readOutput : writeOutput,
       readOnly,
+      openWorld,
       handler,
       prepare,
     });
@@ -90,6 +103,7 @@ export function createTools(store) {
         "cost_estimates",
         "weekly_budgets",
         "local_photo_import",
+        "recipe_link_import",
         "recipe_links",
         "recipe_facets",
         "techniques",
@@ -98,7 +112,7 @@ export function createTools(store) {
       ],
       limits: [
         "One household database. Browser clients share this server; no hosted cloud sync or individual accounts.",
-        "No direct WhatsApp, website, video, or model-provider connection. Recipe links are stored and embedded by the apps, never fetched here. Photo OCR runs locally and requires review.",
+        "No direct WhatsApp, video, or model-provider connection. Recipe links are stored and opened by the apps; recipe_import_link fetches one public page the user names, for its schema.org Recipe data only. Photo OCR runs locally and requires review.",
         "Photos and ebooks (PDF, EPUB) are stored locally as immutable assets; this server never reads, summarizes or fetches them, and the browser opens PDFs in its own viewer and downloads EPUBs.",
         "Timers store deadlines but do not deliver background alarms.",
         "Equipment checks are conditional; no automatic serving-time optimizer.",
@@ -487,7 +501,7 @@ export function createTools(store) {
     (args) => restoreBackup(store, args.backup),
   );
 
-  addFeatureTools(tool, store, kooks);
+  addFeatureTools(tool, store, kooks, { readPage });
   addLibraryTools(tool, store, kooks);
   return definitions.map((definition) => ({
     ...definition,
