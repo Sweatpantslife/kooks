@@ -2870,7 +2870,7 @@ document.addEventListener("click", async (event) => {
       try {
         await addPasskey();
       } catch (error) {
-        throw new Error(passkeyMessage(error));
+        throw new Error(passkeyMessage(error), { cause: error });
       }
       await render();
       toast("Passkey added. Next time, sign in with one tap.");
