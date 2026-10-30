@@ -1,3 +1,11 @@
+# The redesigned app is built here; only its output reaches the image.
+FROM node:22-bookworm-slim AS client
+WORKDIR /build
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY client ./client
+RUN npm run build:client
+
 FROM node:22-bookworm-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends tesseract-ocr ca-certificates && rm -rf /var/lib/apt/lists/*
@@ -8,6 +16,7 @@ COPY mcp ./mcp
 COPY shared ./shared
 COPY web ./web
 COPY ocr ./ocr
+COPY --from=client /build/client/dist ./client/dist
 COPY LICENSE ./LICENSE
 RUN mkdir -p /data && chown node:node /data
 ENV NODE_ENV=production KOOKS_HOST=0.0.0.0 PORT=4317 KOOKS_DB_PATH=/data/kooks.sqlite

@@ -7,7 +7,7 @@ import { pipeline } from "node:stream/promises";
 import { promisify } from "node:util";
 import { brotliCompress, constants, gzip } from "node:zlib";
 import { fileURLToPath } from "node:url";
-import { resolve, extname } from "node:path";
+import { resolve, extname, sep } from "node:path";
 import { ZodError } from "zod";
 import { Store, KooksError } from "../mcp/store.js";
 import { createTools } from "../mcp/tools.js";
@@ -44,11 +44,17 @@ const staticFiles = new Map([
     fileURLToPath(new URL(`../shared/${name}`, import.meta.url)),
   ]),
 ]);
+// The redesigned app, built by `npm run build:client`, is served at /next/
+// beside this one until it replaces it.
+const builtClient = fileURLToPath(new URL("../client/dist/", import.meta.url));
 const mime = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
   ".css": "text/css; charset=utf-8",
   ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".woff2": "font/woff2",
+  ".webmanifest": "application/manifest+json",
 };
 // Text larger than this travels compressed when the browser accepts it.
 // Brotli at quality 5 shrinks app.js to a quarter and a 7.8 MB cookbook to
@@ -80,21 +86,41 @@ function acceptedEncoding(req) {
 // Static files revalidate on every load against a tag of their size and
 // modification time: an unchanged file costs a 304, and an edited one shows
 // at once without restarting the server. Each version is read and encoded
-// once.
+// once; fonts and images are already compressed and travel as they are.
+const compressible = new Set([".html", ".js", ".css", ".svg", ".webmanifest"]);
 const staticCache = new Map();
-async function staticFile(path, encoding) {
-  const file = staticFiles.get(path);
+async function staticFile(file, encoding) {
   const info = await stat(file);
   const tag = `W/"${info.size}-${Math.floor(info.mtimeMs)}"`;
-  let entry = staticCache.get(path);
+  let entry = staticCache.get(file);
   if (entry?.tag !== tag) {
     entry = { tag, identity: await readFile(file) };
-    staticCache.set(path, entry);
+    staticCache.set(file, entry);
   }
-  if (encoding && entry.identity.length > 1024)
+  if (
+    encoding &&
+    compressible.has(extname(file)) &&
+    entry.identity.length > 1024
+  )
     entry[encoding] ??= await compressors[encoding](entry.identity);
   else encoding = null;
   return { tag, encoding, data: entry[encoding ?? "identity"] };
+}
+async function sendStatic(req, res, file, cacheControl = "no-cache") {
+  const found = await staticFile(file, acceptedEncoding(req));
+  res.setHeader("Cache-Control", cacheControl);
+  res.setHeader("ETag", found.tag);
+  res.setHeader("Vary", "Accept-Encoding");
+  if (req.headers["if-none-match"] === found.tag) {
+    res.writeHead(304);
+    return res.end();
+  }
+  res.writeHead(200, {
+    "Content-Type": mime[extname(file)],
+    "Content-Length": found.data.length,
+    ...(found.encoding ? { "Content-Encoding": found.encoding } : {}),
+  });
+  return res.end(found.data);
 }
 const MINUTE = 60000;
 // A tab that is this many actions behind gets everything again instead of
@@ -222,6 +248,7 @@ export function createWebServer({
   members = [],
   mailer = null,
   authOptions = {},
+  clientRoot = builtClient,
 }) {
   const external = publicOrigin ? parseOrigin(publicOrigin) : null;
   // Kooks speaks plain HTTP, so an HTTPS origin means a proxy in front.
@@ -249,6 +276,7 @@ export function createWebServer({
       })
     : null;
   const tools = new Map(createTools(store).map((t) => [t.name, t]));
+  const clientDir = resolve(clientRoot) + sep;
   const limits = new Map();
   // Revisions are this server start plus the action sequence, so a tab that
   // was open before a restart, or against another database, reloads fully.
@@ -597,29 +625,45 @@ export function createWebServer({
           largeUploads--;
         }
       }
+      if (req.method === "GET" && url.pathname === "/next") {
+        res.writeHead(308, { Location: "/next/" });
+        return res.end();
+      }
+      if (req.method === "GET" && url.pathname.startsWith("/next/")) {
+        const name = url.pathname.slice("/next/".length) || "index.html";
+        const file = resolve(clientDir, name);
+        if (!file.startsWith(clientDir) || !mime[extname(file)])
+          return send(res, 404, { message: "Not found." });
+        try {
+          // Built files carry a content hash in their name, so they never
+          // change; the page that names them revalidates.
+          return await sendStatic(
+            req,
+            res,
+            file,
+            name.startsWith("assets/")
+              ? "public, max-age=31536000, immutable"
+              : "no-cache",
+          );
+        } catch (error) {
+          if (error.code !== "ENOENT") throw error;
+          return send(res, 404, {
+            message:
+              name === "index.html"
+                ? "The new Kooks app is not built yet. Run npm run build:client."
+                : "Not found.",
+          });
+        }
+      }
       if (req.method === "GET") {
         const path = url.pathname === "/" ? "/index.html" : url.pathname;
         if (staticFiles.has(path)) {
-          let file;
           try {
-            file = await staticFile(path, acceptedEncoding(req));
+            return await sendStatic(req, res, staticFiles.get(path));
           } catch (error) {
             if (error.code !== "ENOENT") throw error;
             return send(res, 404, { message: "Not found." });
           }
-          res.setHeader("Cache-Control", "no-cache");
-          res.setHeader("ETag", file.tag);
-          res.setHeader("Vary", "Accept-Encoding");
-          if (req.headers["if-none-match"] === file.tag) {
-            res.writeHead(304);
-            return res.end();
-          }
-          res.writeHead(200, {
-            "Content-Type": mime[extname(path)],
-            "Content-Length": file.data.length,
-            ...(file.encoding ? { "Content-Encoding": file.encoding } : {}),
-          });
-          return res.end(file.data);
         }
       }
       send(res, 404, { message: "Not found." });

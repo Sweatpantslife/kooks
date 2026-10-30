@@ -39,6 +39,7 @@ jobs:
       - name: Coverage summary
         run: node scripts/coverage-summary.mjs coverage/lcov.info >> "$GITHUB_STEP_SUMMARY"
       - run: npm run build:mobile
+      - run: npm run build:client
       - name: Find the Playwright version
         id: playwright
         run: echo "version=$(npx playwright --version | cut -d' ' -f2)" >> "$GITHUB_OUTPUT"

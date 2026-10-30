@@ -1,0 +1,128 @@
+/* The Market look: warm white, tomato, herb. Every color in the app comes from
+   these tokens, so the dark theme is a second set of values, not a second
+   stylesheet. Text pairs keep 4.5:1 contrast on the surfaces they sit on,
+   and field borders and the focus ring 3:1. */
+:root {
+  color-scheme: light;
+  --ground: #faf8f4;
+  --surface: #ffffff;
+  --raised: #ffffff;
+  --sunken: #f2efe8;
+  --line: #ece8e0;
+  --line-strong: #e4dfd4;
+  --field-line: #8f8a80;
+  --ink: #1c1b19;
+  --muted: #66635c;
+  --accent: #c4432b;
+  --accent-hover: #a8381f;
+  --on-accent: #ffffff;
+  --accent-soft: #f6dcd3;
+  --accent-ink: #7a2a1a;
+  --herb: #2e6a4c;
+  --herb-soft: #e3efe7;
+  --herb-ink: #1e4a34;
+  --saffron-soft: #fbf1dc;
+  --saffron-ink: #8a5a00;
+  --plum: #eadcea;
+  --plum-ink: #6b3f6b;
+  --sky: #dce7f3;
+  --sky-ink: #2f5a8a;
+  --stone: #ece8e0;
+  --stone-ink: #5f5b52;
+  --danger: #b3261e;
+  --focus: #1f5fbf;
+  --scrim: rgb(28 27 25 / 0.45);
+  --shadow: 0 1px 2px rgb(28 27 25 / 0.06), 0 8px 24px rgb(28 27 25 / 0.08);
+
+  --font-title:
+    "Bricolage Grotesque Variable", ui-rounded, system-ui, sans-serif;
+  --font-text:
+    system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --text-xs: 0.8125rem;
+  --text-sm: 0.9375rem;
+  --text-md: 1.0625rem;
+  --text-lg: 1.25rem;
+  --text-xl: 1.5rem;
+  --text-2xl: 2rem;
+  --text-3xl: 2.5rem;
+
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 22px;
+  --radius-pill: 999px;
+  --target: 44px;
+  --gutter: 16px;
+  --rail: 248px;
+  --tabbar: 64px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --ground: #151412;
+    --surface: #1f1d1a;
+    --raised: #45413a;
+    --sunken: #2a2825;
+    --line: #34312c;
+    --line-strong: #3f3b35;
+    --field-line: #7d776d;
+    --ink: #f5f2ea;
+    --muted: #b5b0a5;
+    --accent: #e46a50;
+    --accent-hover: #ee8670;
+    --on-accent: #161513;
+    --accent-soft: #4a2219;
+    --accent-ink: #f3b6a6;
+    --herb: #7cc39e;
+    --herb-soft: #1d3328;
+    --herb-ink: #bfe3cd;
+    --saffron-soft: #3d2f12;
+    --saffron-ink: #f0c46a;
+    --plum: #3a2a3a;
+    --plum-ink: #e3c3e3;
+    --sky: #1f2e40;
+    --sky-ink: #b7cfec;
+    --stone: #2f2c28;
+    --stone-ink: #d2cdc2;
+    --danger: #ffb4ab;
+    --focus: #8ab4f8;
+    --scrim: rgb(0 0 0 / 0.6);
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 24px rgb(0 0 0 / 0.35);
+  }
+}
+
+/* The same dark values, chosen by hand in Household › Look, and always while
+   cooking. */
+:root[data-theme="dark"],
+.theme-dark {
+  color-scheme: dark;
+  --ground: #151412;
+  --surface: #1f1d1a;
+  --raised: #45413a;
+  --sunken: #2a2825;
+  --line: #34312c;
+  --line-strong: #3f3b35;
+  --field-line: #7d776d;
+  --ink: #f5f2ea;
+  --muted: #b5b0a5;
+  --accent: #e46a50;
+  --accent-hover: #ee8670;
+  --on-accent: #161513;
+  --accent-soft: #4a2219;
+  --accent-ink: #f3b6a6;
+  --herb: #7cc39e;
+  --herb-soft: #1d3328;
+  --herb-ink: #bfe3cd;
+  --saffron-soft: #3d2f12;
+  --saffron-ink: #f0c46a;
+  --plum: #3a2a3a;
+  --plum-ink: #e3c3e3;
+  --sky: #1f2e40;
+  --sky-ink: #b7cfec;
+  --stone: #2f2c28;
+  --stone-ink: #d2cdc2;
+  --danger: #ffb4ab;
+  --focus: #8ab4f8;
+  --scrim: rgb(0 0 0 / 0.6);
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 24px rgb(0 0 0 / 0.35);
+}
