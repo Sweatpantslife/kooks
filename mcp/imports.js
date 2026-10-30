@@ -16,6 +16,7 @@ import { fileURLToPath } from "node:url";
 import { KooksError, requireThat } from "./store.js";
 import { recipe } from "./schemas.js";
 import { splitIngredientLine } from "../shared/ingredients.js";
+import { unitSpelling } from "../shared/quantities.js";
 
 // Backend policy: keep the writer's unit (lowercased, singular) and never
 // convert a bare cup or spoon; the household convention is not settled.
@@ -33,11 +34,7 @@ export function parseIngredient(line) {
     ...base,
     name: parts.name,
     quantity: parts.quantity,
-    unit: parts.unitToken
-      .toLowerCase()
-      .replace(/^cups$/, "cup")
-      .replace(/^tablespoons?$/, "tbsp")
-      .replace(/^teaspoons?$/, "tsp"),
+    unit: unitSpelling(parts.unitToken),
     preparation: parts.preparation,
   };
 }

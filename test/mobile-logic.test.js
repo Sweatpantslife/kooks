@@ -40,6 +40,14 @@ test("mobile ingredient lines keep the pasted wording and apply the stated volum
   assert.equal(eggs.u, "");
   assert.deepEqual(eggs.original, { q: 3, u: "" });
   assert.equal(parseIngredient("2 cloves garlic").u, "clove");
+  assert.equal(parseIngredient("2 bunches parsley").u, "bunch");
+  assert.equal(parseIngredient("2 bunches parsley").n, "parsley");
+  assert.equal(parseIngredient("250 g. rice").u, "g");
+  assert.equal(parseIngredient("2 tbsp. sugar").q, 30);
+  assert.deepEqual(parseIngredient("2 tbsp. sugar").original, {
+    q: 2,
+    u: "tbsp.",
+  });
   const salt = parseIngredient("Salt to taste");
   assert.equal(salt.q, null);
   assert.equal(salt.note, "As written");

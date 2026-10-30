@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { Store } from "../mcp/store.js";
 import { createTools } from "../mcp/tools.js";
+import { parseIngredient } from "../mcp/imports.js";
 
 function harness(t, path = ":memory:") {
   const store = new Store(path);
@@ -126,6 +127,67 @@ test("compose, scale, plan, shop, check, repeat and remove contributions without
     150,
   );
   assert.equal(checked.record.version, 3);
+});
+
+test("plural and abbreviated units combine on one shopping line", (t) => {
+  const { call } = harness(t);
+  const save = (title, lines) =>
+    call("recipe_save", {
+      recipe: {
+        title,
+        servings: 2,
+        ingredients: lines.map(parseIngredient),
+      },
+    }).record;
+  const a = save("Hummus", [
+    "2 cans chickpeas",
+    "3 cloves garlic",
+    "2 tablespoons tahini",
+    "1 bunch parsley",
+  ]);
+  const b = save("Stew", [
+    "1 can chickpeas",
+    "1 clove garlic",
+    "1 tbsp. tahini",
+    "2 bunches parsley",
+  ]);
+  // A unit an agent sends in the plural combines with the parsed singular.
+  const c = call("recipe_save", {
+    recipe: {
+      title: "Salad",
+      servings: 2,
+      ingredients: [{ name: "chickpeas", quantity: 1, unit: "Cans" }],
+    },
+  }).record;
+  let list = call("shopping_create", { title: "Week" }).record;
+  for (const [key, r] of [
+    ["a", a],
+    ["b", b],
+    ["c", c],
+  ]) {
+    const args = {
+      id: list.id,
+      source: { kind: "recipe", id: r.id },
+      source_key: key,
+    };
+    const preview = call("shopping_preview", args);
+    list = call("shopping_sync", {
+      ...args,
+      expected_version: preview.list_version,
+      preview_token: preview.preview_token,
+    }).record;
+  }
+  const items = call("kooks_get", { kind: "shopping", id: list.id }).record
+    .items;
+  assert.deepEqual(
+    items.map((i) => [i.name, i.quantity, i.unit]),
+    [
+      ["chickpeas", 4, "can"],
+      ["garlic", 4, "clove"],
+      ["parsley", 3, "bunch"],
+      ["tahini", 3, "tbsp"],
+    ],
+  );
 });
 
 test("shopping changes require a current preview and stale operations leave the list untouched", (t) => {

@@ -72,6 +72,46 @@ test("pantry matching subtracts a known stock only once, preserves unknown amoun
   assert.equal(call("kooks_list", { kind: "pantry" }).total, 3);
 });
 
+test("pantry stock and prices match units written in the plural", (t) => {
+  const { call } = setup(t);
+  const r = call("recipe_save", {
+    recipe: recipe("Chickpea stew", {
+      ingredients: [
+        parseIngredient("3 cans chickpeas"),
+        parseIngredient("2 cloves garlic"),
+      ],
+    }),
+  }).record;
+  call("pantry_save", {
+    pantry: { name: "chickpeas", quantity: 1, unit: "can" },
+  });
+  call("pantry_save", {
+    pantry: { name: "garlic", quantity: 6, unit: "Cloves" },
+  });
+  const result = call("recipe_suggest").results.find(
+    (s) => s.record.id === r.id,
+  );
+  assert.deepEqual(
+    result.missing.map((i) => [i.name, i.quantity, i.unit]),
+    [["chickpeas", 2, "can"]],
+  );
+  assert.deepEqual(result.check_quantities, []);
+  for (const price of [
+    { name: "chickpeas", package_quantity: 1, unit: "can", price: 2 },
+    { name: "garlic", package_quantity: 10, unit: "cloves", price: 5 },
+  ])
+    call("price_save", {
+      price: { ...price, currency: "USD", purchased_on: "2026-09-14" },
+    });
+  const cost = call("cost_estimate", {
+    source: { kind: "recipe", id: r.id },
+    currency: "USD",
+    as_of: "2026-09-19",
+  });
+  assert.equal(cost.complete, true);
+  assert.equal(cost.total, 7);
+});
+
 test("dinner suggestions respect selected eaters and effort limits without assuming unknowns are quick", (t) => {
   const { call } = setup(t);
   call("recipe_save", { recipe: recipe() });
@@ -414,6 +454,11 @@ test("recipe drafts require review, preserve source wording and ambiguous units,
   assert.equal(parsed.recipe.ingredients[2].quantity, null);
   assert.ok(parsed.warnings.some((w) => w.includes("conventions")));
   assert.equal(parseIngredient("1/0 cup nonsense").quantity, null);
+  // The writer's unit is kept, lowercased and singular.
+  assert.equal(parseIngredient("2 Cans chickpeas").unit, "can");
+  assert.equal(parseIngredient("3 tablespoons oil").unit, "tbsp");
+  assert.equal(parseIngredient("2 tbsp. sugar").unit, "tbsp");
+  assert.equal(parseIngredient("500 grams rice").unit, "grams");
   const draft = call("recipe_import_text", { text }).record;
   const args = {
     id: draft.id,

@@ -33,8 +33,9 @@ export function parseQuantity(token) {
 
 const quantityPrefix =
   /^(\d+\s+\d+\/\d+|\d+\/\d+|\d+(?:[.,]\d+)?)(?:\s+|(?=[a-zA-Z]))(.+)$/;
+// An abbreviation may end in a full stop ("2 tbsp. sugar").
 export const unitToken =
-  /^(g|grams?|kg|kilograms?|mg|milligrams?|mL|ml|millilit(?:er|re)s?|l|lit(?:er|re)s?|oz|ounces?|lb|lbs|pounds?|cups?|tbsp|tablespoons?|tsp|teaspoons?|us_cup|metric_cup|us_tbsp|metric_tbsp|us_tsp|metric_tsp|us_fl_oz|cloves?|cans?|each|pieces?|count)\s+(.+)$/i;
+  /^((?:g|grams?|kg|kilograms?|mg|milligrams?|mL|ml|millilit(?:er|re)s?|l|lit(?:er|re)s?|oz|ounces?|lb|lbs|pounds?|cups?|tbsp|tablespoons?|tsp|teaspoons?|us_cup|metric_cup|us_tbsp|metric_tbsp|us_tsp|metric_tsp|us_fl_oz|cloves?|cans?|each|pieces?|count|bunch(?:es)?|pinch(?:es)?|dash(?:es)?|sprigs?|stalks?|sticks?|slices?|heads?|handfuls?|packages?|packets?|jars?|tins?|bottles?)\.?)\s+(.+)$/i;
 
 // A bullet is dropped; the unit token keeps the writer's spelling and case.
 export function splitIngredientLine(line) {
