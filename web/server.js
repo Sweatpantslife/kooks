@@ -88,8 +88,29 @@ function parseOrigin(value) {
     );
   return url;
 }
-// Uploads travel as base64 inside JSON: an ebook of 64 MB needs about 86 MB.
-const maxBody = 96 * 1024 * 1024;
+// Request bodies are JSON and are read whole, so each route gets the room it
+// needs and no more: sign-in a few kilobytes before anyone has signed in,
+// ordinary actions a long imported recipe. Files travel as base64, so only
+// the actions that carry them get more: an ebook of 64 MB needs about 86 MB.
+const KB = 1024,
+  MB = 1024 * KB;
+const authBody = 64 * KB;
+const toolBody = 2 * MB;
+const largeBodies = new Map([
+  ["asset_save", 96 * MB],
+  ["backup_restore", 96 * MB],
+  ["recipe_import_image", 12 * MB],
+]);
+// Each large upload is held several times over while it is parsed, checked
+// and decoded, so only this many run at once.
+const maxLargeUploads = 2;
+const decoded = (text) => {
+  try {
+    return decodeURIComponent(text);
+  } catch {
+    return null;
+  }
+};
 const extensions = {
   "image/png": "png",
   "image/jpeg": "jpg",
@@ -171,22 +192,28 @@ export function createWebServer({
   // produces, and only once the person presses play; the book reader frames
   // PDFs from this origin, which asset responses allow in turn.
   const policy = `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; connect-src 'self'; frame-src 'self' ${embedOrigins.join(" ")}; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'`;
-  let importsInProgress = 0;
+  let importsInProgress = 0,
+    largeUploads = 0;
   function send(res, status, data) {
     res.writeHead(status, {
       "Content-Type": "application/json; charset=utf-8",
     });
     res.end(JSON.stringify(data));
   }
-  async function body(req) {
+  const tooLarge = () =>
+    Object.assign(new KooksError("TOO_LARGE", "Request is too large."), {
+      status: 413,
+    });
+  // A declared length over the limit is refused before a byte is read.
+  async function body(req, limit) {
     if (!(req.headers["content-type"] ?? "").startsWith("application/json"))
       throw new KooksError("INVALID_INPUT", "Send JSON.");
+    if (Number(req.headers["content-length"]) > limit) throw tooLarge();
     const chunks = [];
     let size = 0;
     for await (const chunk of req) {
       size += chunk.length;
-      if (size > maxBody)
-        throw new KooksError("TOO_LARGE", "Request is too large.");
+      if (size > limit) throw tooLarge();
       chunks.push(chunk);
     }
     try {
@@ -249,6 +276,7 @@ export function createWebServer({
     const route = `${req.method} ${url.pathname.slice("/api/auth/".length)}`;
     const origin = external?.origin ?? url.origin;
     const address = clientAddress(req);
+    const input = () => body(req, authBody);
     const throttle = (key, max, windowMs) => {
       if (limited(key, max, windowMs))
         throw new AuthError(
@@ -258,7 +286,7 @@ export function createWebServer({
         );
     };
     if (route === "POST link") {
-      const email = normalizeEmail((await body(req)).email);
+      const email = normalizeEmail((await input()).email);
       if (!isEmail(email))
         throw new AuthError("INVALID_INPUT", "Enter a valid email address.");
       throttle(`link:${address}`, 10, 10 * MINUTE);
@@ -269,7 +297,7 @@ export function createWebServer({
     }
     if (route === "POST link/confirm") {
       throttle(`confirm:${address}`, 20, 10 * MINUTE);
-      const email = auth.confirmLink((await body(req)).token);
+      const email = auth.confirmLink((await input()).token);
       return signedIn(req, res, email, "email");
     }
     if (route === "POST passkey/options") {
@@ -281,7 +309,7 @@ export function createWebServer({
     if (route === "POST passkey/signin") {
       throttle(`passkey:${address}`, 60, 10 * MINUTE);
       const email = auth.authenticate({
-        credential: (await body(req)).credential,
+        credential: (await input()).credential,
       });
       return signedIn(req, res, email, "passkey");
     }
@@ -297,7 +325,7 @@ export function createWebServer({
         options: auth.registrationOptions({ email: session.email, origin }),
       });
     if (route === "POST passkey/register") {
-      const { credential, name } = await body(req);
+      const { credential, name } = await input();
       return send(res, 200, {
         passkey: auth.register({ email: session.email, credential, name }),
       });
@@ -305,7 +333,7 @@ export function createWebServer({
     if (route === "GET passkeys")
       return send(res, 200, { passkeys: auth.passkeys(session.email) });
     if (route === "POST passkey/remove") {
-      auth.removePasskey(session.email, (await body(req)).id);
+      auth.removePasskey(session.email, (await input()).id);
       return send(res, 200, { ok: true });
     }
     return send(res, 404, { message: "Not found." });
@@ -383,9 +411,8 @@ export function createWebServer({
         return send(res, 200, state);
       }
       if (url.pathname.startsWith("/api/assets/") && req.method === "GET") {
-        const id = decodeURIComponent(
-          url.pathname.slice("/api/assets/".length),
-        );
+        const id = decoded(url.pathname.slice("/api/assets/".length));
+        if (!id) return send(res, 404, { message: "Not found." });
         const asset = store.read(() => ({
           data: store.get("asset", id, true).data,
           bytes: store.blob("asset", id),
@@ -406,24 +433,39 @@ export function createWebServer({
       }
       if (url.pathname.startsWith("/api/tools/") && req.method === "POST") {
         const tool = tools.get(
-          decodeURIComponent(url.pathname.slice("/api/tools/".length)),
+          decoded(url.pathname.slice("/api/tools/".length)),
         );
         if (!tool) return send(res, 404, { message: "Unknown action." });
-        const input = await body(req);
-        if (tool.name === "recipe_import_image") {
-          if (importsInProgress >= 2)
-            return send(res, 429, {
-              message:
-                "Two photos are being read. Try again when one finishes.",
-            });
-          importsInProgress++;
-          try {
-            return send(res, 200, await tool.execute(input));
-          } finally {
-            importsInProgress--;
+        const run = async (limit) => {
+          const input = await body(req, limit);
+          if (tool.name === "recipe_import_image") {
+            if (importsInProgress >= 2)
+              return send(res, 429, {
+                message:
+                  "Two photos are being read. Try again when one finishes.",
+              });
+            importsInProgress++;
+            try {
+              return send(res, 200, await tool.execute(input));
+            } finally {
+              importsInProgress--;
+            }
           }
+          return send(res, 200, await tool.execute(input));
+        };
+        if (!largeBodies.has(tool.name)) return await run(toolBody);
+        if (largeUploads >= maxLargeUploads)
+          return send(res, 429, {
+            error: "BUSY",
+            message:
+              "Another upload is still on its way. Try again when it finishes.",
+          });
+        largeUploads++;
+        try {
+          return await run(largeBodies.get(tool.name));
+        } finally {
+          largeUploads--;
         }
-        return send(res, 200, await tool.execute(input));
       }
       if (req.method === "GET") {
         const path = url.pathname === "/" ? "/index.html" : url.pathname;

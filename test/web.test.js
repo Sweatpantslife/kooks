@@ -720,3 +720,108 @@ test("ebooks are served with their names for the in-app reader and for download"
   for (const kind of ["technique", "inspiration", "book"])
     assert.deepEqual(state.records[kind], []);
 });
+
+// Sends the request line and headers, then whatever body has been written;
+// resolves with the status as soon as the server answers.
+function openRequest(origin, path, headers, firstBytes = "") {
+  const { hostname, port } = new URL(origin);
+  const socket = net.connect(Number(port), hostname);
+  const status = new Promise((resolve, reject) => {
+    socket.once("data", (chunk) =>
+      resolve(Number(chunk.toString().split(" ")[1])),
+    );
+    socket.on("error", reject);
+  });
+  socket.write(
+    `POST ${path} HTTP/1.1\r\n${Object.entries({
+      Host: `${hostname}:${port}`,
+      Origin: origin,
+      "Content-Type": "application/json",
+      ...headers,
+    })
+      .map(([name, value]) => `${name}: ${value}`)
+      .join("\r\n")}\r\n\r\n${firstBytes}`,
+  );
+  return { socket, status };
+}
+
+test("request bodies are limited per route, and large uploads take turns", async (t) => {
+  const box = mailbox();
+  const signIn = await setup(t, { members: [member], mailer: box });
+  // Before anyone signs in, a sign-in request may carry a few kilobytes: a
+  // declared 50 MB body is refused before it is read...
+  const declared = openRequest(
+    signIn.origin,
+    "/api/auth/link",
+    { "Content-Length": 50 * 1024 * 1024 },
+    '{"email":',
+  );
+  assert.equal(await declared.status, 413);
+  declared.socket.destroy();
+  // ...and an undeclared one as soon as it outgrows the limit.
+  const streamed = await fetch(`${signIn.origin}/api/auth/link`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Origin: signIn.origin },
+    body: `{"email":"${"a".repeat(100 * 1024)}"}`,
+  });
+  assert.equal(streamed.status, 413);
+  assert.equal((await streamed.json()).error, "TOO_LARGE");
+  assert.equal(box.sent.length, 0);
+  assert.equal(
+    (await signIn.post("/api/auth/link", { email: member })).status,
+    200,
+  );
+
+  const { origin, post } = await setup(t);
+  const recipe = (size) =>
+    post("/api/tools/recipe_save", {
+      request_id: `long-${size}`,
+      recipe: { title: "Long", original_text: "x".repeat(size) },
+    });
+  // Ordinary actions get room for the longest recipe text the schema takes.
+  assert.equal((await recipe(200000)).status, 200);
+  assert.equal((await recipe(3 * 1024 * 1024)).status, 413);
+  const pdf = Buffer.concat([
+    Buffer.from("%PDF-1.4\n"),
+    Buffer.alloc(3 * 1024 * 1024, 32),
+  ]);
+  const book = await post("/api/tools/asset_save", {
+    request_id: "large-book",
+    file: {
+      name: "book.pdf",
+      mime_type: "application/pdf",
+      base64: pdf.toString("base64"),
+    },
+  });
+  assert.equal(book.status, 200);
+  // Two uploads in flight hold both turns; a third waits for one to end.
+  const pending = [0, 1].map(() =>
+    openRequest(origin, "/api/tools/asset_save", {
+      "Content-Length": 1024 * 1024,
+    }),
+  );
+  const probe = () =>
+    post("/api/tools/asset_save", { request_id: "probe", file: {} });
+  let busy;
+  for (let tries = 0; tries < 100; tries++) {
+    busy = await probe();
+    if (busy.status === 429) break;
+    assert.equal(busy.status, 400);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  assert.equal(busy.status, 429);
+  assert.equal((await busy.json()).error, "BUSY");
+  // Ordinary actions are not held up.
+  assert.equal((await recipe(10)).status, 200);
+  for (const { socket } of pending) socket.destroy();
+  let free;
+  for (let tries = 0; tries < 100; tries++) {
+    free = await probe();
+    if (free.status !== 429) break;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  assert.equal(free.status, 400, "abandoned uploads give their turns back");
+  // A malformed escape in a path is simply not found.
+  assert.equal((await fetch(`${origin}/api/assets/%E0%A4%A`)).status, 404);
+  assert.equal((await post("/api/tools/%E0%A4%A", {})).status, 404);
+});
