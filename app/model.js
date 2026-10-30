@@ -190,6 +190,10 @@ export const newCookbook = () => ({
   design: { ...defaultDesign },
 });
 
+// Exports are named after the local day, the one the person sees.
+export const backupFilename = (now = new Date()) =>
+  `kooks-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}.json`;
+
 export function snapshot(state, design) {
   return validateBackup({
     format: "kooks-mobile",
@@ -211,12 +215,14 @@ function requireValid(condition, message) {
 }
 
 // Backups before facets carried one free label per recipe. It becomes a tag,
-// except the placeholder the editor used to give every saved recipe.
+// except the placeholder the editor used to give every saved recipe. A label
+// longer than a tag allows is cut to fit, or every later save would fail.
 function upgradeRecipe(recipe) {
   if (!("tag" in recipe)) return recipe;
   const { tag, ...upgraded } = recipe;
-  if (!upgraded.tags.length && tag && tag !== "Your collection")
-    upgraded.tags = [tag];
+  const label = (tag ?? "").trim().slice(0, MAX_LABEL_LENGTH).trim();
+  if (!upgraded.tags.length && label && label !== "Your collection")
+    upgraded.tags = [label];
   return upgraded;
 }
 

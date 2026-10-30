@@ -6,6 +6,7 @@ import { LocalNotifications } from "@capacitor/local-notifications";
 import { Share } from "@capacitor/share";
 import { notificationChanges } from "./timers.js";
 import { clone as structuredClone } from "./compat.js";
+import { backupFilename } from "./model.js";
 
 export const isNative = Capacitor.isNativePlatform();
 export const platform = Capacitor.getPlatform();
@@ -93,7 +94,7 @@ function download(blob, filename) {
 // app that receives it may read the file after the share sheet closes, so it
 // cannot be removed right away.
 export async function exportCookbook(backup) {
-  const filename = `kooks-${new Date().toISOString().slice(0, 10)}.json`;
+  const filename = backupFilename();
   const data = JSON.stringify(backup, null, 2);
   if (!isNative)
     return download(new Blob([data], { type: "application/json" }), filename);
