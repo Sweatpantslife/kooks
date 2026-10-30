@@ -1,6 +1,6 @@
 # Kooks for iOS and Android
 
-Kooks now has a Capacitor 8 application in `app/`, with Xcode and Android Studio projects in `ios/` and `android/`. The bundled app works without a running desktop server or internet connection. The existing MCP server and desktop web app keep their own data and commands.
+Kooks now has a Capacitor 8 application in `app/`, with Xcode and Android Studio projects in `ios/` and `android/`. The bundled app works without a running desktop server or internet connection. The existing MCP server and desktop web app keep their own data and commands. Its page carries the browser app's content security policy as a meta tag: no inline or evaluated script (zod runs without its compiled parsers for that reason), and video players only from the embed origins in `shared/links.js`; the mobile Playwright suite fails on any violation.
 
 ## Run and build
 

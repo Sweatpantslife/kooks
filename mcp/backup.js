@@ -5,6 +5,7 @@ import {
   ingredient,
   equipment,
   id,
+  key,
   servings,
   date,
   version,
@@ -45,7 +46,7 @@ const dish = z.object({
 });
 const contribution = snapshotIngredient.extend({
   contribution_id: z.string(),
-  source_key: id,
+  source_key: key,
   recipe_id: id,
   recipe_version: version,
   recipe_title: z.string(),
@@ -91,7 +92,7 @@ const dataSchemas = {
     sources: z
       .array(
         z.object({
-          source_key: id,
+          source_key: key,
           title: z.string(),
           reference,
           contributions: z.array(contribution).max(25000),

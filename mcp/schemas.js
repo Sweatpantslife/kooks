@@ -8,7 +8,18 @@ import {
 } from "../shared/taxonomy.js";
 
 export const text = z.string().trim().min(1).max(500);
-export const id = z.string().min(1).max(128);
+// Record and item ids are UUIDs or keys Kooks builds from them, such as
+// "dish-1" or "recipe:<uuid>". Both apps put them in markup and addresses,
+// so nothing else is accepted, whether from an agent or a backup.
+export const id = z
+  .string()
+  .regex(
+    /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/,
+    "Use an id Kooks returned: letters, digits, '_', '.', ':' and '-', up to 128 characters.",
+  );
+// Keys a caller chooses and Kooks only compares: request ids and shopping
+// source keys.
+export const key = z.string().min(1).max(128);
 export const version = z.number().int().positive();
 export const servings = z.number().min(0.01).max(10000);
 const note = z.string().max(30000);
@@ -184,7 +195,7 @@ export const kind = z.enum([
   "book",
 ]);
 export const write = {
-  request_id: id.describe(
+  request_id: key.describe(
     "Unique key for this action. Reuse the same key and arguments on a retry.",
   ),
 };
