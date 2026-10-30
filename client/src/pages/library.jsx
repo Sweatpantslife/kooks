@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useState } from "preact/hooks";
 import {
   ArrowLeft,
   BookOpen,
@@ -16,11 +16,11 @@ import { formatLabels, parseLabels } from "../../../shared/taxonomy.js";
 import { editedSteps, stepsText } from "../../../shared/ingredients.js";
 import { formatLinkLines, parseLinkLines } from "../../../shared/links.js";
 import { change, record } from "../lib/store.js";
-import { guardLeaving, leave } from "../lib/router.js";
+import { leave } from "../lib/router.js";
 import { uploadBook, uploadPhoto } from "../lib/files.js";
 import { hrefOf } from "../lib/kitchen.js";
 import { Empty, PageHeader } from "../ui/page.jsx";
-import { Field, FormError, hint, useWork } from "../ui/form.jsx";
+import { Field, FormError, hint, useDirty, useWork } from "../ui/form.jsx";
 import { Icon } from "../ui/icon.jsx";
 import { Art } from "../ui/tile.jsx";
 import { MoreList, linkItems } from "../ui/more.jsx";
@@ -50,7 +50,7 @@ function Gone({ kind }) {
 }
 
 // Off the shelf with Undo, back to the Recipes tab showing its kind.
-function RemoveButton({ kind, item, label, done }) {
+export function RemoveButton({ kind, item, label, done }) {
   const work = useWork();
   const remove = () =>
     work.run(async () => {
@@ -452,21 +452,6 @@ export function BookPage({ id }) {
 }
 
 // ---------- Forms ----------
-
-// A form holds the person on the page while it has unsaved changes.
-function useDirty() {
-  const dirty = useRef(false);
-  useEffect(
-    () =>
-      guardLeaving(
-        () =>
-          !dirty.current ||
-          confirm("Leave without saving? Your changes will be lost."),
-      ),
-    [],
-  );
-  return dirty;
-}
 
 function PhotoField({ id, label, has, setFile, remove, setRemove }) {
   return (

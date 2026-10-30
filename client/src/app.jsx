@@ -15,7 +15,7 @@ import { AtHome, Groceries, PutAway, ShopFor } from "./pages/groceries.jsx";
 import { AddToDay, ChooseDay, Week } from "./pages/week.jsx";
 import { Recipes } from "./pages/recipes.jsx";
 import { Recipe } from "./pages/recipe.jsx";
-import { Meal } from "./pages/meal.jsx";
+import { Meal, MealForm } from "./pages/meal.jsx";
 import { Add, Idea, Paste, Photo } from "./pages/add.jsx";
 import { Editor } from "./pages/editor.jsx";
 import {
@@ -101,8 +101,15 @@ function pageFor([first = "week", second, third, fourth]) {
       title: "Check the draft",
       page: <Editor mode="draft" id={third} />,
     };
+  if (first === "recipes" && second === "meal" && third === "new" && !fourth)
+    return { title: "New meal", page: <MealForm key="new" id="new" /> };
   if (first === "recipes" && second === "meal" && third && !fourth)
     return { title: named("meal", third, "Meal"), page: <Meal id={third} /> };
+  if (first === "recipes" && second === "meal" && third && fourth === "edit")
+    return {
+      title: `Edit · ${named("meal", third, "Meal")}`,
+      page: <MealForm key={third} id={third} />,
+    };
   if (first === "recipes" && Object.hasOwn(LIBRARY, second) && third) {
     const [kind, Page, Form] = LIBRARY[second];
     const name = named(kind, third, "Not found");

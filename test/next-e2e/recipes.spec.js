@@ -270,3 +270,77 @@ test("a meal page lists its dishes, and a missing recipe says so", async ({
     page.getByRole("heading", { name: "That recipe isn’t in the kitchen" }),
   ).toBeVisible();
 });
+
+test("a meal is put together from the Add page, changed, and removed with Undo", async ({
+  page,
+}) => {
+  const lunch = `Picnic lunch ${tag}`;
+  await page.goto("/next/#/recipes/add");
+  await page.getByRole("link", { name: /^Put a meal together/ }).click();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("New meal");
+  await page.getByLabel("Name").fill(lunch);
+  await page.getByRole("button", { name: "Save meal" }).click();
+  await expect(page.getByRole("alert")).toHaveText(
+    "Choose at least one recipe for the meal.",
+  );
+  const find = page.getByRole("searchbox", { name: /^Find a recipe/ });
+  await find.fill(`stew ${tag}`);
+  await page.getByRole("checkbox", { name: `Chickpea stew ${tag}` }).check();
+  await find.fill(`salad ${tag}`);
+  await page.getByRole("checkbox", { name: `Green salad ${tag}` }).check();
+  const stewDish = page.getByRole("group", { name: `Chickpea stew ${tag}` });
+  await stewDish.getByLabel("Served as").fill("Main");
+  await stewDish.getByLabel("Servings").fill("6");
+  await page
+    .getByRole("group", { name: `Green salad ${tag}` })
+    .getByLabel("Served as")
+    .fill("Side");
+  await expectAccessible(page, "New meal");
+  await page.getByRole("button", { name: "Save meal" }).click();
+
+  await expect(page.locator(".toast-region")).toContainText(
+    `${lunch} is in your cookbook.`,
+  );
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(lunch);
+  await expect(tile(page, `Chickpea stew ${tag}`)).toContainText(
+    "Main · Serves 6",
+  );
+  await expect(tile(page, `Green salad ${tag}`)).toContainText("Side");
+
+  await page.getByRole("link", { name: "Edit meal" }).click();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Edit meal");
+  await expect(
+    page
+      .getByRole("group", { name: `Chickpea stew ${tag}` })
+      .getByLabel("Servings"),
+  ).toHaveValue("6");
+  // Unticked, the salad stays in place with the focus, and leaves the meal.
+  const salad = page.getByRole("checkbox", { name: `Green salad ${tag}` });
+  await salad.focus();
+  await page.keyboard.press("Space");
+  await expect(salad).not.toBeChecked();
+  await expect(salad).toBeFocused();
+  await expect(
+    page.getByRole("group", { name: `Green salad ${tag}` }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: "Save meal" }).click();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(lunch);
+  await expect(tile(page, `Green salad ${tag}`)).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Remove meal" }).click();
+  await expect(page.locator(".toast-region")).toContainText(
+    `${lunch} is off your meals.`,
+  );
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Recipes");
+  await expect(page.getByRole("button", { name: /^Meals/ })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await page
+    .locator(".toast-region")
+    .getByRole("button", { name: "Undo" })
+    .click();
+  await expect(
+    page.getByRole("link", { name: new RegExp(lunch) }),
+  ).toBeVisible();
+});

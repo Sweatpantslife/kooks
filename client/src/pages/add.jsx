@@ -9,6 +9,7 @@ import {
   PenLine,
   ScanText,
   Trash2,
+  UtensilsCrossed,
 } from "lucide";
 import { parseLinkLines } from "../../../shared/links.js";
 import { change, records } from "../lib/store.js";
@@ -41,6 +42,13 @@ const WAYS = [
     tone: "herb",
     title: "Write it yourself",
     text: "The way you make it, in your own words.",
+  },
+  {
+    href: "#/recipes/meal/new",
+    icon: UtensilsCrossed,
+    tone: "herb",
+    title: "Put a meal together",
+    text: "Recipes you cook together, like a main, a side and a salad.",
   },
   {
     href: "#/recipes/add/idea",
