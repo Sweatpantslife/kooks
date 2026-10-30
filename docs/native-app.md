@@ -79,4 +79,4 @@ The mobile build and `cap sync` succeed. Browser verification covers adding/edit
 
 On the implementation machine, Xcode, Java, and the Android SDK are missing. Consequently no native binary, simulator run, signing, or physical-device notification delivery has been verified. Before distribution, run both native builds and exercise cold launch, safe areas/keyboard, back navigation, share/export/restore, offline editing, app termination/relaunch, and timer permissions/delivery on actual iOS and Android devices. Also confirm that embedded players load inside the native WebView and that recipe links open in the system browser; both were checked in Chromium only.
 
-The app's production dependencies have no reported advisories in the implementation audit. The Capacitor CLI's build-only `xcode → uuid` dependency reports a moderate advisory; it is not included in the app bundle. Keep the CLI updated as upstream releases fixes.
+`npm audit` reports no vulnerabilities. The Capacitor CLI's build-only `xcode → uuid` advisory is gone from CLI 8.6.0, whose `xcode` 4 no longer depends on `uuid`; the CLI was never part of the app bundle.
