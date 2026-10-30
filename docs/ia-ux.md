@@ -141,6 +141,7 @@ Both apps load `shared/tokens.css` and `shared/ui.css` and use the same class vo
 - **Type.** Georgia for titles (h1, h2, card titles), the system sans for everything else. Body 15 px / 1.55. Minimum 13 px for secondary text.
 - **Dark mode** follows the system by default and can be forced in Settings › Preferences; every colour comes from a token so both themes stay in step. Contrast stays at or above 4.5:1 for text, and at or above 3:1 for the focus ring and form-field borders (`field-line`), in both themes and both mobile palettes.
 - **Windows contrast themes** (`forced-colors`) show selected chips, section tabs, toggles and the current destination in the system highlight colours, and outline the surfaces that only a background sets apart.
+- **Direction**: layout CSS uses logical properties (`inline-start` and `inline-end`, `text-align: start`), so setting `dir="rtl"` mirrors the shell, lists, forms and cooking footer without a second stylesheet. A unit test in `test/shared.test.js` rejects physical left and right; a declaration that must stay physical carries a `/* physical: … */` note. A right-to-left language would still need translated strings, a language setting and mirrored directional icons (chevrons and arrows).
 - **Motion** is limited to short transitions and honours `prefers-reduced-motion`.
 
 ## Copy

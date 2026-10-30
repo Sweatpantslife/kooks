@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import {
   canonicalQuantity,
   convertUnits,
@@ -456,4 +457,21 @@ test("shared taxonomy dedupes labels, matches facets case-insensitively and coun
     [{ name: "Shabbat", count: 2 }],
   );
   assert.deepEqual(taxonomy([]).courses, []);
+});
+
+test("the stylesheets use start and end rather than left and right", async () => {
+  // Logical properties let a right-to-left language mirror the layout without
+  // a second stylesheet. A declaration that must stay physical says why.
+  const physical =
+    /(?:^|[\s{;])(?:(?:margin|padding|border)-(?:left|right)|left|right)\s*:|(?:text-align|float)\s*:\s*(?:left|right)\b|translateX\(/;
+  for (const file of ["shared/ui.css", "shared/tokens.css", "app/styles.css"]) {
+    const css = await readFile(new URL(`../${file}`, import.meta.url), "utf8");
+    const found = css
+      .split("\n")
+      .map((line, index) => [index + 1, line])
+      .filter(
+        ([, line]) => physical.test(line) && !line.includes("/* physical:"),
+      );
+    assert.deepEqual(found, [], `${file} has physical directions`);
+  }
 });
