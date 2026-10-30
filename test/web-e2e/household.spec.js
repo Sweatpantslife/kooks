@@ -353,6 +353,27 @@ test("the cookbook exports as a portable Kooks backup", async ({
   ).toBe(true);
 });
 
+test("another cook's additions and archives reach an open page on its next poll", async ({
+  page,
+  request,
+  baseURL,
+}) => {
+  await page.goto("/#/recipes");
+  await expect(h1(page, "Recipes")).toBeVisible();
+  const added = await seed(request, baseURL, "recipe_save", {
+    recipe: recipe("Polled stew"),
+  });
+  const card = page.getByRole("link", { name: title("Polled stew") });
+  await expect(card).toBeVisible();
+  await seed(request, baseURL, "record_archive", {
+    kind: "recipe",
+    id: added.record.id,
+    expected_version: added.record.version,
+    archived: true,
+  });
+  await expect(card).toHaveCount(0);
+});
+
 test("links and videos save with a recipe, play on request and round-trip through the editor", async ({
   page,
   request,
