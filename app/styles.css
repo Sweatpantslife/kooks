@@ -17,7 +17,7 @@
   font-family: inherit;
 }
 .sidebar .nav-item {
-  text-align: left;
+  text-align: start;
 }
 .tabbar .nav-item {
   width: auto;
@@ -175,7 +175,7 @@ body:has(.cook-footer) .toast {
   justify-content: flex-start;
 }
 .proposal-lines {
-  padding-left: var(--s-5);
+  padding-inline-start: var(--s-5);
   font-size: var(--fs-sm);
 }
 
@@ -231,14 +231,14 @@ body:has(.cook-footer) .toast {
 }
 :root[data-layout="rows"] .card.recipe-card .card-end {
   margin-top: 0;
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 
 /* Card titles are buttons here (no routing on the device). */
 .card-open {
   font: inherit;
   color: inherit;
-  text-align: left;
+  text-align: start;
   padding: 0;
   cursor: pointer;
 }
