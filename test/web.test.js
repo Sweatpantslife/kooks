@@ -814,6 +814,38 @@ test("the phone app signs in with an emailed code and sends a device token, acro
   assert.equal((await get("/api/state", device)).status, 401);
 });
 
+test("wrong codes count per address, strangers' alike, and what is not an address is never kept", async (t) => {
+  const { server, post } = await setup(t, {
+    host: "0.0.0.0",
+    publicOrigin: "https://kooks.example",
+    members: [member],
+    mailer: mailbox(),
+  });
+  const app = { Host: "kooks.example", Origin: "capacitor://localhost" };
+  const guess = (email, i) =>
+    post(
+      "/api/auth/code/confirm",
+      { email, code: "000000" },
+      { ...app, "X-Forwarded-For": `198.51.100.${i}` },
+    );
+  for (const [i, email] of [
+    "x".repeat(60000),
+    `${"x".repeat(300)}@example.test`,
+    "not an address",
+    42,
+  ].entries()) {
+    const refused = await guess(email, i);
+    assert.equal(refused.status, 400);
+    assert.equal((await refused.json()).error, "CODE_INVALID");
+  }
+  assert.deepEqual(server.wrongCodes(), { members: 0, others: 0 });
+  // A stranger gets the same answers a member would.
+  for (let i = 0; i < 20; i++)
+    assert.equal((await guess("stranger@example.test", 10 + i)).status, 400);
+  assert.equal((await guess("stranger@example.test", 99)).status, 429);
+  assert.deepEqual(server.wrongCodes(), { members: 0, others: 1 });
+});
+
 test("a kitchen at https://localhost is a browser's, not the phone app's", async (t) => {
   const box = mailbox();
   const { call, post } = await setup(t, {

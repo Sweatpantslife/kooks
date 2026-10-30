@@ -16,7 +16,13 @@ import { batchView } from "../mcp/features.js";
 import { backupChunks } from "../mcp/backup.js";
 import { shoppingItems } from "../mcp/shopping.js";
 import { embedOrigins } from "../shared/links.js";
-import { AuthError, createAuth, normalizeEmail, parseMembers } from "./auth.js";
+import {
+  AuthError,
+  createAuth,
+  normalizeEmail,
+  parseMembers,
+  wrongCode,
+} from "./auth.js";
 import { createMailer, isEmail } from "./mail.js";
 
 // The app, built by `npm run build:client`, is the files in client/dist.
@@ -260,8 +266,12 @@ export function createWebServer({
   const tools = new Map(createTools(store).map((t) => [t.name, t]));
   const clientDir = resolve(clientRoot) + sep;
   const limits = new Map();
-  // Wrong sign-in codes per address, for the day.
-  const missed = new Map();
+  // Wrong sign-in codes per address, for the day: exact for the household's
+  // addresses, and for any other address in a map that keeps the latest
+  // 10,000, so strangers get the same answer without the map growing
+  // without end.
+  const missed = { members: new Map(), others: new Map() };
+  const othersKept = 10000;
   // Revisions are this server start plus the action sequence, so a tab that
   // was open before a restart, or against another database, reloads fully.
   const started = randomUUID().slice(0, 8);
@@ -417,8 +427,11 @@ export function createWebServer({
       // an address takes twenty wrong guesses a day, and a right one starts
       // the count again.
       const key = normalizeEmail(email);
+      // What is not an address is never counted, so it cannot fill the map.
+      if (!isEmail(key)) throw wrongCode();
+      const counts = auth.isMember(key) ? missed.members : missed.others;
       const t = Date.now();
-      const wrong = missed.get(key);
+      const wrong = counts.get(key);
       if (wrong?.until > t && wrong.count >= 20)
         throw new AuthError(
           "RATE_LIMITED",
@@ -429,17 +442,19 @@ export function createWebServer({
       try {
         confirmed = auth.confirmCode({ email, code });
       } catch (error) {
-        if (missed.size > 5000)
-          for (const [k, v] of missed) if (v.until < t) missed.delete(k);
-        missed.set(
+        // Set afresh, so the map's order is the order of the latest guesses.
+        counts.delete(key);
+        counts.set(
           key,
           wrong?.until > t
             ? { ...wrong, count: wrong.count + 1 }
             : { count: 1, until: t + 24 * 60 * MINUTE },
         );
+        if (counts === missed.others && counts.size > othersKept)
+          counts.delete(counts.keys().next().value);
         throw error;
       }
-      missed.delete(key);
+      counts.delete(key);
       // The device keeps the token and sends it; it is never a cookie.
       return send(res, 200, {
         ok: true,
@@ -774,6 +789,11 @@ export function createWebServer({
   // slow household connection may take a few minutes to send.
   server.requestTimeout = 300000;
   server.auth = auth;
+  // How many addresses have wrong codes counted, for the tests.
+  server.wrongCodes = () => ({
+    members: missed.members.size,
+    others: missed.others.size,
+  });
   return server;
 }
 

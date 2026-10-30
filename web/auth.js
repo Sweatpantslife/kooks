@@ -54,6 +54,11 @@ const cleanName = (value) =>
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 60);
+export const wrongCode = () =>
+  new AuthError(
+    "CODE_INVALID",
+    "That code is not right, or it has expired. Check it, or ask for a new one.",
+  );
 const tooSlow = () =>
   new AuthError("PASSKEY_EXPIRED", "That took a little too long. Try again.");
 
@@ -236,15 +241,10 @@ export function createAuth({
     confirmCode({ email, code }) {
       prune();
       const address = normalizeEmail(email);
-      const invalid = () =>
-        new AuthError(
-          "CODE_INVALID",
-          "That code is not right, or it has expired. Check it, or ask for a new one.",
-        );
       const row = q(
         "SELECT salt, code_hash, attempts FROM auth_codes WHERE email = ? AND expires_at >= ?",
       ).get(address, now());
-      if (!row || !allowed.has(address)) throw invalid();
+      if (!row || !allowed.has(address)) throw wrongCode();
       const given = String(code ?? "").replace(/\s/g, "");
       const right =
         /^\d{6}$/.test(given) &&
@@ -258,7 +258,7 @@ export function createAuth({
         q("UPDATE auth_codes SET attempts = attempts + 1 WHERE email = ?").run(
           address,
         );
-      if (!right) throw invalid();
+      if (!right) throw wrongCode();
       return address;
     },
     createSession(email, method) {
