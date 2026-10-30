@@ -4,6 +4,7 @@ import {
   formatLinkLines,
   parseLinkLines,
 } from "/shared/links.js";
+import { findPlace, keepPlace, placeOf } from "/shared/a11y.js";
 import { icon } from "/shared/icons.js";
 import { unitLabel } from "/shared/quantities.js";
 import {
@@ -194,6 +195,7 @@ let db = {},
   revision = "",
   busy = 0,
   draw = 0,
+  drawn = null,
   lastAction = null,
   sharing = false,
   filters = {},
@@ -1883,9 +1885,10 @@ async function accountTab() {
 function renderLogin() {
   conditional?.abort();
   conditional = null;
+  drawn = null;
   const sent = signin.step === "sent";
   $("#app").innerHTML =
-    `<main class="login panel"><a class="brand" href="#/today">${icon("cooking-pot")}kooks</a>${
+    `<main id="main" class="login panel" tabindex="-1"><a class="brand" href="#/today">${icon("cooking-pot")}kooks</a>${
       sent
         ? `<div><h1>Check your inbox.</h1><p class="small muted">We sent a sign-in link to <strong>${esc(signin.email)}</strong>. Open it on this device within 15 minutes; it works once.</p><p class="small muted">Nothing there? Look in spam, or ask whoever runs this kitchen to add your address.</p></div><div>${button("Use a different address", "signin-restart", "", "btn-quiet")}</div>`
         : `<div><h1>Welcome to your kitchen.</h1><p class="small muted">${passkeysSupported() ? "Sign in with the passkey on this device, or get a link by email." : "Get a sign-in link by email."}</p></div><div class="error" role="alert" data-login-error>${esc(signin.error)}</div>${passkeysSupported() ? `${button("Sign in with a passkey", "passkey-signin", "", "btn-primary btn-block", "key-round")}<div class="or">or</div>` : ""}<form data-form="email-link" class="stack">${field("Email address", "email", signin.email, "email", 'required autocomplete="username webauthn" placeholder="you@example.com"')}${errorSlot()}<div>${submit("Email me a sign-in link", "log-in")}</div></form>`
@@ -2030,10 +2033,18 @@ async function render({ focus = false } = {}) {
     };
   }
   if (token !== draw) return;
-  $("#app").innerHTML = shell({
-    ...view,
-    active: page === "account" ? "account" : view.active,
-  });
+  const paint = () => {
+    $("#app").innerHTML = shell({
+      ...view,
+      active: page === "account" ? "account" : view.active,
+    });
+  };
+  // Redrawing the page the person is on (another cook's change, or the result
+  // of a button on it) keeps their focus, caret, open sections and scroll.
+  if (drawn === location.hash && !focus)
+    keepPlace($("#app"), paint, { fallback: () => $("#main") });
+  else paint();
+  drawn = location.hash;
   document.title = `${view.title} · Kooks`;
   updateTimers();
   void manageWakeLock(Boolean(view.wakeLock));
@@ -2142,6 +2153,15 @@ async function saveRecipe(form, values) {
 }
 
 // ---------- Events ----------
+// A control is disabled while its change is saved, which takes the focus off
+// it. Remember where the focus was and put it back afterwards: on the redrawn
+// control, or on the page when the control is gone.
+const holdFocus = (el) => (el === document.activeElement ? placeOf(el) : null);
+function restoreFocus(place) {
+  if (!place || (document.activeElement ?? document.body) !== document.body)
+    return;
+  (findPlace(place) ?? $("#main"))?.focus({ preventScroll: true });
+}
 const listResults = {
   recipes: () => libraryResults(),
   techniques: () => techniqueResults(),
@@ -2593,6 +2613,7 @@ document.addEventListener("click", async (event) => {
     }
     return;
   }
+  const held = holdFocus(el);
   el.disabled = true;
   busy++;
   try {
@@ -2815,6 +2836,7 @@ document.addEventListener("click", async (event) => {
   } finally {
     el.disabled = false;
     busy--;
+    restoreFocus(held);
   }
 });
 
@@ -2823,6 +2845,7 @@ document.addEventListener("change", async (event) => {
     type = el.dataset.change;
   if (!type) return;
   busy++;
+  const held = holdFocus(el);
   el.disabled = true;
   try {
     if (type === "pantry-available") {
@@ -2861,6 +2884,7 @@ document.addEventListener("change", async (event) => {
   } finally {
     busy--;
     el.disabled = false;
+    restoreFocus(held);
   }
 });
 

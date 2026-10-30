@@ -32,6 +32,7 @@ import {
   taxonomy,
 } from "../shared/taxonomy.js";
 import { icon } from "../shared/icons.js";
+import { keepPlace } from "../shared/a11y.js";
 import { clone as structuredClone, randomId } from "./compat.js";
 import { defaultDesign, snapshot, parseBackup } from "./model.js";
 import { createCookbookStorage } from "./storage.js";
@@ -910,6 +911,28 @@ async function boot() {
     }
   }
   function render() {
+    // Redrawing the view the person is on keeps their focus, open sections
+    // and scroll; moving to another view starts at its top instead.
+    if (renderedView === state.view)
+      keepPlace(root, paint, { fallback: () => main });
+    else paint();
+    toastElement.textContent = noteMessage;
+    const title =
+      state.view === "detail"
+        ? recipe().title
+        : state.view === "meal"
+          ? (meal()?.title ?? "Meal")
+          : TITLES[state.view] || "Kooks";
+    document.title = `${title} · Kooks`;
+    updateTimers();
+    void manageWakeLock(state.view === "cook" && Boolean(state.session));
+    if (renderedView && renderedView !== state.view) {
+      window.scrollTo(0, 0);
+      main.focus({ preventScroll: true });
+    }
+    renderedView = state.view;
+  }
+  function paint() {
     applyDesign();
     navigation();
     const views = {
@@ -930,21 +953,6 @@ async function boot() {
       settings: settingsView,
     };
     main.innerHTML = `<div class="page">${(views[state.view] || todayView)()}</div>`;
-    toastElement.textContent = noteMessage;
-    const title =
-      state.view === "detail"
-        ? recipe().title
-        : state.view === "meal"
-          ? (meal()?.title ?? "Meal")
-          : TITLES[state.view] || "Kooks";
-    document.title = `${title} · Kooks`;
-    updateTimers();
-    void manageWakeLock(state.view === "cook" && Boolean(state.session));
-    if (renderedView && renderedView !== state.view) {
-      window.scrollTo(0, 0);
-      main.focus({ preventScroll: true });
-    }
-    renderedView = state.view;
   }
   function updateTimers() {
     if (!state.session) return;
@@ -1001,6 +1009,7 @@ async function boot() {
         notify("Finish or remove a timer before adding another.");
         return;
       }
+      const hadFocus = target === document.activeElement;
       target.disabled = true;
       try {
         if (!(await enableTimerAlerts()))
@@ -1011,6 +1020,8 @@ async function boot() {
         noteMessage = "Timer started. Device alerts are unavailable.";
       }
       target.disabled = false;
+      // Disabling the button took the focus off it; the redraw puts it back.
+      if (hadFocus) target.focus({ preventScroll: true });
     }
     if (["favorite", "confirm-list", "cook-next", "finish-cook"].includes(a))
       tap();

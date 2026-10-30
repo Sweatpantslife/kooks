@@ -102,6 +102,9 @@ test("browser API shares persistent actions, reports revisions and rejects stale
   assert.equal(taxonomy.status, 200);
   assert.match(await taxonomy.text(), /export function matchesFacets/);
   assert.equal((await fetch(`${origin}/shared/quantities.js`)).status, 200);
+  const a11y = await fetch(`${origin}/shared/a11y.js`);
+  assert.equal(a11y.status, 200);
+  assert.match(await a11y.text(), /export function keepPlace/);
   assert.equal((await fetch(`${origin}/shared/ingredients.js`)).status, 404);
   const initial = await (await fetch(`${origin}/api/state`)).json();
   assert.equal(initial.sharing, false);
