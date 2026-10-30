@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Files Kooks hands to other apps: only cookbook exports, written to their
+     own folder in the app's cache by app/native.js. -->
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
-    <external-path name="my_images" path="." />
-    <cache-path name="my_cache_images" path="." />
+    <cache-path name="exports" path="exports/" />
 </paths>
