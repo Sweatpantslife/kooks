@@ -7,7 +7,14 @@ import {
   unitLabel,
   unitSpelling,
 } from "../shared/quantities.js";
-import { parseQuantity, splitIngredientLine } from "../shared/ingredients.js";
+import {
+  editedIngredients,
+  editedSteps,
+  ingredientLine,
+  parseQuantity,
+  splitIngredientLine,
+  stepsText,
+} from "../shared/ingredients.js";
 import {
   describeLink,
   displayLinks,
@@ -136,6 +143,119 @@ test("shared unit labels read in the plural only above one", () => {
   assert.equal(unitLabel("mL", 30), "mL");
   assert.equal(unitLabel("us_cup", 2), "us_cup");
   assert.equal(unitLabel("", 3), "");
+});
+
+test("editor lines left as shown keep their stored ingredient exactly", () => {
+  const original = [
+    {
+      name: "salt",
+      quantity: 1,
+      unit: "pinch of",
+      preparation: "",
+      category: "Pantry",
+      original_text: "a pinch of salt",
+    },
+    {
+      name: "Pepper",
+      quantity: null,
+      unit: "",
+      preparation: "to taste",
+      category: "Pantry",
+      original_text: "Pepper, to taste",
+    },
+    {
+      name: "onion",
+      quantity: 1,
+      unit: "",
+      preparation: "diced",
+      category: "Produce",
+      original_text: "1 onion, finely diced",
+    },
+    {
+      name: "milk",
+      quantity: 1,
+      unit: "us_cup",
+      preparation: "",
+      category: "Dairy",
+      original_text: "1 cup milk",
+    },
+  ];
+  const text = original.map(ingredientLine).join("\n");
+  assert.equal(
+    text,
+    "1 pinch of salt\nPepper, to taste\n1 onion, diced\n1 us_cup milk",
+  );
+  assert.deepEqual(editedIngredients(text, original), original);
+  // Reordered and with stray spaces, every line still finds its ingredient.
+  assert.deepEqual(
+    editedIngredients(
+      `  1 us_cup   milk\n${text}`.split("\n").slice(0, 4).join("\n"),
+      original,
+    ),
+    [original[3], original[0], original[1], original[2]],
+  );
+});
+
+test("edited editor lines are parsed again and keep the category they replaced", () => {
+  const original = [
+    {
+      name: "onion",
+      quantity: 1,
+      unit: "",
+      preparation: "diced",
+      category: "Produce",
+      original_text: "1 onion, diced",
+    },
+    {
+      name: "flour",
+      quantity: 2,
+      unit: "cup",
+      preparation: "",
+      category: "Baking",
+      original_text: "2 cups flour",
+    },
+    {
+      name: "eggs",
+      quantity: 2,
+      unit: "",
+      preparation: "",
+      category: "Dairy",
+      original_text: "2 eggs",
+    },
+  ];
+  const [onion, flour, eggs, extra] = editedIngredients(
+    "1 onion, sliced\n2 cups bread flour\n3 eggs\n1 bunch parsley",
+    original,
+  );
+  // Same name, new preparation: the category and source wording follow.
+  assert.equal(onion.preparation, "sliced");
+  assert.equal(onion.category, "Produce");
+  assert.equal(onion.original_text, "1 onion, diced");
+  // Renamed in place: the category of the line it replaced.
+  assert.equal(flour.name, "bread flour");
+  assert.equal(flour.unit, "cup");
+  assert.equal(flour.category, "Baking");
+  assert.equal(eggs.quantity, 3);
+  assert.equal(eggs.category, "Dairy");
+  // A new line is parsed like a pasted one and has no category yet.
+  assert.equal(extra.name, "parsley");
+  assert.equal(extra.unit, "bunch");
+  assert.equal(extra.category, undefined);
+});
+
+test("editor steps keep their timers and never split at a blank line inside them", () => {
+  const original = [
+    { text: "Mix.\n\nThen rest.", duration_seconds: 600, equipment_names: [] },
+    { text: "Bake.", duration_seconds: 1200, equipment_names: ["Oven"] },
+  ];
+  const text = stepsText(original);
+  assert.equal(text, "Mix.\nThen rest.\n\nBake.");
+  assert.deepEqual(editedSteps(text, original), original);
+  assert.deepEqual(
+    editedSteps("Bake.\n\nMix.\nThen rest.\n\nServe.", original),
+    [original[1], original[0], { text: "Serve." }],
+  );
+  assert.deepEqual(editedSteps("", original), []);
 });
 
 test("shared link lines accept an address with an optional title in either order", () => {

@@ -15,29 +15,9 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { KooksError, requireThat } from "./store.js";
 import { recipe } from "./schemas.js";
-import { splitIngredientLine } from "../shared/ingredients.js";
-import { unitSpelling } from "../shared/quantities.js";
+import { parseIngredient } from "../shared/ingredients.js";
 
-// Backend policy: keep the writer's unit (lowercased, singular) and never
-// convert a bare cup or spoon; the household convention is not settled.
-export function parseIngredient(line) {
-  const parts = splitIngredientLine(line);
-  const base = {
-    name: parts.original || "Unclear ingredient",
-    quantity: null,
-    unit: "",
-    original_text: line,
-    preparation: "",
-  };
-  if (parts.quantity === null || parts.quantity > 1e9) return base;
-  return {
-    ...base,
-    name: parts.name,
-    quantity: parts.quantity,
-    unit: unitSpelling(parts.unitToken),
-    preparation: parts.preparation,
-  };
-}
+export { parseIngredient };
 
 // Conservative extraction: keep the entire source and never invent yield,
 // times, ingredients or instructions when headings cannot be recognized.
