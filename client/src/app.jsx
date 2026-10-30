@@ -16,6 +16,8 @@ import { Recipe } from "./pages/recipe.jsx";
 import { Meal } from "./pages/meal.jsx";
 import { Add, Idea, Paste, Photo } from "./pages/add.jsx";
 import { Editor } from "./pages/editor.jsx";
+import { Cook, Finish } from "./pages/cook.jsx";
+import { watchTimers } from "./lib/cooking.js";
 
 const named = (kind, id, fallback) => record(kind, id)?.data.title ?? fallback;
 
@@ -111,6 +113,17 @@ function pageFor([first = "week", second, third, fourth]) {
       page: <ShopFor kind={third} id={fourth} />,
     };
   if (first === "household") return { title: "Household", page: <Household /> };
+  if (first === "cook" && second && third === "done" && !fourth)
+    return {
+      title: `Finish cooking · ${named("session", second, "Cooking")}`,
+      page: <Finish id={second} />,
+    };
+  if (first === "cook" && second && !third)
+    return {
+      title: `Cooking · ${named("session", second, "Cooking")}`,
+      page: <Cook id={second} />,
+      full: true,
+    };
   return { title: "Not found", page: <NotFound /> };
 }
 
@@ -132,7 +145,7 @@ function NotFound() {
 }
 
 function Kitchen() {
-  const { title, page } = pageFor(route.value);
+  const { title, page, full } = pageFor(route.value);
   const key = route.value.join("/");
   const shown = useRef(null);
 
@@ -151,9 +164,13 @@ function Kitchen() {
   useEffect(() => {
     document.title = `${title} · Kooks`;
   }, [title]);
+  useEffect(watchTimers, []);
 
   // Keyed by address, so one recipe's servings never carry over to the next.
-  return (
+  // Cooking fills the screen, without the navigation.
+  return full ? (
+    <Fragment key={key}>{page}</Fragment>
+  ) : (
     <Shell>
       <Fragment key={key}>{page}</Fragment>
     </Shell>

@@ -30,6 +30,7 @@ import {
 import { Art } from "../ui/tile.jsx";
 import { Empty, PageHeader } from "../ui/page.jsx";
 import { Icon } from "../ui/icon.jsx";
+import { CookButton } from "../ui/cook-button.jsx";
 
 const back = (
   <a class="back" href="#/recipes">
@@ -113,7 +114,7 @@ function Facts({ d }) {
   );
 }
 
-function LastTime({ notes }) {
+export function LastTime({ notes }) {
   const last = notes[0];
   if (!last) return null;
   const n = last.data;
@@ -336,13 +337,11 @@ export function Recipe({ id }) {
           <Icon icon={ShoppingBasket} />
           Add to groceries
         </a>
-        <a
-          class="btn btn-primary"
-          href={`#/week/when/recipe/${encodeURIComponent(id)}`}
-        >
+        <a class="btn" href={`#/week/when/recipe/${encodeURIComponent(id)}`}>
           <Icon icon={CalendarPlus} />
           Add to the week
         </a>
+        <CookButton source={{ kind: "recipe", id }} primary />
       </PageHeader>
       <Facts d={d} />
       <LastTime notes={memories(r)} />

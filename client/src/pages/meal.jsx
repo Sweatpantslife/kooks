@@ -4,6 +4,7 @@ import { metaOf } from "../lib/kitchen.js";
 import { PageHeader } from "../ui/page.jsx";
 import { Tile } from "../ui/tile.jsx";
 import { Icon } from "../ui/icon.jsx";
+import { CookButton } from "../ui/cook-button.jsx";
 import { Missing } from "./recipe.jsx";
 
 // A meal is dishes cooked together: a main, a side, a salad.
@@ -25,13 +26,11 @@ export function Meal({ id }) {
           <Icon icon={ShoppingBasket} />
           Add to groceries
         </a>
-        <a
-          class="btn btn-primary"
-          href={`#/week/when/meal/${encodeURIComponent(id)}`}
-        >
+        <a class="btn" href={`#/week/when/meal/${encodeURIComponent(id)}`}>
           <Icon icon={CalendarPlus} />
           Add to the week
         </a>
+        <CookButton source={{ kind: "meal", id }} primary />
       </PageHeader>
       {m.data.notes && <p class="lede preline">{m.data.notes}</p>}
       <section aria-labelledby="dishes" class="stack">

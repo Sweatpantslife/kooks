@@ -26,6 +26,7 @@ import { toast } from "../lib/toast.js";
 import { Empty, PageHeader } from "../ui/page.jsx";
 import { Art } from "../ui/tile.jsx";
 import { Icon } from "../ui/icon.jsx";
+import { CookButton } from "../ui/cook-button.jsx";
 
 // Meals in the order a day is eaten; anything else the household calls a
 // meal comes after, in its own order.
@@ -67,10 +68,12 @@ function planned(day) {
     .sort((a, b) => slotOrder(a.data.slot) - slotOrder(b.data.slot));
 }
 
+// Leftovers set aside for a day. Portions already eaten, tonight's own
+// share of a dish among them, are not plans.
 function leftovers(day) {
   return records("batch").flatMap((b) =>
     (b.data.allocations ?? [])
-      .filter((a) => a.date === day)
+      .filter((a) => a.date === day && a.status !== "eaten")
       .map((a) => ({ ...a, batch: b })),
   );
 }
@@ -127,6 +130,13 @@ function PlanItem({ plan, day }) {
         {details && <span class="muted small">{details}</span>}
       </span>
       <span class="plan-actions">
+        {day === localDay() && (
+          <CookButton
+            source={{ kind: "plan", id: plan.id }}
+            name={`Cook ${d.title}`}
+            compact
+          />
+        )}
         <a
           class="btn btn-quiet btn-small"
           href={`#/week/move/${encodeURIComponent(plan.id)}`}
@@ -177,7 +187,6 @@ function Day({ day, heading: H = "h2" }) {
                     {[a.slot, plural(a.portions, "portion")]
                       .filter(Boolean)
                       .join(" · ")}
-                    {a.status === "eaten" ? " · Eaten" : ""}
                   </span>
                 </span>
               </li>

@@ -119,3 +119,19 @@ test("groceries read as a shop sells them and say what they are for", async () =
   assert.equal(nameKey("Lemons"), nameKey("lemon"));
   assert.equal(nameKey(" Bay  Leaves "), "bay leaf");
 });
+
+test("cooking timers read as a kitchen clock does", async () => {
+  const { clock, minutesLabel, secondsLeft } =
+    await import("../client/src/lib/cooking.js");
+  assert.equal(clock(545), "9:05");
+  assert.equal(clock(59), "0:59");
+  assert.equal(clock(3720), "1:02:00");
+  assert.equal(minutesLabel(600), "10 min");
+  assert.equal(minutesLabel(20), "1 min");
+  assert.equal(minutesLabel(3600), "1 hr");
+  assert.equal(minutesLabel(5400), "1 hr 30 min");
+  const deadline = new Date(Date.UTC(2026, 9, 30, 18, 0, 0)).toISOString();
+  const at = Date.parse(deadline);
+  assert.equal(secondsLeft({ deadline }, at - 1500), 2);
+  assert.equal(secondsLeft({ deadline }, at + 5000), 0);
+});

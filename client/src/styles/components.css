@@ -1531,3 +1531,221 @@ a.plan-title:hover {
   background: var(--saffron-soft);
   color: var(--saffron-ink);
 }
+
+/* ---------- Cooking ---------- */
+/* At the top of every page, in the flow: a bar that stayed on screen
+   would cover part of whatever scrolled under it. */
+.now-cooking {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-radius: var(--radius-md);
+  background: var(--ink);
+  color: var(--ground);
+  box-shadow: var(--shadow);
+  text-decoration: none;
+}
+.now-cooking:hover {
+  color: var(--ground);
+}
+.now-cooking-text {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 12px;
+  min-width: 0;
+}
+.now-cooking-label {
+  flex-basis: 100%;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  opacity: 0.85;
+}
+.now-cooking-title {
+  font-weight: 700;
+}
+.now-cooking-status {
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}
+.cook {
+  min-height: 100dvh;
+  background: var(--ground);
+}
+.cook:focus {
+  outline: none;
+}
+.cook-bar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px var(--gutter);
+  border-block-end: 1px solid var(--line);
+  background: var(--ground);
+}
+.cook-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cook-page {
+  display: grid;
+  gap: 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px var(--gutter) 48px;
+}
+@media (min-width: 1000px) {
+  .cook-page {
+    grid-template-columns: minmax(0, 1fr) 380px;
+    align-items: start;
+    gap: 32px;
+    padding: 32px 40px 48px;
+  }
+  .cook-page > .chips {
+    grid-column: 1 / -1;
+  }
+  .cook-side {
+    position: sticky;
+    inset-block-start: 80px;
+  }
+}
+.cook-step {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+}
+.cook-step h1 {
+  font-size: var(--text-xl);
+}
+.cook-text {
+  font-size: clamp(1.375rem, 1.1rem + 1.2vw, 2rem);
+  font-weight: 500;
+  line-height: 1.4;
+  max-width: 36ch;
+}
+.cook-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  width: 100%;
+  margin-block-start: 8px;
+}
+.btn-large {
+  min-height: 56px;
+  padding: 0 24px;
+  font-size: var(--text-md);
+}
+.cook-nav .btn-primary {
+  flex: 1;
+  max-width: 320px;
+}
+.cook-side {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.cook-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+.cook-card h2 {
+  font-size: var(--text-lg);
+}
+.timers {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.timer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 4px 4px 12px;
+  border-radius: var(--radius-md);
+  background: var(--sunken);
+}
+.timer-label {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+}
+.timer-clock {
+  font-size: var(--text-lg);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+.timer-done {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+.cook-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cook-steps-jump {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+  padding: 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink);
+  text-align: start;
+}
+.cook-steps-jump:hover {
+  background: var(--sunken);
+}
+.cook-steps-jump[aria-current="step"] {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+.cook-steps-number {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  font-weight: 700;
+}
+.cook-steps-done .cook-steps-jump {
+  color: var(--muted);
+}
+.cook-steps-done .cook-steps-number {
+  color: var(--herb);
+}
+/* A floated legend sits inside its card instead of on the border. */
+.card-legend {
+  float: inline-start;
+  width: 100%;
+  padding: 0;
+  font-family: var(--font-title);
+  font-size: var(--text-lg);
+  font-weight: 700;
+}
+.input-short {
+  width: 8em;
+}
