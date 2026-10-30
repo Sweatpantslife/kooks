@@ -11,6 +11,7 @@ import {
 } from "lucide";
 import { parseIngredient } from "../../../shared/ingredients.js";
 import { change, record, records, undoAction } from "../lib/store.js";
+import { waiting } from "../lib/outbox.js";
 import { leave } from "../lib/router.js";
 import { toast } from "../lib/toast.js";
 import {
@@ -268,8 +269,9 @@ function Sources({ list }) {
 export function Groceries() {
   const lists = records("shopping");
   const list = theList();
+  const held = (list && waiting.value[list.id]) ?? {};
   const rows = (list?.items ?? []).flatMap((row) => {
-    const now = pending.value[row.id];
+    const now = pending.value[row.id] ?? held[row.id];
     if (now === "gone") return [];
     return [now === undefined ? row : { ...row, checked: now }];
   });

@@ -1540,6 +1540,22 @@ a.plan-title:hover {
   color: var(--saffron-ink);
 }
 
+/* ---------- Out of reach ---------- */
+.offline {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  background: var(--saffron-soft);
+  color: var(--saffron-ink);
+  font-size: var(--text-sm);
+}
+.offline svg {
+  flex: none;
+  margin-block-start: 2px;
+}
+
 /* ---------- Cooking ---------- */
 /* At the top of every page, in the flow: a bar that stayed on screen
    would cover part of whatever scrolled under it. */

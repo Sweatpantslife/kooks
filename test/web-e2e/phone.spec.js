@@ -126,3 +126,84 @@ test("on a phone, a member finds the kitchen, signs in with an emailed code, and
   await expect(title(page)).toHaveText("Where is your kitchen?");
   expect(await stored(page, "kooks.kitchen")).toBeNull();
 });
+
+// Signed in on the phone, as the test above does it.
+async function signIn(page, email) {
+  await page.goto(`${kitchen}/`);
+  await page.getByLabel("Kitchen address").fill(kitchen);
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByLabel("Code").fill(await emailCode(page, email));
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(title(page)).toHaveText("This week");
+}
+
+const copies = (page) =>
+  page.evaluate(
+    () =>
+      new Promise((resolve, reject) => {
+        const open = indexedDB.open("kooks", 1);
+        open.onupgradeneeded = () => open.result.createObjectStore("copies");
+        open.onerror = () => reject(open.error);
+        open.onsuccess = () => {
+          const count = open.result
+            .transaction("copies")
+            .objectStore("copies")
+            .count();
+          count.onsuccess = () => {
+            open.result.close();
+            resolve(count.result);
+          };
+        };
+      }),
+  );
+
+test("out of the kitchen's reach, a phone shows its copy, keeps the ticks made and sends them when the kitchen answers", async ({
+  page,
+  request,
+}) => {
+  await signIn(page, "cook@example.test");
+  const grocery = `limes ${Date.now()}`;
+  await page.getByRole("link", { name: "Groceries" }).first().click();
+  const add = page.getByRole("textbox", { name: "Add to the list" });
+  await add.fill(`3 ${grocery}`);
+  await add.press("Enter");
+  const box = page.getByRole("checkbox", { name: new RegExp(`^${grocery}`) });
+  await expect(box).not.toBeChecked();
+  // The copy is written a moment after the kitchen last changed.
+  await expect.poll(() => copies(page)).toBe(1);
+
+  // The kitchen stops answering: the tick stays, and the page says why.
+  const away = (route) => route.abort("internetdisconnected");
+  await page.route(`${kitchen}/api/**`, away);
+  await box.check();
+  const bar = page.getByRole("status").filter({ hasText: "Can’t reach" });
+  await expect(bar).toContainText(
+    "1 tick on the grocery list will go when it answers.",
+  );
+  await expect(box).toBeChecked();
+  expect(await scan(page, "Groceries, out of reach")).toEqual([]);
+
+  // Started again without the kitchen, the phone shows its copy.
+  await page.reload();
+  await expect(title(page)).toHaveText("To buy");
+  await expect(bar).toContainText("This is how it was at");
+  await expect(box).toBeChecked();
+
+  // The kitchen answers again: the bar goes and the tick is sent.
+  await page.unroute(`${kitchen}/api/**`, away);
+  await expect(bar).toHaveCount(0);
+  await expect(box).toBeChecked();
+  expect(await stored(page, "kooks.outbox")).toBeNull();
+  const state = await request.get(`${kitchen}/api/state`, {
+    headers: { Authorization: `Bearer ${await stored(page, "kooks.device")}` },
+  });
+  const list = (await state.json()).records.shopping[0];
+  expect(list.items.find((row) => row.name === grocery).checked).toBe(true);
+
+  // Signing out leaves no copy of the kitchen on the phone.
+  await page.getByRole("link", { name: "Household" }).click();
+  await page.getByRole("link", { name: /^Sign-in/ }).click();
+  await page.getByRole("button", { name: "Sign out", exact: true }).click();
+  await expect(title(page)).toHaveText("Welcome to your kitchen.");
+  await expect.poll(() => copies(page)).toBe(0);
+});

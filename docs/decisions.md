@@ -7,7 +7,7 @@ Reconciled October 9, 2026 against the source. See [the developer handoff](hando
 - Household cooking is the product scope: recipe capture, editing, portions, meals, shopping, equipment, guided cooking, and cooking notes.
 - Capacitor is selected for both iOS and Android. Earlier proposals treating platform choice as undecided are historical.
 - Node.js and SQLite implement the local MCP backend and persistent browser app. They share validated domain actions and a cookbook.
-- The phone app is the same client as the browser's, packaged with Capacitor, and works on the household's kitchen: it signs in with an emailed six-digit code and keeps a device token, because an emailed link opens in the browser and a passkey belongs to the kitchen's web address. The previous phone app's separate cookbook, data model and backup format are retired; the recipes written in it come into the kitchen once, when the member asks.
+- The phone app is the same client as the browser's, packaged with Capacitor, and works on the household's kitchen: it signs in with an emailed six-digit code and keeps a device token, because an emailed link opens in the browser and a passkey belongs to the kitchen's web address. The previous phone app's separate cookbook, data model and backup format are retired; the recipes written in it come into the kitchen once, when the member asks. Without a connection the phone shows a read-only copy of the kitchen and keeps grocery ticks until it answers: a tick only sets "in the basket" or not, so it can be sent late without overwriting anyone.
 - All eight household additions are implemented in the browser/MCP layer: pantry suggestions, leftovers/batching, cooking memory/variants, effort filters, taste profiles, shared tasks/timer ownership, cost estimates, and reviewed photo imports. Older deferrals of these additions are superseded.
 - Backup/restore and reversible action history exist in the backend. Prototype-era statements saying no backups/history exist do not describe the present code.
 - Logic both clients need lives in `shared/` as dependency-free modules; image bytes live outside record documents and history (database schema 2).
@@ -22,7 +22,7 @@ Reconciled October 9, 2026 against the source. See [the developer handoff](hando
 
 ## Open decisions and unfinished delivery
 
-- Decide what the phone keeps for use without a connection, and how changes made offline meet changes made meanwhile.
+- Decide which changes besides grocery ticks a phone keeps without a connection, and how each meets changes made meanwhile.
 - Decide how members join beyond the configured address list (invitations from inside the app), whether taste profiles should link to sign-in identities, and hosting for more than one household on a server.
 - Confirm the first phone release scope.
 - Select a supported OpenAI/Claude integration and credential boundary. Account login, API access, and subscription entitlements are distinct; no API-key fallback or billing policy is assumed.

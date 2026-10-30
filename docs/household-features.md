@@ -64,7 +64,7 @@ To use other devices, list the household's addresses in `KOOKS_HOUSEHOLD_EMAILS`
 
 Each member signs in with a one-time link sent to their address, then adds a passkey so the next sign-in is a fingerprint, face or screen lock. Passkeys need HTTPS or localhost, so a plain-HTTP LAN address offers email links only. Sessions last through 30 days of use, survive restarts, and end on sign-out or when an address leaves the list. Setting `KOOKS_HOUSEHOLD_EMAILS` on the loopback server also turns sign-in on, which is how to try the flow locally with an outbox. Sign-in state lives in `auth_` tables beside the cookbook and is left out of portable backups.
 
-Members are known by email address; person profiles remain taste preferences and task assignments, not accounts. The server must remain running; neither browsers nor the phone app have offline storage or cloud synchronization yet.
+Members are known by email address; person profiles remain taste preferences and task assignments, not accounts. The server must remain running. The phone app shows its last copy of the kitchen and keeps grocery ticks while the kitchen is out of reach; browsers need the kitchen, and there is no cloud synchronization.
 
 ## Data, compatibility and checks
 
