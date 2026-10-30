@@ -10,14 +10,15 @@ import {
   Minus,
   Pencil,
   Plus,
+  ShoppingBasket,
   Timer,
   UtensilsCrossed,
 } from "lucide";
 import { courseLabel, dietLabel } from "../../../shared/taxonomy.js";
 import { displayLinks, describeLink } from "../../../shared/links.js";
-import { normalize } from "../../../shared/quantities.js";
 import { record, records } from "../lib/store.js";
 import { dateLabel, plural } from "../lib/format.js";
+import { nameKey } from "../lib/aisles.js";
 import {
   amount,
   atHome,
@@ -171,7 +172,7 @@ function Ingredients({ d }) {
               <span>
                 {i.name}
                 {i.preparation && <span class="muted">, {i.preparation}</span>}
-                {home.has(normalize(i.name)) && (
+                {home.has(nameKey(i.name)) && (
                   <span class="badge badge-herb">At home</span>
                 )}
               </span>
@@ -327,6 +328,13 @@ export function Recipe({ id }) {
         <a class="btn" href={`#/recipes/${encodeURIComponent(id)}/edit`}>
           <Icon icon={Pencil} />
           Edit
+        </a>
+        <a
+          class="btn"
+          href={`#/groceries/add/recipe/${encodeURIComponent(id)}`}
+        >
+          <Icon icon={ShoppingBasket} />
+          Add to groceries
         </a>
         <a
           class="btn btn-primary"

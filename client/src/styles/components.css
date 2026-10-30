@@ -1370,3 +1370,164 @@ a.plan-title:hover {
 .earlier .days {
   gap: 4px;
 }
+
+/* ---------- Groceries ---------- */
+.subnav {
+  display: inline-flex;
+  width: fit-content;
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--sunken);
+}
+.subnav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: var(--radius-pill);
+  color: var(--muted);
+  font-weight: 600;
+  text-decoration: none;
+}
+.subnav a:hover {
+  color: var(--ink);
+}
+.subnav a[aria-current="page"] {
+  background: var(--raised);
+  color: var(--ink);
+  box-shadow: var(--shadow);
+}
+.quick-add {
+  display: flex;
+  gap: 8px;
+}
+.quick-add .input {
+  flex: 1;
+  min-width: 0;
+}
+.aisle {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.aisle h2 {
+  color: var(--muted);
+  font-family: var(--font-text);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.groceries {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.grocery {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: var(--target);
+  padding-block: 4px;
+  border-block-end: 1px solid var(--line);
+}
+.grocery:last-child {
+  border-block-end: 0;
+}
+.grocery input,
+.shop-picks input {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  accent-color: var(--herb);
+}
+.grocery-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+.grocery-name {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding-block: 8px 2px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.grocery-text .small {
+  padding-block-end: 6px;
+}
+.grocery-amount {
+  color: var(--muted);
+  font-weight: 500;
+}
+.grocery-done .grocery-name {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+.basket-done {
+  align-self: flex-start;
+}
+.shop-dish {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.shop-dish-title {
+  padding: 0;
+  font-weight: 700;
+}
+.shop-picks {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.shop-picks li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: var(--target);
+}
+.shop-picks label {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 2px 12px;
+  padding-block: 8px;
+  cursor: pointer;
+}
+/* The choice stays in reach while the list scrolls under it: above the tab
+   bar on phones, at the bottom of the window on wide screens. */
+.shop-footer {
+  position: sticky;
+  inset-block-end: calc(var(--tabbar) + env(safe-area-inset-bottom) + 8px);
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding: 12px 12px 12px 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--raised);
+  box-shadow: var(--shadow);
+}
+@media (min-width: 840px) {
+  .shop-footer {
+    inset-block-end: 16px;
+  }
+}
+.btn-quiet[aria-pressed="true"] {
+  background: var(--saffron-soft);
+  color: var(--saffron-ink);
+}
