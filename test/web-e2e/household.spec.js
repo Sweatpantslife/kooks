@@ -217,6 +217,10 @@ test("cooking together records progress, tasks and timers, then leftovers reach 
   await expect(page.getByText("0 of 2 steps complete")).toBeVisible();
   await page.getByRole("button", { name: "Done, next step" }).click();
   await expect(page.getByText("1 of 2 steps complete")).toBeVisible();
+  // The new step changes beside the button, so it is read out.
+  await expect(page.locator("#announcer")).toHaveText(
+    `${dish.title}, step 2 of 2: Simmer until tender.`,
+  );
   await page.getByLabel("New task").fill("Chop the herbs");
   await page.getByLabel("Who’s doing it?").selectOption({ label: cook });
   await page.getByRole("button", { name: "Add cooking task" }).click();

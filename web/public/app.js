@@ -2788,23 +2788,30 @@ document.addEventListener("click", async (event) => {
         a === "step-next"
           ? [...new Set([...p.completed_steps, p.current_step])]
           : p.completed_steps;
+      const step =
+        a === "step-jump"
+          ? Number(el.dataset.step)
+          : Math.max(
+              0,
+              Math.min(
+                dish.steps.length - 1,
+                p.current_step + (a === "step-next" ? 1 : -1),
+              ),
+            );
       await write("cooking_progress", {
         id,
         expected_version: s.version,
         dish_id: dish.dish_id,
-        current_step:
-          a === "step-jump"
-            ? Number(el.dataset.step)
-            : Math.max(
-                0,
-                Math.min(
-                  dish.steps.length - 1,
-                  p.current_step + (a === "step-next" ? 1 : -1),
-                ),
-              ),
+        current_step: step,
         completed_steps: completed,
       });
       await afterSave("Cooking progress saved.");
+      // The step changes beside the button that moved it; read it out.
+      announce(
+        a === "step-next" && step === p.current_step
+          ? `${dish.title}: ${completed.length} of ${plural(dish.steps.length, "step")} complete.`
+          : `${dish.title}, step ${step + 1} of ${dish.steps.length}: ${dish.steps[step].text}`,
+      );
     } else if (a === "task-remove") {
       const s = record("session", id);
       await write("cooking_task_save", {

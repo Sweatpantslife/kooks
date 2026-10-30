@@ -358,3 +358,32 @@ test("buttons that redraw the page keep the focus, and filters announce what the
   await expect(count).toHaveText(String(before + 2));
   await expect(more).toBeFocused();
 });
+
+test("cooking reads each new step out, keeps the keyboard on the footer and keeps messages off it", async ({
+  page,
+}) => {
+  await nav(page, "Recipes").click();
+  await openRecipe(page, "Lemon & chickpea orzo");
+  await action(page, "Cook").click();
+  const next = page.getByRole("button", { name: "Next step" });
+  await next.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByText("Step 2 of 4", { exact: true })).toBeVisible();
+  await expect(page.locator("#announcer")).toHaveText(
+    /^Step 2 of 4: Toast the orzo\. Warm the olive oil/,
+  );
+  await expect(next).toBeFocused();
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Enter");
+  // On the last step Next becomes Finish, and the keyboard lands on it.
+  await expect(
+    page.getByRole("button", { name: "Finish cooking" }),
+  ).toBeFocused();
+  // A message (here, from adding a timer) sits above Previous and Finish.
+  await page.getByRole("button", { name: "Add a 5-minute timer" }).click();
+  const toast = page.locator("#toast");
+  await expect(toast).toHaveText(/Timer started/);
+  const message = await toast.boundingBox();
+  const footer = await page.locator(".cook-footer").boundingBox();
+  expect(message.y + message.height).toBeLessThanOrEqual(footer.y);
+});
