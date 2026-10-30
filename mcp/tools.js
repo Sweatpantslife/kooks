@@ -495,7 +495,7 @@ export function createTools(store) {
           return store.read(() => definition.handler(args, prepared));
         return store.mutate(definition.name, args, () => {
           const result = definition.handler(args, prepared);
-          kooks.validateRelations();
+          kooks.validateRelations(store.changes);
           return result;
         });
       };

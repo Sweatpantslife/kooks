@@ -48,9 +48,14 @@ export function splitAsset(data) {
   };
 }
 
+// Rows in the order SQLite sorts their TEXT ids: by UTF-8 bytes.
+const byId = (a, b) => Buffer.compare(Buffer.from(a.id), Buffer.from(b.id));
+const active = (record) => !record.archived;
+
 // SQLite serializes transactions across MCP processes. The domain layer never
 // awaits while a transaction is open, so reads and writes form one atomic action.
 export class Store {
+  #statements = new Map();
   constructor(path) {
     if (path !== ":memory:")
       mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
@@ -83,6 +88,11 @@ export class Store {
           kind TEXT NOT NULL, id TEXT NOT NULL, bytes BLOB NOT NULL,
           PRIMARY KEY (kind, id)
         );
+        -- Saves check a recipe's variants; this finds them without reading
+        -- the whole cookbook. An older server simply keeps it up to date.
+        CREATE INDEX IF NOT EXISTS recipe_originals
+          ON records(json_extract(document, '$.data.original_recipe_id'))
+          WHERE kind = 'recipe';
       `);
       // Re-read inside the transaction: another process may have upgraded
       // the file between the first check and the lock.
@@ -145,10 +155,19 @@ export class Store {
     }
     return moved;
   }
+  // Prepared once per connection: reads and validation run these often.
+  #query(sql) {
+    let statement = this.#statements.get(sql);
+    if (!statement)
+      this.#statements.set(sql, (statement = this.db.prepare(sql)));
+    return statement;
+  }
   #storeBytes(kind, id, bytes) {
-    this.db
-      .prepare("INSERT INTO blobs(kind, id, bytes) VALUES (?, ?, ?)")
-      .run(kind, id, bytes);
+    this.#query("INSERT INTO blobs(kind, id, bytes) VALUES (?, ?, ?)").run(
+      kind,
+      id,
+      bytes,
+    );
   }
   close() {
     this.db.close();
@@ -165,9 +184,9 @@ export class Store {
     }
   }
   get(kind, id, includeArchived = false) {
-    const row = this.db
-      .prepare("SELECT document FROM records WHERE kind = ? AND id = ?")
-      .get(kind, id);
+    const row = this.#query(
+      "SELECT document FROM records WHERE kind = ? AND id = ?",
+    ).get(kind, id);
     requireThat(row, "NOT_FOUND", `${kind} ${id} does not exist.`);
     const record = JSON.parse(row.document);
     requireThat(
@@ -178,11 +197,36 @@ export class Store {
     return record;
   }
   list(kind, includeArchived = false) {
-    return this.db
-      .prepare("SELECT document FROM records WHERE kind = ? ORDER BY id")
+    return this.#query(
+      "SELECT document FROM records WHERE kind = ? ORDER BY id",
+    )
       .all(kind)
       .map((row) => JSON.parse(row.document))
       .filter((record) => includeArchived || !record.archived);
+  }
+  // Active records of a kind whose document holds this string value, in id
+  // order. Callers confirm the reference; the text match only spares them
+  // parsing every record of the kind.
+  mentioning(kind, value) {
+    return this.#query(
+      "SELECT document FROM records WHERE kind = ? AND instr(document, ?) > 0 ORDER BY id",
+    )
+      .all(kind, JSON.stringify(value))
+      .map((row) => JSON.parse(row.document))
+      .filter(active);
+  }
+  // A recipe and the active recipes that name it as their original, in id
+  // order. The recipe_originals index keeps this independent of cookbook size.
+  recipeFamily(id) {
+    return this.#query(
+      `SELECT id, document FROM records WHERE kind = 'recipe' AND id = ?
+       UNION SELECT id, document FROM records
+       WHERE kind = 'recipe' AND json_extract(document, '$.data.original_recipe_id') = ?`,
+    )
+      .all(id, id)
+      .sort(byId)
+      .map((row) => JSON.parse(row.document))
+      .filter(active);
   }
   all() {
     return this.db
@@ -201,9 +245,9 @@ export class Store {
   }
   // The stored bytes of an asset, as a zero-copy Buffer view.
   blob(kind, id) {
-    const row = this.db
-      .prepare("SELECT bytes FROM blobs WHERE kind = ? AND id = ?")
-      .get(kind, id);
+    const row = this.#query(
+      "SELECT bytes FROM blobs WHERE kind = ? AND id = ?",
+    ).get(kind, id);
     requireThat(row, "NOT_FOUND", `${kind} ${id} has no stored bytes.`);
     return Buffer.from(
       row.bytes.buffer,
@@ -223,9 +267,11 @@ export class Store {
       this.#storeBytes(kind, record.id, bytes);
       stored = { ...record, data };
     }
-    this.db
-      .prepare("INSERT INTO records(kind, id, document) VALUES (?, ?, ?)")
-      .run(kind, stored.id, JSON.stringify(stored));
+    this.#query("INSERT INTO records(kind, id, document) VALUES (?, ?, ?)").run(
+      kind,
+      stored.id,
+      JSON.stringify(stored),
+    );
     this.changes.push({ kind, id: stored.id, before: null, after: stored });
     return stored;
   }
@@ -270,11 +316,9 @@ export class Store {
       updated_at: now,
       data,
     };
-    this.db
-      .prepare(
-        "INSERT OR REPLACE INTO records(kind, id, document) VALUES (?, ?, ?)",
-      )
-      .run(kind, id, JSON.stringify(record));
+    this.#query(
+      "INSERT OR REPLACE INTO records(kind, id, document) VALUES (?, ?, ?)",
+    ).run(kind, id, JSON.stringify(record));
     this.changes.push({ kind, id, before, after: record });
     return record;
   }
@@ -282,9 +326,9 @@ export class Store {
     const fingerprint = digest({ action, args });
     this.db.exec("BEGIN IMMEDIATE");
     try {
-      const prior = this.db
-        .prepare("SELECT fingerprint, result FROM actions WHERE request_id = ?")
-        .get(args.request_id);
+      const prior = this.#query(
+        "SELECT fingerprint, result FROM actions WHERE request_id = ?",
+      ).get(args.request_id);
       if (prior) {
         requireThat(
           prior.fingerprint === fingerprint,
@@ -298,19 +342,17 @@ export class Store {
       const data = fn();
       const actionId = randomUUID();
       const result = { ...data, action_id: actionId, replayed: false };
-      this.db
-        .prepare(
-          "INSERT INTO actions(id, request_id, fingerprint, action, created_at, changes, result) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        )
-        .run(
-          actionId,
-          args.request_id,
-          fingerprint,
-          action,
-          new Date().toISOString(),
-          JSON.stringify(this.changes),
-          JSON.stringify(result),
-        );
+      this.#query(
+        "INSERT INTO actions(id, request_id, fingerprint, action, created_at, changes, result) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      ).run(
+        actionId,
+        args.request_id,
+        fingerprint,
+        action,
+        new Date().toISOString(),
+        JSON.stringify(this.changes),
+        JSON.stringify(result),
+      );
       this.db.exec("COMMIT");
       return result;
     } catch (error) {
