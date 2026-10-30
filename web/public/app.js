@@ -5,6 +5,7 @@ import {
   parseLinkLines,
 } from "/shared/links.js";
 import { icon } from "/shared/icons.js";
+import { unitLabel } from "/shared/quantities.js";
 import {
   courseLabel,
   courses,
@@ -56,7 +57,7 @@ const plural = (n, word, words = `${word}s`) =>
 const amount = (ingredient) =>
   ingredient.quantity === null
     ? "As written"
-    : `${num(ingredient.quantity)} ${ingredient.unit ?? ""}`.trim();
+    : `${num(ingredient.quantity)} ${unitLabel(ingredient.unit ?? "", Number(ingredient.quantity.toFixed(3)))}`.trim();
 const inputNumber = (value) =>
   value === "" || value === null ? null : Number(value);
 const comma = (value) =>
