@@ -502,6 +502,16 @@ async function boot() {
       );
     }, 500);
   }
+  // Moving between cooking steps changes the page beside the button that
+  // did it; read the new step out.
+  function announceStep() {
+    const s = state.session,
+      r = s.snapshot,
+      step = r.steps[s.step];
+    announce(
+      `${s.dishes ? `${r.title}, step` : "Step"} ${s.step + 1} of ${r.steps.length}: ${step.title}. ${scaledText(step.text, s.units)}`,
+    );
+  }
   function libraryCards() {
     const term = state.query.trim().toLowerCase();
     const found = allRecipes().filter(
@@ -1241,16 +1251,19 @@ async function boot() {
         state.selectedMeal = state.session.mealId;
         state.view = "meal";
       } else state.view = "detail";
-    } else if (a === "cook-next")
+    } else if (a === "cook-next") {
       state.session.step = Math.min(
         state.session.step + 1,
         state.session.snapshot.steps.length - 1,
       );
-    else if (a === "cook-back")
+      announceStep();
+    } else if (a === "cook-back") {
       state.session.step = Math.max(0, state.session.step - 1);
-    else if (a === "jump-step")
+      announceStep();
+    } else if (a === "jump-step") {
       state.session.step = Number(target.dataset.step);
-    else if (a === "start-timer") {
+      announceStep();
+    } else if (a === "start-timer") {
       const s = state.session,
         step = s.snapshot.steps[s.step];
       s.timers.push(newTimer(step.title, step.mins, s.step));
@@ -1398,6 +1411,11 @@ async function boot() {
       noteMessage = "Meal creation undone.";
     }
     render();
+    // On the last step Next becomes Finish; keep the keyboard on it.
+    if (a === "cook-next" && document.activeElement === main)
+      main
+        .querySelector('[data-action="finish-cook"]')
+        ?.focus({ preventScroll: true });
     save();
   });
   root.addEventListener("input", (event) => {
