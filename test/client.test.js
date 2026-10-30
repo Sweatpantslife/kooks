@@ -36,3 +36,23 @@ test("the redesigned app's weeks start on Monday", () => {
   assert.equal(addDays("2026-12-31", 1), "2027-01-01");
   assert.equal(localDay(new Date(2026, 2, 29, 23, 30)), "2026-03-29");
 });
+
+test("the redesigned app writes amounts the way a cook does", async () => {
+  const { amount, minutes } = await import("../client/src/lib/kitchen.js");
+  const i = (quantity, unit = "") => ({ quantity, unit });
+  assert.equal(amount(i(0.5, "cup")), "½ cup");
+  assert.equal(amount(i(0.5, "cup"), 1.25), "⅝ cup");
+  assert.equal(amount(i(2, "tbsp"), 1.25), "2½ tbsp");
+  assert.equal(amount(i(1, "cup"), 2), "2 cups");
+  assert.equal(amount(i(1, "clove"), 3), "3 cloves");
+  assert.equal(amount(i(1), 1 / 3), "⅓");
+  // Grams and millilitres stay decimal, rounded to what a scale shows.
+  assert.equal(amount(i(250, "g"), 1.25), "313 g");
+  assert.equal(amount(i(7.5, "g")), "7.5 g");
+  assert.equal(amount(i(0.25, "l")), "0.25 l");
+  assert.equal(amount(i(0.3, "cup")), "0.3 cup");
+  assert.equal(amount(i(null, "g")), "");
+  assert.equal(minutes(25), "25 min");
+  assert.equal(minutes(60), "1 hr");
+  assert.equal(minutes(95), "1 hr 35 min");
+});
