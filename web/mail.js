@@ -56,12 +56,16 @@ export function formatMessage({ from, to, subject, text, date = new Date() }) {
   return message.endsWith("\r\n") ? message : `${message}\r\n`;
 }
 
-function openSocket({ host, port, secure, tlsOptions }) {
+const silent = () => new Error("The mail server stopped responding.");
+// Connecting and any TLS handshake get the same patience as each reply.
+function openSocket({ host, port, secure, tlsOptions, timeoutMs }) {
   return new Promise((resolve, reject) => {
     const socket = secure
       ? tls.connect({ host, port, servername: host, ...tlsOptions })
       : net.connect({ host, port });
+    socket.setTimeout(timeoutMs, () => socket.destroy(silent()));
     socket.once(secure ? "secureConnect" : "connect", () => {
+      socket.setTimeout(0);
       socket.off("error", reject);
       resolve(socket);
     });
@@ -106,7 +110,7 @@ function converse(initial, timeoutMs) {
   const attach = (next) => {
     socket = next;
     socket.setTimeout(timeoutMs, () => {
-      fail(new Error("The mail server stopped responding."));
+      fail(silent());
       socket.destroy();
     });
     socket.on("data", (chunk) => {
@@ -142,6 +146,12 @@ function converse(initial, timeoutMs) {
       return expect(codes, context);
     },
     upgrade({ host, tlsOptions }) {
+      // Anything after the server's go-ahead arrived unencrypted, so it may
+      // come from someone in between and must not pass for a later reply.
+      if (buffer || partial.length || pending.length)
+        return Promise.reject(
+          new Error("The mail server sent data before encryption began."),
+        );
       return new Promise((resolve, reject) => {
         const plain = socket;
         for (const event of ["data", "error", "close"])
@@ -152,6 +162,7 @@ function converse(initial, timeoutMs) {
           servername: host,
           ...tlsOptions,
         });
+        secure.setTimeout(timeoutMs, () => secure.destroy(silent()));
         secure.once("secureConnect", () => {
           attach(secure);
           resolve();
@@ -185,7 +196,13 @@ export async function sendSmtp({
 }) {
   if (!isEmail(to)) throw new Error("The recipient is not an email address.");
   const talk = converse(
-    await openSocket({ host, port, secure: security === "tls", tlsOptions }),
+    await openSocket({
+      host,
+      port,
+      secure: security === "tls",
+      tlsOptions,
+      timeoutMs,
+    }),
     timeoutMs,
   );
   try {

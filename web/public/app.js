@@ -460,10 +460,15 @@ function linkLine(links) {
   if (!links?.length) return "";
   return `<p class="small">Links and videos: ${links.map((l) => `<a href="${esc(l.url)}" target="_blank" rel="noreferrer">${esc(l.title || describeLink(l.url)?.site || l.url)}</a>`).join(" · ")}</p>`;
 }
+// Video players are sandboxed: they play, open their own site in a new tab
+// and go full screen, but cannot navigate this page away. The PDF reader is
+// this server's own file, and browsers refuse to show PDFs in a sandbox.
+const playerSandbox =
+  'sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-presentation allow-forms"';
 function loadEmbed(box, src = box?.dataset.src) {
   if (!box) return;
   box.dataset.loaded = "true";
-  box.innerHTML = `<iframe src="${esc(src)}" title="${esc(box.dataset.title)}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
+  box.innerHTML = `<iframe src="${esc(src)}" title="${esc(box.dataset.title)}" ${box.classList.contains("reader") ? "" : playerSandbox} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
 }
 
 // ---------- Today ----------

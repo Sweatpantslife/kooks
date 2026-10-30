@@ -357,6 +357,9 @@ export function createWebServer({
     res.setHeader("Referrer-Policy", "no-referrer");
     res.setHeader("Cache-Control", "no-store");
     res.setHeader("Content-Security-Policy", policy);
+    // Browsers that have seen the HTTPS origin never fall back to plain HTTP;
+    // subdomains are left alone, since they may be other household services.
+    if (proxied) res.setHeader("Strict-Transport-Security", "max-age=31536000");
     try {
       let url;
       try {

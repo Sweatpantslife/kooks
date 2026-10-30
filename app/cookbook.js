@@ -446,11 +446,13 @@ async function boot() {
     if (!links?.length) return "";
     return `<p class="small">Links and videos: ${links.map((l) => `<a href="${esc(l.url)}" target="_blank" rel="noreferrer">${esc(l.title || describeLink(l.url)?.site || l.url)}</a>`).join(" · ")}</p>`;
   }
+  // Video players are sandboxed: they play, open their own site in a new
+  // tab and go full screen, but cannot navigate the app away.
   function loadEmbed(target) {
     const box = target.closest(".embed");
     if (!box) return;
     box.dataset.loaded = "true";
-    box.innerHTML = `<iframe src="${esc(box.dataset.src)}" title="${esc(box.dataset.title)}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
+    box.innerHTML = `<iframe src="${esc(box.dataset.src)}" title="${esc(box.dataset.title)}" sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-presentation allow-forms" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
   }
   function shareText(r) {
     const links = (r.links || []).map((l) =>

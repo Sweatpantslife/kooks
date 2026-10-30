@@ -390,6 +390,11 @@ test("links and videos save with a recipe, play on request and round-trip throug
     "src",
     "https://player.vimeo.com/video/76979871?autoplay=1",
   );
+  // A player cannot navigate the page away, but may open its own site.
+  await expect(section.locator("iframe")).toHaveAttribute(
+    "sandbox",
+    /^(?!.*allow-top-navigation).*allow-scripts.*allow-popups-to-escape-sandbox/,
+  );
   await page.getByRole("link", { name: "Edit recipe" }).click();
   const links = page.getByLabel("Links and videos · one per line");
   await expect(links).toHaveValue(
@@ -644,6 +649,11 @@ test("techniques, ideas and books: a video technique, an idea written up as a re
   await expect(page.locator(".reader iframe")).toHaveAttribute(
     "src",
     /^\/api\/assets\/[^#]+#page=12$/,
+  );
+  // Browsers refuse to show a PDF in a sandbox; the reader is our own file.
+  await expect(page.locator(".reader iframe")).not.toHaveAttribute(
+    "sandbox",
+    /.*/,
   );
   await page.goto("/#/library");
   const card = page.locator(".card.book", { hasText: book });
