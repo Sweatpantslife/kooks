@@ -143,6 +143,12 @@ Checks:
 - `npm run test:e2e`: 49 passed. 1 is new: a link to this computer is refused on the page, with axe, and Paste is offered. `#/recipes/add/link` joins the layout check at four widths.
 - **Not exercised:** a real recipe site (the sandbox has no direct internet), and a household network's own hairpin.
 
+### The Anthropic SDK, for the assistant
+
+`@anthropic-ai/sdk` 1.3.0 joins the runtime dependencies, pinned exactly, in a pull request of its own as CONTRIBUTING asks. The assistant that follows calls Claude through it from the server, and only when the host gives the kitchen an API key. It brings seven small packages with it (`standardwebhooks`, `@stablelib/base64`, `fast-sha256`, `json-schema-to-ts`, `ts-algebra`, `@babel/runtime` and `@opentelemetry/api`); nothing loads it yet.
+
+`npm audit` finds no vulnerabilities, and `npm run format:check`, `npm run lint` and `npm test` pass unchanged.
+
 ### A failed passkey suggestion stays silent on the sign-in screen
 
 When the browser turns down the quiet passkey suggestion in the email field (no authenticator, nothing saved, or the request abandoned), both apps now say nothing, instead of putting the browser's raw message ("Resident credentials or empty 'allowCredentials' lists are not supported at this time.") in the sign-in alert, where it replaced a real reason such as "This sign-in link has expired or was already used." Only the kitchen turning down a passkey the person picked is shown. The quiet request's own failure to load its options is silent too.
