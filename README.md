@@ -47,7 +47,7 @@ Connect an MCP client to `node /absolute/path/to/kooks/mcp/index.js`; adapt [the
 
 The local server stores its cookbook in `.data/kooks.sqlite`; `KOOKS_DB_PATH` selects another location. The native app stores its own cookbook in its private app directory. Keep personal recipes, photos, exports, credentials, and logs outside version control. `.gitignore` excludes local data, configuration, backups, signing material, dependencies, and generated build outputs.
 
-The browser server binds to loopback by default and asks nobody to sign in. Sharing it beyond this computer turns sign-in on: the people listed in `KOOKS_HOUSEHOLD_EMAILS` prove their address with a one-time emailed link and then add passkeys for one-tap sign-in. See [household setup](docs/household-features.md) and [hosting](docs/hosting.md). Publishing this source repository does not deploy a running service.
+The browser server binds to loopback by default and asks nobody to sign in. Sharing it beyond this computer turns sign-in on: the people listed in `KOOKS_HOUSEHOLD_EMAILS` prove their address with a one-time emailed link and then add passkeys for one-tap sign-in. See [household setup](docs/household-features.md) and [hosting](docs/hosting.md); [.env.example](.env.example) lists every setting the servers read, with its default. Publishing this source repository does not deploy a running service.
 
 ## Code layout
 
@@ -58,6 +58,9 @@ The browser server binds to loopback by default and asks nobody to sign in. Shar
 | Guide                                                          | Purpose                                                                            |
 | -------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
 | [Developer handoff](docs/handoff.md)                           | Verified status, remaining work, entry points, next steps, and acceptance criteria |
+| [Changelog](CHANGELOG.md)                                      | What changed and how each change was verified                                      |
+| [Contributing](CONTRIBUTING.md)                                | Setup, checks, conventions and dependencies for changes                            |
+| [Security policy](SECURITY.md)                                 | How to report a vulnerability privately, and what is in scope                      |
 | [Information architecture and UX](docs/ia-ux.md)               | Navigation model, pages, flows, components, copy and accessibility for both apps   |
 | [Current decisions](docs/decisions.md)                         | Selected architecture and unresolved product decisions                             |
 | [Household features](docs/household-features.md)               | All eight additions, local sharing, OCR, and backups                               |
