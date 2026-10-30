@@ -109,6 +109,7 @@ test("browser API shares persistent actions, reports revisions and rejects stale
   const initial = await (await fetch(`${origin}/api/state`)).json();
   assert.equal(initial.sharing, false);
   assert.equal(initial.account, null);
+  assert.equal(page.headers.get("strict-transport-security"), null);
   // A kitchen on this computer alone has no sign-in at all.
   const disabled = await post("/api/auth/link", { email: member });
   assert.equal(disabled.status, 404);
@@ -169,6 +170,10 @@ test("HTTPS hosting signs members in with emailed links and passkeys behind its 
   });
   const headers = { Host: "kooks.example", Origin: publicOrigin };
   assert.equal((await fetch(`${origin}/healthz`)).status, 200);
+  assert.equal(
+    (await fetch(`${origin}/healthz`)).headers.get("strict-transport-security"),
+    "max-age=31536000",
+  );
   assert.equal((await fetch(`${origin}/api/state`)).status, 403);
   for (const Origin of ["https://outside.example", "http://kooks.example"])
     assert.equal(

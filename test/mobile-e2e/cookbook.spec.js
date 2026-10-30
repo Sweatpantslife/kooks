@@ -250,6 +250,10 @@ test("links and videos save with a recipe, play on request and survive a reload"
     "src",
     "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?autoplay=1",
   );
+  await expect(page.locator(".embed iframe")).toHaveAttribute(
+    "sandbox",
+    /^(?!.*allow-top-navigation).*allow-scripts.*allow-popups-to-escape-sandbox/,
+  );
   await saved(page);
   await page.reload();
   await nav(page, "Recipes").click();

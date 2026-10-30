@@ -56,6 +56,7 @@ function fakeSmtp(
     implicit = null,
     mechanisms = "PLAIN LOGIN",
     rejectRecipient = false,
+    inject = "",
   } = {},
 ) {
   const received = [];
@@ -111,7 +112,8 @@ function fakeSmtp(
             write("250 8BITMIME");
             break;
           case "STARTTLS": {
-            write("220 go ahead");
+            // A man in the middle can append plaintext replies to this one.
+            current.write(`220 go ahead\r\n${inject}`);
             socket.removeAllListeners("data");
             listen(
               new tls.TLSSocket(socket, {
@@ -298,6 +300,47 @@ test("sends in the clear only when asked, insists on STARTTLS otherwise, and rep
   await assert.rejects(
     sendSmtp({ ...settings, security: "none", to: "bad\r\nRCPT", message: "" }),
     /not an email address/,
+  );
+});
+
+test("refuses replies smuggled in before STARTTLS and gives up on silent servers", async (t) => {
+  const cert = certificate(t);
+  if (!cert) return t.skip("openssl is not available");
+  const settings = {
+    host: "localhost",
+    user: "cook@example.test",
+    password: "secret",
+    from: "kooks@example.test",
+    to: "cook@example.test",
+    message: message("Hi\n"),
+    tls: { ca: cert.cert },
+  };
+  // Injected lines would otherwise answer the encrypted EHLO and AUTH.
+  const injected = await fakeSmtp(t, {
+    starttls: cert,
+    inject: "250-fake.example\r\n250 AUTH LOGIN\r\n334 VXNlcm5hbWU6\r\n",
+  });
+  await assert.rejects(
+    sendSmtp({ ...settings, port: injected.port }),
+    /sent data before encryption began/,
+  );
+  assert.equal(injected.received.length, 0);
+  // A server that accepts the connection but never completes TLS.
+  const sockets = new Set();
+  const silent = net.createServer((socket) => sockets.add(socket));
+  await new Promise((resolve) => silent.listen(0, "127.0.0.1", resolve));
+  t.after(() => {
+    for (const socket of sockets) socket.destroy();
+    return new Promise((resolve) => silent.close(resolve));
+  });
+  await assert.rejects(
+    sendSmtp({
+      ...settings,
+      port: silent.address().port,
+      security: "tls",
+      timeoutMs: 200,
+    }),
+    /stopped responding/,
   );
 });
 
