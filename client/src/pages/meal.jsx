@@ -1,4 +1,4 @@
-import { ArrowLeft } from "lucide";
+import { ArrowLeft, CalendarPlus } from "lucide";
 import { record } from "../lib/store.js";
 import { metaOf } from "../lib/kitchen.js";
 import { PageHeader } from "../ui/page.jsx";
@@ -23,9 +23,10 @@ export function Meal({ id }) {
       <PageHeader eyebrow="Meal" title={m.data.title}>
         <a
           class="btn btn-primary"
-          href={`../#/meals/${encodeURIComponent(id)}`}
+          href={`#/week/when/meal/${encodeURIComponent(id)}`}
         >
-          Plan or cook
+          <Icon icon={CalendarPlus} />
+          Add to the week
         </a>
       </PageHeader>
       {m.data.notes && <p class="lede preline">{m.data.notes}</p>}

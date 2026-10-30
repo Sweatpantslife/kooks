@@ -2,13 +2,15 @@ import { Fragment } from "preact";
 import { useEffect, useRef } from "preact/hooks";
 import { CircleAlert, Leaf } from "lucide";
 import { route } from "./lib/router.js";
+import { dateLabel, monday, weekdayLabel } from "./lib/format.js";
 import { status, loadError, refresh, record } from "./lib/store.js";
 import { Shell } from "./ui/shell.jsx";
 import { Toasts } from "./ui/toast.jsx";
 import { Empty, PageHeader } from "./ui/page.jsx";
 import { SignIn } from "./pages/signin.jsx";
 import { Household } from "./pages/household.jsx";
-import { Week, Groceries } from "./pages/placeholders.jsx";
+import { Groceries } from "./pages/placeholders.jsx";
+import { AddToDay, ChooseDay, Week } from "./pages/week.jsx";
 import { Recipes } from "./pages/recipes.jsx";
 import { Recipe } from "./pages/recipe.jsx";
 import { Meal } from "./pages/meal.jsx";
@@ -28,9 +30,38 @@ const EDIT = {
   variation: "Your own version",
 };
 
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+const planned = (id) => record("plan", id)?.data.title ?? "Plan";
+
 // The page for an address, and the title the browser tab shows for it.
 function pageFor([first = "week", second, third, fourth]) {
-  if (first === "week") return { title: "This week", page: <Week /> };
+  if (first === "week" && !second)
+    return { title: "This week", page: <Week /> };
+  if (first === "week" && DAY.test(second) && !third)
+    return {
+      title: `Week of ${dateLabel(monday(second))}`,
+      page: <Week start={monday(second)} />,
+    };
+  if (first === "week" && second === "add" && DAY.test(third) && !fourth)
+    return {
+      title: `Add to ${weekdayLabel(third)}`,
+      page: <AddToDay day={third} />,
+    };
+  if (
+    first === "week" &&
+    second === "when" &&
+    (third === "recipe" || third === "meal") &&
+    fourth
+  )
+    return {
+      title: `Which day · ${named(third, fourth, "Plan")}`,
+      page: <ChooseDay kind={third} id={fourth} />,
+    };
+  if (first === "week" && second === "move" && third && !fourth)
+    return {
+      title: `Move · ${planned(third)}`,
+      page: <ChooseDay planId={third} />,
+    };
   if (first === "recipes" && second === "add" && !fourth && ADD[third ?? ""]) {
     const [title, Page] = ADD[third ?? ""];
     return { title, page: <Page /> };

@@ -28,6 +28,12 @@ One editor serves a new recipe, a change, your own version of a recipe (from "Ma
 
 The new app's tests now use the accessibility suites' shared scan (`test/axe-scan.js`, both themes per call). `npm run format:check`, `npm run lint`, `npm test` and `npm run test:e2e` (58 passed; 9 new for adding and editing, with scans of the choices, paste, photo, idea, draft, editor at phone and wide sizes, and a variation).
 
+### The redesigned app's Week tab
+
+The Week tab at `/next/#/week` shows the days from today on, with days gone by folded into "Earlier this week", and pages back and forward a week at a time (`#/week/<monday>` for any other week). Each day lists what is planned, by meal (breakfast, lunch, dinner), with its picture, and leftovers set aside for that day. Add on a day opens a search over recipes and meals, favorites first, with a choice of breakfast, lunch or dinner. "Add to the week" on a recipe or meal page, and Move on anything planned, open a choice of the rest of this week and all of the next, each day saying how much is already planned. Taking a dish off a day offers Undo. Shopping for the week's plan comes with the Groceries tab.
+
+`npm run format:check`, `npm run lint`, `npm test` and `npm run test:e2e` (62 passed; 4 new for the Week, with axe scans of the week, adding to a day and moving).
+
 ### A failed passkey suggestion stays silent on the sign-in screen
 
 When the browser turns down the quiet passkey suggestion in the email field (no authenticator, nothing saved, or the request abandoned), both apps now say nothing, instead of putting the browser's raw message ("Resident credentials or empty 'allowCredentials' lists are not supported at this time.") in the sign-in alert, where it replaced a real reason such as "This sign-in link has expired or was already used." Only the kitchen turning down a passkey the person picked is shown. The quiet request's own failure to load its options is silent too.

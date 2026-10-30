@@ -24,3 +24,6 @@ export const weekLabel = (start) =>
 
 export const plural = (n, word, words = `${word}s`) =>
   `${n} ${n === 1 ? word : words}`;
+
+export const weekdayLabel = (day) =>
+  at(day).toLocaleDateString(undefined, { weekday: "long" });

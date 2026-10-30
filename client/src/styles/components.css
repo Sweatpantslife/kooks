@@ -346,6 +346,7 @@
 .segmented {
   display: inline-flex;
   flex-wrap: wrap;
+  width: fit-content;
   gap: 4px;
   padding: 4px;
   border: 0;
@@ -1189,4 +1190,183 @@ fieldset.field legend {
 }
 .draft-title {
   font-weight: 700;
+}
+
+/* ---------- Week ---------- */
+.badge-tomato {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+/* A smaller button still reaches a 44px target: its hit area extends
+   above and below it. */
+.btn-small {
+  position: relative;
+  min-height: 36px;
+  padding: 0 12px;
+}
+.btn-small::after {
+  content: "";
+  position: absolute;
+  inset: -4px 0;
+}
+.art-thumb {
+  flex: none;
+  width: 56px;
+  aspect-ratio: 1;
+  border-radius: var(--radius-sm);
+}
+.art-thumb .art-icon {
+  width: 24px;
+  height: 24px;
+}
+.days {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+@media (min-width: 1000px) {
+  .days {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+.day-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  height: 100%;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+.day-today .day-inner {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.day-past .day-inner {
+  background: transparent;
+}
+.day-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.day-head h2 {
+  font-size: var(--text-lg);
+}
+.day-date {
+  color: var(--muted);
+  font-family: var(--font-text);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  letter-spacing: 0;
+}
+.day-add {
+  align-self: flex-start;
+  margin-inline-start: -12px;
+}
+.plan-items {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.plan-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.plan-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+.plan-title {
+  color: var(--ink);
+  font-weight: 700;
+  text-decoration: none;
+}
+a.plan-title:hover {
+  text-decoration: underline;
+}
+.plan-actions {
+  display: flex;
+  align-items: center;
+}
+.picks,
+.day-picks {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+@media (min-width: 840px) {
+  .picks {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+.day-picks {
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+}
+.pick,
+.day-pick {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  height: 100%;
+  padding: 10px 14px 10px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  text-align: start;
+}
+.pick:hover,
+.day-pick:hover {
+  border-color: var(--line-strong);
+  background: var(--sunken);
+}
+.pick:disabled,
+.day-pick:disabled {
+  opacity: 0.55;
+  cursor: progress;
+}
+.pick-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+.pick-title,
+.day-pick-name {
+  font-weight: 700;
+}
+.day-pick {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 14px 16px;
+}
+.day-pick[aria-current="date"] {
+  border-color: var(--accent);
+}
+.earlier summary h2 {
+  flex: 1;
+  font-size: var(--text-lg);
+}
+.earlier .day-inner {
+  padding: 12px 0 0;
+  border: 0;
+  border-block-start: 1px solid var(--line);
+  border-radius: 0;
+}
+.earlier .days {
+  gap: 4px;
 }
