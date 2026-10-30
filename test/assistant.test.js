@@ -1,9 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import Anthropic from "@anthropic-ai/sdk";
-import { Store } from "../mcp/store.js";
+import { KooksError, Store } from "../mcp/store.js";
 import { createTools } from "../mcp/tools.js";
-import { anthropicClient, createAssistant } from "../web/assistant.js";
+import {
+  anthropicClient,
+  askInput,
+  createAssistant,
+} from "../web/assistant.js";
+import { fitting } from "../shared/conversation.js";
 import { fakeClaude, says, usage, uses } from "./helpers/claude.js";
 
 const question = (text) => ({
@@ -325,4 +330,49 @@ test("refusals, cut-off answers and failed calls end the question plainly", asyn
       },
     );
   assert.ok(errors.length === 3 && errors.every((e) => !e.includes(secret)));
+});
+
+test("a question that takes too long ends plainly, and a conversation sent has a size", async (t) => {
+  const { assistant } = kitchen(
+    t,
+    [
+      (params, { signal }) =>
+        new Promise((resolve, reject) =>
+          signal.addEventListener("abort", () =>
+            reject(new Anthropic.APIUserAbortError()),
+          ),
+        ),
+    ],
+    { timeLimit: 50 },
+  );
+  // The time limit's timer doesn't hold the process open; a server does.
+  const serving = setInterval(() => {}, 1000);
+  t.after(() => clearInterval(serving));
+  await assistant.ask(question("Slow?")).then(
+    () => assert.fail("expected an error"),
+    (failure) => {
+      // A Kooks error, which the server tells the member without logging.
+      assert.ok(failure instanceof KooksError);
+      assert.equal(failure.code, "ASSISTANT_UNAVAILABLE");
+      assert.match(failure.message, /took me too long/);
+    },
+  );
+
+  // A conversation of more than 60,000 characters is refused, and the app
+  // sends the latest turns that fit, from a question of the member's.
+  const turns = (count, size = (i) => (i % 2 ? 20000 : 4000)) =>
+    Array.from({ length: count }, (_, i) => ({
+      role: i % 2 ? "assistant" : "user",
+      text: "x".repeat(size(i)),
+    }));
+  const asked = (messages) =>
+    askInput.safeParse({ today: "2026-10-30", messages }).success;
+  const long = turns(7);
+  assert.equal(asked(long), false);
+  assert.deepEqual(fitting(long), long.slice(2));
+  assert.equal(asked(fitting(long)), true);
+  const many = turns(41, () => 10);
+  assert.equal(asked(many), false);
+  assert.deepEqual(fitting(many), many.slice(2));
+  assert.equal(asked(fitting(many)), true);
 });

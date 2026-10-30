@@ -4,6 +4,10 @@ import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import * as s from "../mcp/schemas.js";
 import { KooksError, requireThat } from "../mcp/store.js";
+import {
+  conversationCharacters,
+  conversationTurns,
+} from "../shared/conversation.js";
 
 // The assistant: Claude, asked from the household server with the host's API
 // key. It reads the kitchen through the tools the apps use and changes
@@ -213,7 +217,7 @@ export const askInput = z.strictObject({
       }),
     )
     .min(1)
-    .max(40)
+    .max(conversationTurns)
     .refine(
       (messages) =>
         messages.every((m, i) => m.role === (i % 2 ? "assistant" : "user")) &&
@@ -224,6 +228,12 @@ export const askInput = z.strictObject({
       (messages) =>
         messages.every((m) => m.role === "assistant" || m.text.length <= 4000),
       "Keep a question under 4,000 characters.",
+    )
+    .refine(
+      (messages) =>
+        messages.reduce((sum, m) => sum + m.text.length, 0) <=
+        conversationCharacters,
+      "The conversation is too long to send. Start over.",
     ),
 });
 
@@ -238,6 +248,10 @@ function explained(error) {
   if (error instanceof Anthropic.APIUserAbortError) return error;
   if (error instanceof Anthropic.AuthenticationError)
     console.error("The assistant's API key was refused (401).");
+  else if (error instanceof Anthropic.BadRequestError)
+    console.error(
+      "The assistant's API call was refused (400). If KOOKS_ASSISTANT_MODEL is set, check that the model takes adaptive thinking, effort and server-side fallback.",
+    );
   else if (error instanceof Anthropic.APIError)
     console.error(`The assistant's API call failed (${error.status}).`);
   else return error;
@@ -323,6 +337,7 @@ export function createAssistant({
   apiKey,
   model = defaultModel,
   dailyTokens = defaultDailyTokens,
+  timeLimit = deadline,
   client = anthropicClient({ apiKey }),
 }) {
   const usage = usageBook(store.path);
@@ -414,9 +429,8 @@ export function createAssistant({
     if (usage.used() >= dailyTokens) throw outOfTokens();
     const made = [];
     const room = { left: readLimit };
-    const stop = AbortSignal.any(
-      [signal, AbortSignal.timeout(deadline)].filter(Boolean),
-    );
+    const late = AbortSignal.timeout(timeLimit);
+    const stop = AbortSignal.any([signal, late].filter(Boolean));
     onStep("Thinking");
     for (let call = 0; call < maxCalls; call++) {
       if (call && usage.used() >= dailyTokens)
@@ -449,6 +463,10 @@ export function createAssistant({
           { signal: stop },
         );
       } catch (error) {
+        if (late.aborted && !signal?.aborted)
+          throw unavailable(
+            "That took me too long. Try asking about a smaller part of it.",
+          );
         throw explained(error);
       }
       usage.add(spent(response.usage));

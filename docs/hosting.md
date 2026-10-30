@@ -29,13 +29,13 @@ The Docker health check requests `GET /healthz`. It exposes no cookbook records.
 
 - `KOOKS_ANTHROPIC_API_KEY`: an API key from the Claude Console (console.anthropic.com), kept in the deployment's secret store. Use a key of its own with a spending limit set in the Console. Kooks reads only this variable: it ignores `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_BASE_URL` and the SDK's other settings, so another tool's key on the same machine neither turns the assistant on nor is used by it.
 - `KOOKS_ASSISTANT_DAILY_TOKENS`: what the kitchen may spend in a day, in tokens, 2,000,000 by default. Tokens read from the prompt cache count a tenth. When the day's allowance is used, members are told the assistant is back tomorrow. The count is kept in the database, by UTC day, so a restart does not reset it.
-- `KOOKS_ASSISTANT_MODEL`: the Claude model, `claude-opus-5-5` by default. Leave it unless you have a reason.
+- `KOOKS_ASSISTANT_MODEL`: the Claude model, `claude-opus-5-5` by default. Leave it unless you have a reason. Another model must take adaptive thinking, the effort setting and server-side fallback, as the default does; one that doesn't fails every question, and the server log says so with a 400.
 
 With the key set, the server says at start that the assistant is on, members see **Ask Kooks** beside Household, and the container needs outbound HTTPS to `api.anthropic.com`. Without it, nothing is sent and `/api/assistant` answers 404.
 
 What leaves the house: the member's question and the conversation so far, and what the assistant reads to answer it. It reads recipes, meals, the plan, the grocery list, what is at home, equipment, cooking notes and sessions, leftovers, prices and budget, techniques, ideas and books, and the people at the table with their tastes and diet labels, which may include allergies or other health details. It never reads photos or ebook files, import drafts, sign-in addresses, passkeys or sessions, history or backups. Anthropic handles the data under its API terms. Every member's records can be sent when any member asks, so tell the household before you turn it on. The Ask page says so under the question box.
 
-Each member asks one question at a time, 30 an hour, and the kitchen 300 a day. A question takes at most eight model calls, reads at most 120,000 characters of the kitchen, and gives up after three minutes.
+Each member asks one question at a time, 30 an hour, and the kitchen 300 a day. A question carries at most 60,000 characters of the conversation before it (the app leaves the oldest turns out), takes at most eight model calls, reads at most 120,000 characters of the kitchen, and gives up after three minutes.
 
 ## Signing in
 

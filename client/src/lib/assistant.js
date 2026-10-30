@@ -6,6 +6,7 @@ import { amount } from "./kitchen.js";
 import { dateLabel, localDay, monday, weekdayLabel } from "./format.js";
 import { navigate } from "./router.js";
 import { toast } from "./toast.js";
+import { fitting } from "../../../shared/conversation.js";
 
 // The conversation with the assistant lives in this tab only: it goes when
 // the tab closes or the member starts over. Each answer may carry
@@ -15,12 +16,6 @@ export const turns = signal([]);
 // What the assistant is doing while it answers, or null.
 export const working = signal(null);
 let asking = null;
-
-// The server takes the last 39 turns at most, starting with a question.
-const recent = (all) => {
-  const kept = all.slice(-39);
-  return kept[0]?.role === "assistant" ? kept.slice(1) : kept;
-};
 
 // An earlier answer as the assistant hears it again: its words, and what
 // became of what it proposed.
@@ -48,7 +43,7 @@ export async function askAbout(text) {
   asking = new AbortController();
   try {
     const answer = await api.ask(
-      { today: localDay(), messages: recent(turns.value).map(heard) },
+      { today: localDay(), messages: fitting(turns.value.map(heard)) },
       { signal: asking.signal, onStep: (step) => (working.value = step) },
     );
     turns.value = [
