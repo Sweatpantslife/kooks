@@ -260,6 +260,8 @@ export function createWebServer({
   const tools = new Map(createTools(store).map((t) => [t.name, t]));
   const clientDir = resolve(clientRoot) + sep;
   const limits = new Map();
+  // Wrong sign-in codes per address, for the day.
+  const missed = new Map();
   // Revisions are this server start plus the action sequence, so a tab that
   // was open before a restart, or against another database, reloads fully.
   const started = randomUUID().slice(0, 8);
@@ -334,8 +336,11 @@ export function createWebServer({
   const cookieFor = (token, maxAge) =>
     `kooks_session=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${maxAge}${proxied ? "; Secure" : ""}`;
   // The phone app's device token, or else the browser's cookie. A request
-  // from the phone app never counts a cookie.
-  const fromApp = (req) => appOrigins.has(req.headers.origin);
+  // from the phone app never counts a cookie. A kitchen whose own address is
+  // https://localhost is a browser's, not the app's.
+  const fromApp = (req) =>
+    appOrigins.has(req.headers.origin) &&
+    req.headers.origin !== external?.origin;
   const sessionToken = (req) =>
     bearer(req) ??
     (fromApp(req)
@@ -378,9 +383,9 @@ export function createWebServer({
         );
     };
     // The phone app signs in with a code; links and passkeys are the
-    // browser's, and are not offered across origins.
-    const forApp = ["POST code", "POST code/confirm", "POST signout"];
-    if (fromApp(req) && !forApp.includes(route) && !bearer(req))
+    // browser's, and are never offered across origins, whatever the request
+    // carries.
+    if (fromApp(req) && /^POST (link|passkey\/)/.test(route))
       return send(res, 403, {
         message: "Open Kooks directly to make changes.",
       });
@@ -408,10 +413,33 @@ export function createWebServer({
     if (route === "POST code/confirm") {
       throttle(`confirm:${address}`, 20, 10 * MINUTE);
       const { email, code } = await input();
-      // Each code takes five guesses; this caps the guesses at an address
-      // across new codes too, whoever makes them.
-      throttle(`code:${normalizeEmail(email)}`, 10, 60 * MINUTE);
-      const confirmed = auth.confirmCode({ email, code });
+      // Each code takes five guesses; across new codes, and from anywhere,
+      // an address takes twenty wrong guesses a day, and a right one starts
+      // the count again.
+      const key = normalizeEmail(email);
+      const t = Date.now();
+      const wrong = missed.get(key);
+      if (wrong?.until > t && wrong.count >= 20)
+        throw new AuthError(
+          "RATE_LIMITED",
+          "Too many wrong codes today. Wait until tomorrow, or sign in with a link in a browser.",
+          429,
+        );
+      let confirmed;
+      try {
+        confirmed = auth.confirmCode({ email, code });
+      } catch (error) {
+        if (missed.size > 5000)
+          for (const [k, v] of missed) if (v.until < t) missed.delete(k);
+        missed.set(
+          key,
+          wrong?.until > t
+            ? { ...wrong, count: wrong.count + 1 }
+            : { count: 1, until: t + 24 * 60 * MINUTE },
+        );
+        throw error;
+      }
+      missed.delete(key);
       // The device keeps the token and sends it; it is never a cookie.
       return send(res, 200, {
         ok: true,
@@ -503,6 +531,14 @@ export function createWebServer({
       }
       if (url.pathname === "/healthz" && req.method === "GET")
         return send(res, 200, { ok: true });
+      // A configured origin is the only accepted Host; otherwise the server
+      // is on loopback, where only loopback names defeat DNS rebinding.
+      if (
+        external
+          ? req.headers.host !== external.host
+          : !isLoopback(url.hostname.replace(/^\[|\]$/g, ""))
+      )
+        return send(res, 403, { message: "Unrecognized host." });
       // With sign-in on, the phone app may call the API, and ask first;
       // nothing else of the server is open to it. Without sign-in nothing is
       // open across origins, since nothing would ask who is calling.
@@ -518,14 +554,6 @@ export function createWebServer({
           return res.end();
         }
       }
-      // A configured origin is the only accepted Host; otherwise the server
-      // is on loopback, where only loopback names defeat DNS rebinding.
-      if (
-        external
-          ? req.headers.host !== external.host
-          : !isLoopback(url.hostname.replace(/^\[|\]$/g, ""))
-      )
-        return send(res, 403, { message: "Unrecognized host." });
       if (
         req.method === "POST" &&
         req.headers.origin !== (external?.origin ?? url.origin) &&

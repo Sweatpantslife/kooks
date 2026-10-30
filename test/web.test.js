@@ -706,9 +706,26 @@ test("the phone app signs in with an emailed code and sends a device token, acro
     "capacitor://localhost",
   );
   assert.equal((await locked.json()).error, "SIGN_IN");
-  // Links and passkeys are the browser's.
-  for (const path of ["/api/auth/link", "/api/auth/passkey/options"])
-    assert.equal((await post(path, { email: member }, app)).status, 403);
+  // Links and passkeys are the browser's, whatever token comes with them.
+  const madeUp = { ...app, Authorization: `Bearer ${"0".repeat(64)}` };
+  for (const path of [
+    "link",
+    "link/confirm",
+    "passkey/options",
+    "passkey/signin",
+    "passkey/register/options",
+    "passkey/register",
+  ])
+    for (const headers of [app, madeUp]) {
+      const refused = await post(
+        `/api/auth/${path}`,
+        { email: member },
+        headers,
+      );
+      assert.equal(refused.status, 403, path);
+      assert.equal(refused.cookie, null, path);
+    }
+  assert.equal(box.sent.length, 0);
 
   assert.equal(
     (await post("/api/auth/code", { email: "stranger@example.test" }, app))
@@ -723,8 +740,12 @@ test("the phone app signs in with an emailed code and sends a device token, acro
   assert.match(box.sent[0].subject, /^Your Kooks code: \d{6}$/);
   const code = codeIn(box.sent[0]);
   const wrong = String((Number(code) + 1) % 1000000).padStart(6, "0");
-  const confirm = (guess, email = member) =>
-    post("/api/auth/code/confirm", { email, code: guess }, app);
+  const confirm = (guess, from = {}) =>
+    post(
+      "/api/auth/code/confirm",
+      { email: member, code: guess },
+      { ...app, ...from },
+    );
   const missed = await confirm(wrong);
   assert.equal(missed.status, 400);
   assert.equal((await missed.json()).error, "CODE_INVALID");
@@ -777,13 +798,47 @@ test("the phone app signs in with an emailed code and sends a device token, acro
   await post("/api/auth/code", { email: member }, app);
   clock += 10 * 60 * 1000 + 1;
   assert.equal((await confirm(codeIn(box.sent[2]))).status, 400);
-  // However many codes are asked for, an address takes ten guesses an hour.
-  assert.equal((await confirm("000000")).status, 429);
+  // However many codes are asked for, and from wherever, an address takes
+  // twenty wrong guesses a day; eight so far, since the right one.
+  const from = (i) => ({ "X-Forwarded-For": `198.51.100.${i}` });
+  for (let i = 0; i < 12; i++)
+    assert.equal((await confirm("000000", from(i))).status, 400);
+  await post("/api/auth/code", { email: member }, app);
+  const capped = await confirm(codeIn(box.sent[3]), from(99));
+  assert.equal(capped.status, 429);
+  assert.equal((await capped.json()).error, "RATE_LIMITED");
 
   const out = await post("/api/auth/signout", {}, device);
   assert.equal(out.status, 200);
   assert.equal(out.cookie, null);
   assert.equal((await get("/api/state", device)).status, 401);
+});
+
+test("a kitchen at https://localhost is a browser's, not the phone app's", async (t) => {
+  const box = mailbox();
+  const { call, post } = await setup(t, {
+    host: "0.0.0.0",
+    publicOrigin: "https://localhost",
+    members: [member],
+    mailer: box,
+  });
+  const browser = { Host: "localhost", Origin: "https://localhost" };
+  assert.equal(
+    (await post("/api/auth/link", { email: member }, browser)).status,
+    200,
+  );
+  const login = await post(
+    "/api/auth/link/confirm",
+    { token: tokenIn(box.sent[0]) },
+    browser,
+  );
+  assert.equal(login.status, 200);
+  const cookie = { Cookie: sessionCookie(login) };
+  const state = await call("/api/state", {
+    headers: { ...browser, ...cookie },
+  });
+  assert.equal(state.status, 200);
+  assert.equal(state.headers["access-control-allow-origin"], undefined);
 });
 
 test("without sign-in, nothing is open to the phone app's origins", async (t) => {

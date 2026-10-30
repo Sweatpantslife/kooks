@@ -221,7 +221,7 @@ export function createAuth({
         await mailer.send({
           to: address,
           subject: `Your Kooks code: ${code}`,
-          text: `Enter this code in the Kooks app to get into your kitchen:\n\n${code}\n\nIt works once, for the next ${minutes} minutes.\nIf you did not ask for it, you can ignore this email.\n`,
+          text: `Enter this code in the Kooks app to get into your kitchen:\n\n${code}\n\nIt works once, for the next ${minutes} minutes. Kooks will never ask you for this code: type it only into the Kooks app.\nIf you did not ask for it, you can ignore this email.\n`,
         });
       } catch (error) {
         q("DELETE FROM auth_codes WHERE email = ? AND salt = ?").run(
