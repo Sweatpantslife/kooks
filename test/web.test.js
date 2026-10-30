@@ -538,6 +538,7 @@ test("household addresses turn sign-in on, links expire, sessions slide and leav
     members: household,
     mailer: box,
     authOptions: { now: () => clock, linkLifetime: 1000 },
+    clientRoot: fakeBuild(t),
   });
   assert.equal((await fetch(origin)).status, 200);
   const locked = await get("/api/state");
