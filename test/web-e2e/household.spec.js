@@ -615,6 +615,8 @@ test("courses, cuisines, diet labels and tags filter the cookbook and round-trip
   await filters.getByRole("button", { name: "Clear filters" }).click();
   // The editor shows the facets and offers the household's existing tags.
   await page.getByRole("link", { name: orzo.title, exact: true }).click();
+  // Wait for the recipe page: other recipes' cards carry the same chip.
+  await expect(h1(page, orzo.title)).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Show Italian recipes" }),
   ).toBeVisible();

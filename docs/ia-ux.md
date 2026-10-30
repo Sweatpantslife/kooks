@@ -154,6 +154,7 @@ Both apps load `shared/tokens.css` and `shared/ui.css` and use the same class vo
 
 ## Accessibility
 
+- Checked automatically: each Playwright project runs axe-core against WCAG 2.2 A and AA and axe's best practices in both themes (every web route at desktop and phone widths, every mobile view in both palettes, the sign-in screens), so a regression in names, labels, headings, landmarks or contrast fails CI. Focus order, announcements and keyboard paths have their own end-to-end tests.
 - Landmarks: one `header`, one `nav` per navigation (labelled), one `main` that receives focus on every route change, the page title as the only `h1`, including on pages that only say a record is missing. Headings below it do not skip a level; `.h-sub` styles an `h2` as a small section label.
 - A skip link to the main content.
 - `aria-current="page"` on the active destination and section tab; `aria-pressed` on toggles.
