@@ -1,0 +1,89 @@
+name: Native builds
+
+# Compiles the Android debug APK and the iOS simulator app whenever the phone
+# app (client/) or the native projects change. Neither build is signed or run
+# on a device; docs/native-app.md lists what still needs real hardware.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "client/**"
+      - "shared/**"
+      - "android/**"
+      - "ios/**"
+      - "resources/**"
+      - "capacitor.config.json"
+      - "package.json"
+      - "package-lock.json"
+      - "scripts/native-build.mjs"
+      - ".github/workflows/native.yml"
+  pull_request:
+    paths:
+      - "client/**"
+      - "shared/**"
+      - "android/**"
+      - "ios/**"
+      - "resources/**"
+      - "capacitor.config.json"
+      - "package.json"
+      - "package-lock.json"
+      - "scripts/native-build.mjs"
+      - ".github/workflows/native.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  android:
+    name: Android debug APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+      - run: npm ci
+      - name: Install Android SDK Platform 36
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "platforms;android-36" > /dev/null
+      - run: npm run build:android
+      - name: Check that the native projects match cap sync
+        run: |
+          if ! git diff --exit-code -- android ios; then
+            echo "::error::cap sync changed the native projects. Run npm run cap:sync and commit the result."
+            exit 1
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kooks-debug-apk
+          path: android/app/build/outputs/apk/debug/*.apk
+          retention-days: 7
+
+  ios:
+    name: iOS simulator app
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: xcodebuild -version
+      - run: npm run build:ios
