@@ -32,6 +32,7 @@ Use Node.js 22.13 or newer. Install from the committed lockfile with `npm ci`.
 | `node mcp/index.js`     | MCP stdio entry point; use an absolute executable/script path in a client                    |
 | `npm run dev:mobile`    | Separate mobile browser preview at `http://127.0.0.1:5173`                                   |
 | `npm run build:mobile`  | Vite production web bundle                                                                   |
+| `npm run test:coverage` | Unit tests with a coverage table; also writes `coverage/lcov.info` for CI's job summary      |
 | `npm run test:e2e`      | Playwright suites for the mobile interface and the browser app (`--project mobile` or `web`) |
 | `npm run format:check`  | Prettier check enforced by CI; `npm run format` rewrites files                               |
 | `npm run lint`          | ESLint's recommended rules, enforced by CI (`eslint.config.js`)                              |
