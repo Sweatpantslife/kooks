@@ -1,10 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { Store } from "../mcp/store.js";
 import { createTools } from "../mcp/tools.js";
 import { id, key } from "../mcp/schemas.js";
 import { embedOrigins } from "../shared/links.js";
+import { pagePolicy } from "../client/page-policy.js";
 
 const hostile = [
   'x" autofocus onfocus="alert(1)',
@@ -88,44 +88,23 @@ test("record and item ids are the shapes Kooks makes, while request ids and sour
   }
 });
 
-// The server only hands out safe ids, and the mobile app still escapes every
-// id it puts into an attribute, so a record that predates the rule cannot
-// break out of the markup. (The browser app's Preact components never write
-// markup as text.)
-test("the mobile app escapes the ids it writes into markup attributes", () => {
-  const source = readFileSync(
-    new URL("../app/cookbook.js", import.meta.url),
-    "utf8",
-  );
-  const raw = [
-    ...source.matchAll(
-      /(?<![[\w-])[\w-]+="[^"$]*\$\{((?:\w*[iI]d|[\w?.]+\.\w*[iI]d)(?: \?\? "")?)\}/g,
-    ),
-  ].map((match) => match[0]);
-  assert.deepEqual(raw, [], "app/cookbook.js writes ids into markup unescaped");
-});
-
-test("the mobile app runs under a content security policy that allows exactly the video players", () => {
-  const html = readFileSync(
-    new URL("../app/index.html", import.meta.url),
-    "utf8",
-  );
-  const policy = html.match(
-    /<meta\s+http-equiv="Content-Security-Policy"\s+content="([^"]+)"/,
-  )?.[1];
-  assert.ok(policy, "app/index.html declares a policy");
-  assert.ok(
-    html.indexOf("Content-Security-Policy") < html.indexOf("<link"),
-    "the policy comes before anything it governs",
-  );
+// On a phone the app's page comes from the app, where no server sends a
+// policy, so the built page carries its own. In a browser the server's
+// stricter one applies as well.
+test("the app's page carries a content security policy that allows exactly the video players", () => {
   const directives = Object.fromEntries(
-    policy.split(";").map((part) => {
+    pagePolicy.split(";").map((part) => {
       const [name, ...values] = part.trim().split(/\s+/);
       return [name, values];
     }),
   );
+  assert.deepEqual(directives["default-src"], ["'self'"]);
   assert.deepEqual(directives["script-src"], ["'self'"]);
+  assert.deepEqual(directives["style-src"], ["'self'"]);
   assert.deepEqual(directives["object-src"], ["'none'"]);
   assert.deepEqual(directives["base-uri"], ["'none'"]);
   assert.deepEqual(directives["frame-src"], embedOrigins);
+  // The phone reaches the kitchen wherever it runs, and nothing else widens.
+  assert.deepEqual(directives["connect-src"], ["'self'", "https:"]);
+  assert.deepEqual(directives["img-src"], ["'self'", "blob:", "data:"]);
 });

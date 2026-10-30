@@ -1,6 +1,7 @@
 import { signal, computed, batch } from "@preact/signals";
 import * as api from "./api.js";
 import { toast } from "./toast.js";
+import { deviceToken, keepToken, phone } from "./device.js";
 
 // The kitchen as this tab last saw it: every record by kind, in the server's
 // id order. Pages read it through `records()`; nothing else holds a copy.
@@ -47,7 +48,21 @@ export async function refresh({ fresh = false } = {}) {
   inFlight ??= load().finally(() => (inFlight = null));
   return inFlight;
 }
+// Back to the sign-in page, forgetting what this tab knew. A phone forgets
+// its token too, which the kitchen no longer takes.
+function signedOut() {
+  revision = "";
+  if (phone) keepToken("");
+  batch(() => {
+    db.value = {};
+    account.value = null;
+    status.value = "signin";
+  });
+}
+
 async function load() {
+  // A phone that has not signed in has nothing to ask the kitchen yet.
+  if (phone && !deviceToken()) return signedOut();
   let value;
   try {
     value = await api.state(revision);
@@ -60,15 +75,7 @@ async function load() {
     }
     return;
   }
-  if (value.signedOut) {
-    revision = "";
-    batch(() => {
-      db.value = {};
-      account.value = null;
-      status.value = "signin";
-    });
-    return;
-  }
+  if (value.signedOut) return signedOut();
   if (value.unchanged) return;
   batch(() => {
     db.value = value.changes
@@ -115,10 +122,7 @@ export async function change(name, input, { done, undo = true } = {}) {
       });
     return result;
   } catch (error) {
-    if (error.status === 401) {
-      revision = "";
-      status.value = "signin";
-    }
+    if (error.status === 401) signedOut();
     throw error;
   }
 }
@@ -133,14 +137,15 @@ export async function undoAction(action_id) {
   }
 }
 
+// A phone forgets its token even when the kitchen cannot be reached; a
+// browser's cookie stays until the kitchen ends it.
 export async function signOut() {
-  await api.auth("signout", {});
-  revision = "";
-  batch(() => {
-    db.value = {};
-    account.value = null;
-    status.value = "signin";
-  });
+  try {
+    await api.auth("signout", {});
+  } catch (error) {
+    if (!phone) throw error;
+  }
+  signedOut();
 }
 
 // After a sign-in, load the kitchen as this person.

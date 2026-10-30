@@ -22,6 +22,7 @@ import { plural } from "../lib/format.js";
 import { Empty, PageHeader } from "../ui/page.jsx";
 import { Field, FormError, hint, numberOrNull, useWork } from "../ui/form.jsx";
 import { Icon } from "../ui/icon.jsx";
+import { AssetImage } from "../ui/asset.jsx";
 import { Missing } from "./recipe.jsx";
 import { linkIdea } from "./library.jsx";
 
@@ -155,9 +156,9 @@ function Original({ draft }) {
         </ul>
       )}
       {d.image_id && (
-        <img
+        <AssetImage
           class="original-image"
-          src={`/api/assets/${encodeURIComponent(d.image_id)}`}
+          id={d.image_id}
           alt="The photo the draft was read from"
         />
       )}

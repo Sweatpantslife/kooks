@@ -1,6 +1,6 @@
 # Kooks household features
 
-The eight requested additions are implemented in the browser interface and the shared MCP/SQLite backend. This is a working local app with persistent data, not an in-memory experience prototype. The native Capacitor app added separately under `app/` retains its own interface and storage; these additions do not automatically appear there.
+The eight requested additions are implemented in the browser interface and the shared MCP/SQLite backend. This is a working local app with persistent data, not an in-memory experience prototype. The phone app is the same client, so they are there too.
 
 ## Start
 
@@ -64,7 +64,7 @@ To use other devices, list the household's addresses in `KOOKS_HOUSEHOLD_EMAILS`
 
 Each member signs in with a one-time link sent to their address, then adds a passkey so the next sign-in is a fingerprint, face or screen lock. Passkeys need HTTPS or localhost, so a plain-HTTP LAN address offers email links only. Sessions last through 30 days of use, survive restarts, and end on sign-out or when an address leaves the list. Setting `KOOKS_HOUSEHOLD_EMAILS` on the loopback server also turns sign-in on, which is how to try the flow locally with an outbox. Sign-in state lives in `auth_` tables beside the cookbook and is left out of portable backups.
 
-Members are known by email address; person profiles remain taste preferences and task assignments, not accounts. The server must remain running; the browser interface does not have offline storage or cloud synchronization. The separate native app can still operate using its own local storage.
+Members are known by email address; person profiles remain taste preferences and task assignments, not accounts. The server must remain running; neither browsers nor the phone app have offline storage or cloud synchronization yet.
 
 ## Data, compatibility and checks
 
@@ -82,6 +82,6 @@ npm test
 KOOKS_TEST_OCR=1 npm test
 ```
 
-The second command exercises actual local OCR as well as the domain, stdio integration, HTTP and existing native-storage tests. HTTP tests bind ephemeral loopback ports; the OCR integration requires the system image service or installed Tesseract. Restricted sandboxes may need permission for these tests.
+The second command exercises actual local OCR as well as the domain, stdio integration and HTTP tests. HTTP tests bind ephemeral loopback ports; the OCR integration requires the system image service or installed Tesseract. Restricted sandboxes may need permission for these tests.
 
 Implementation verification: all 29 tests passed with real OCR enabled on macOS. Browser checks used an isolated temporary database, preserving the user's cookbook. They exercised dinner filtering, leftover allocation, task assignment/completion, preferred variants, photo review and cost entry, with phone-width overflow checks. The native interface was not modified by this feature work.

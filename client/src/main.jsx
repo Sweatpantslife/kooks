@@ -7,6 +7,7 @@ import "./styles/components.css";
 import { route, startRouter, navigate } from "./lib/router.js";
 import { refresh, startPolling, confirmLink } from "./lib/store.js";
 import { startTheme } from "./lib/theme.js";
+import { startNative } from "./lib/native.js";
 import { App } from "./app.jsx";
 
 startTheme();
@@ -21,5 +22,15 @@ effect(() => {
   if (token) void confirmLink(token, () => navigate("week", { replace: true }));
 });
 startPolling();
+// On a phone, the back button goes back a page until the week, then leaves
+// the app; coming back to the app catches up at once.
+void startNative({
+  back: () => {
+    if (route.value[0] === "week" && !route.value[1]) return false;
+    history.back();
+    return true;
+  },
+  resume: () => void refresh(),
+});
 
 render(<App />, document.getElementById("app"));

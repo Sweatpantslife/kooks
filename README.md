@@ -1,8 +1,8 @@
 # Kooks
 
-A household cooking companion for recipes, composed meals, shopping, equipment, and guided cooking. This repository contains the local browser application, MCP backend, and Capacitor iOS/Android application.
+A household cooking companion for recipes, composed meals, shopping, equipment, and guided cooking. This repository contains the household server with its app, the MCP backend, and the same app packaged for iOS and Android with Capacitor.
 
-**Start here: [Developer handoff and unfinished work](docs/handoff.md).** The project is implemented for local use but is not release-ready. Native device validation, live AI/provider login, cloud sync, and mobile/backend integration remain outstanding.
+**Start here: [Developer handoff and unfinished work](docs/handoff.md).** The project is implemented for local use but is not release-ready. Native device validation, live AI/provider login and offline use on the phone remain outstanding.
 
 ## Quick start
 
@@ -15,23 +15,15 @@ npm run build:client
 npm run dev
 ```
 
-`npm run test:e2e` runs the Playwright suites for both interfaces (run `npx playwright install chromium` once), `npm run format:check` enforces the shared Prettier style, and `npm run lint` runs ESLint's recommended rules; the GitHub Actions workflow runs all of these on Node 22 and 24 for every pull request and every push to `main`.
+`npm run test:e2e` runs the Playwright suite (run `npx playwright install chromium` once), `npm run format:check` enforces the shared Prettier style, and `npm run lint` runs ESLint's recommended rules; the GitHub Actions workflow runs all of these on Node 22 and 24 for every pull request and every push to `main`.
 
 Open `http://127.0.0.1:4317` for the browser app. It starts with an empty cookbook and shares SQLite storage with the MCP server. It plans the week, keeps recipes (pasted, photographed or written, with courses, cuisines, diet labels and tags), meals, ideas to try, techniques and a shelf of your own PDF and EPUB cookbooks, builds the grocery list by aisle and keeps track of what is at home, cooks one step at a time with timers, notes and leftovers, and knows the people at the table, the prices paid and the weekly budget. Recipe links play YouTube, Vimeo, Facebook, Instagram and TikTok videos only when you press play.
 
-The browser app has three tabs, Week, Recipes and Groceries, with Household behind the household's initials, and cooking as a full-screen mode. It was redesigned from scratch in October 2026; [Information architecture and experience design](docs/ia-ux.md) is the design authority, and the previous app's bookmarks open the pages that replaced them. The mobile app below still has the previous structure until it moves onto the same client.
+The browser app has three tabs, Week, Recipes and Groceries, with Household behind the household's initials, and cooking as a full-screen mode. It was redesigned from scratch in October 2026; [Information architecture and experience design](docs/ia-ux.md) is the design authority, and the previous app's bookmarks open the pages that replaced them. The phone app is the same app.
 
 ### Working on the browser app
 
 The app lives in `client/` (Preact and Vite). `npm run build:client` builds it into `client/dist`, which the server shows at `/`; `npm run dev:client` serves it with live reload at `http://127.0.0.1:5174`, sending `/api` to the server on port 4317 (`KOOKS_API` points elsewhere). Addresses under `/next/`, where it was tried out before it replaced the previous app, lead to `/`.
-
-For the separate mobile interface:
-
-```sh
-npm run dev:mobile
-```
-
-Open `http://127.0.0.1:5173`. This interface uses IndexedDB in a browser and device-local files when packaged natively. Its six example recipes are synthetic demonstration data, and its library filters by course, cuisine, diet label and tag. It does **not** share the browser/MCP cookbook or automatically include all household additions.
 
 ## Native projects
 
@@ -42,7 +34,7 @@ npm run cap:ios
 npm run cap:android
 ```
 
-Native compilation requires Xcode or the Android toolchain. The projects include storage, notifications, sharing, haptics, icons, and launch screens, but native execution and physical-device notification behavior still need verification. See [native setup and limits](docs/native-app.md).
+`npm run cap:sync` builds the app in `client/` and copies it into both projects. On a phone it signs in to the household's kitchen with an emailed code, rings cooking timers as notifications, hands books and backups to the share sheet, and offers to bring in the recipes the previous phone app kept. Native compilation requires Xcode or the Android toolchain, and native execution and physical-device notification behavior still need verification. See [native setup and limits](docs/native-app.md).
 
 ## Agent integration
 
@@ -50,13 +42,13 @@ Connect an MCP client to `node /absolute/path/to/kooks/mcp/index.js`; adapt [the
 
 ## Data and privacy
 
-The local server stores its cookbook in `.data/kooks.sqlite`; `KOOKS_DB_PATH` selects another location. The native app stores its own cookbook in its private app directory. Keep personal recipes, photos, exports, credentials, and logs outside version control. `.gitignore` excludes local data, configuration, backups, signing material, dependencies, and generated build outputs.
+The local server stores its cookbook in `.data/kooks.sqlite`; `KOOKS_DB_PATH` selects another location. Keep personal recipes, photos, exports, credentials, and logs outside version control. `.gitignore` excludes local data, configuration, backups, signing material, dependencies, and generated build outputs.
 
 The browser server binds to loopback by default and asks nobody to sign in. Sharing it beyond this computer turns sign-in on: the people listed in `KOOKS_HOUSEHOLD_EMAILS` prove their address with a one-time emailed link and then add passkeys for one-tap sign-in. See [household setup](docs/household-features.md) and [hosting](docs/hosting.md); [.env.example](.env.example) lists every setting the servers read, with its default. Publishing this source repository does not deploy a running service.
 
 ## Code layout
 
-`mcp/` holds the SQLite store, domain rules and MCP tools (`mcp/library*.js` for techniques, inspiration and the book shelf); `web/` the server, with sign-in in `web/auth.js`, passkey verification in `web/webauthn.js` and mail in `web/mail.js`; `client/` the browser app (see [Working on the browser app](#working-on-the-browser-app)); `app/` the Capacitor mobile app; `shared/` what the apps and the server share: the unit table, the ingredient tokenizer that both parsers build on, the link module that recognises video players, the recipe facet taxonomy (courses, diet labels, cuisine and tag matching), and for the mobile app the design tokens (`tokens.css`), the component stylesheet (`ui.css`) and the icon module (`icons.js`, generated from Lucide by `npm run icons`). `test/` holds the Node unit and integration tests plus the Playwright projects in `test/mobile-e2e` and `test/web-e2e`.
+`mcp/` holds the SQLite store, domain rules and MCP tools (`mcp/library*.js` for techniques, inspiration and the book shelf); `web/` the server, with sign-in in `web/auth.js`, passkey verification in `web/webauthn.js` and mail in `web/mail.js`; `client/` the app, in browsers and on phones (see [Working on the browser app](#working-on-the-browser-app)); `ios/` and `android/` the native projects that package it; `shared/` what the app and the server share: the unit table, the ingredient tokenizer that both parsers build on, the link module that recognises video players, and the recipe facet taxonomy (courses, diet labels, cuisine and tag matching). `test/` holds the Node unit and integration tests plus the Playwright suite in `test/web-e2e`.
 
 ## Documentation
 

@@ -32,6 +32,7 @@ import { Empty, PageHeader } from "../ui/page.jsx";
 import { Icon } from "../ui/icon.jsx";
 import { passFocus } from "../ui/focus.js";
 import { LastTime } from "./recipe.jsx";
+import { allowTimerAlerts, tap } from "../lib/native.js";
 
 const failed = (error) => toast(error.message, { error: true });
 
@@ -72,6 +73,8 @@ async function goTo(session, dish, current_step, completed_steps) {
 
 async function startTimer(session, label, seconds, dish, step) {
   readySound();
+  // A phone asks once whether timers may ring while it is locked.
+  void allowTimerAlerts().catch(() => {});
   try {
     await onSession(session.id, (s) =>
       change("cooking_timer", {
@@ -334,13 +337,15 @@ function Step({ session, dish, onDone }) {
   const step = steps[at];
   const recipe = record("recipe", dish.recipe_id);
   const before = recipe ? memories(recipe) : [];
-  const next = () =>
-    goTo(
+  const next = () => {
+    void tap();
+    return goTo(
       session,
       dish,
       Math.min(at + 1, steps.length - 1),
       [...new Set([...done, at])].sort((a, b) => a - b),
     );
+  };
   const back = () =>
     finished
       ? goTo(

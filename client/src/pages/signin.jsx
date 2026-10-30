@@ -1,11 +1,34 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import { CookingPot, KeyRound, Mail } from "lucide";
+import { ArrowRight, CookingPot, KeyRound, Mail } from "lucide";
 import { auth } from "../lib/api.js";
+import {
+  keepToken,
+  kitchen,
+  kitchenAddress,
+  phone,
+  setKitchen,
+} from "../lib/device.js";
 import * as passkeys from "../lib/passkeys.js";
 import { signedIn, signInError } from "../lib/store.js";
 import { Icon } from "../ui/icon.jsx";
 
-export function SignIn() {
+export const SignIn = () => (phone ? <PhoneSignIn /> : <BrowserSignIn />);
+
+function Frame({ children }) {
+  return (
+    <main id="main" class="signin" tabIndex={-1}>
+      <div class="signin-card">
+        <span class="brand">
+          <Icon icon={CookingPot} />
+          kooks
+        </span>
+        {children}
+      </div>
+    </main>
+  );
+}
+
+function BrowserSignIn() {
   const [sent, setSent] = useState("");
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
@@ -71,87 +94,300 @@ export function SignIn() {
   }
 
   return (
-    <main id="main" class="signin" tabIndex={-1}>
-      <div class="signin-card">
-        <span class="brand">
-          <Icon icon={CookingPot} />
-          kooks
-        </span>
-        {sent ? (
-          <>
-            <div class="stack">
-              <h1 ref={heading} tabIndex={-1}>
-                Check your inbox.
-              </h1>
-              <p class="muted">
-                We sent a sign-in link to <strong>{sent}</strong>. Open it on
-                this device within 15 minutes; it works once.
-              </p>
-              <p class="muted small">
-                Nothing there after a few minutes? Look in spam, or ask whoever
-                runs this kitchen to check that your address is on the list and
-                that its mail is going out.
-              </p>
-            </div>
-            <button
-              type="button"
-              class="btn btn-quiet"
-              onClick={() => setSent("")}
-            >
-              Use a different address
-            </button>
-          </>
-        ) : (
-          <>
-            <div class="stack">
-              <h1 ref={heading} tabIndex={-1}>
-                Welcome to your kitchen.
-              </h1>
-              <p class="muted">
-                {passkeys.supported()
-                  ? "Sign in with the passkey on this device, or get a link by email."
-                  : "Get a sign-in link by email."}
-              </p>
-            </div>
-            <p class="form-error" role="alert">
-              {error}
+    <Frame>
+      {sent ? (
+        <>
+          <div class="stack">
+            <h1 ref={heading} tabIndex={-1}>
+              Check your inbox.
+            </h1>
+            <p class="muted">
+              We sent a sign-in link to <strong>{sent}</strong>. Open it on this
+              device within 15 minutes; it works once.
             </p>
-            {passkeys.supported() && (
-              <>
-                <button
-                  type="button"
-                  class="btn btn-primary btn-block"
-                  disabled={busy}
-                  onClick={withPasskey}
-                >
-                  <Icon icon={KeyRound} />
-                  Sign in with a passkey
-                </button>
-                <div class="or">or</div>
-              </>
-            )}
-            <form class="stack" onSubmit={emailLink}>
-              <div class="field">
-                <label for="signin-email">Email address</label>
-                <input
-                  id="signin-email"
-                  class="input"
-                  type="email"
-                  required
-                  autocomplete="username webauthn"
-                  placeholder="you@example.com"
-                  value={email}
-                  onInput={(event) => setEmail(event.currentTarget.value)}
-                />
-              </div>
-              <button type="submit" class="btn btn-block" disabled={busy}>
-                <Icon icon={Mail} />
-                Email me a sign-in link
+            <p class="muted small">
+              Nothing there after a few minutes? Look in spam, or ask whoever
+              runs this kitchen to check that your address is on the list and
+              that its mail is going out.
+            </p>
+          </div>
+          <button
+            type="button"
+            class="btn btn-quiet"
+            onClick={() => setSent("")}
+          >
+            Use a different address
+          </button>
+        </>
+      ) : (
+        <>
+          <div class="stack">
+            <h1 ref={heading} tabIndex={-1}>
+              Welcome to your kitchen.
+            </h1>
+            <p class="muted">
+              {passkeys.supported()
+                ? "Sign in with the passkey on this device, or get a link by email."
+                : "Get a sign-in link by email."}
+            </p>
+          </div>
+          <p class="form-error" role="alert">
+            {error}
+          </p>
+          {passkeys.supported() && (
+            <>
+              <button
+                type="button"
+                class="btn btn-primary btn-block"
+                disabled={busy}
+                onClick={withPasskey}
+              >
+                <Icon icon={KeyRound} />
+                Sign in with a passkey
               </button>
-            </form>
-          </>
-        )}
+              <div class="or">or</div>
+            </>
+          )}
+          <form class="stack" onSubmit={emailLink}>
+            <div class="field">
+              <label for="signin-email">Email address</label>
+              <input
+                id="signin-email"
+                class="input"
+                type="email"
+                required
+                autocomplete="username webauthn"
+                placeholder="you@example.com"
+                value={email}
+                onInput={(event) => setEmail(event.currentTarget.value)}
+              />
+            </div>
+            <button type="submit" class="btn btn-block" disabled={busy}>
+              <Icon icon={Mail} />
+              Email me a sign-in link
+            </button>
+          </form>
+        </>
+      )}
+    </Frame>
+  );
+}
+
+// The phone app comes without a kitchen: it asks where the household runs
+// Kooks, then for a member's email, then for the code that arrives there.
+// Links and passkeys belong to the kitchen's own address, which the app is
+// not.
+function PhoneSignIn() {
+  const [step, setStep] = useState(kitchen.value ? "email" : "kitchen");
+  const [address, setAddress] = useState(kitchen.value);
+  const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+  const heading = useRef(null);
+  const error = signInError.value;
+  const fail = (message) => (signInError.value = message);
+  // Without a kitchen, as after "Sign out and use another kitchen", the
+  // first question comes first again.
+  const at = kitchen.value ? step : "kitchen";
+
+  useEffect(() => {
+    document.title = "Sign in · Kooks";
+    heading.current?.focus();
+  }, [at]);
+
+  const go = (next) => {
+    fail("");
+    setStep(next);
+  };
+  const work = (task) => async (event) => {
+    event?.preventDefault();
+    fail("");
+    setBusy(true);
+    try {
+      await task();
+    } catch (e) {
+      fail(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const findKitchen = work(async () => {
+    const origin = kitchenAddress(address);
+    if (!origin && /^\s*http:/i.test(address))
+      throw new Error(
+        "The app reaches Kooks only over https. Use the address that starts with https://.",
+      );
+    if (!origin)
+      throw new Error(
+        "Enter the address you open Kooks at, such as kooks.example.com.",
+      );
+    let response;
+    try {
+      response = await fetch(`${origin}/api/state`, { credentials: "omit" });
+    } catch {
+      throw new Error(
+        "Could not reach a kitchen at that address. Check it and your connection.",
+      );
+    }
+    const value = await response.json().catch(() => ({}));
+    if (response.status !== 401 || value.error !== "SIGN_IN")
+      throw new Error(
+        "That address doesn’t answer like a Kooks kitchen that members sign in to. Check it with whoever runs Kooks.",
+      );
+    setKitchen(origin);
+    setAddress(origin);
+    go("email");
+  });
+  const sendCode = work(async () => {
+    await auth("code", { email: email.trim() });
+    setCode("");
+    go("code");
+  });
+  const confirm = work(async () => {
+    const { token } = await auth("code/confirm", {
+      email: email.trim(),
+      code,
+    });
+    keepToken(token);
+    await signedIn("Welcome to your kitchen.");
+  });
+
+  const alert = (
+    <p class="form-error" role="alert">
+      {error}
+    </p>
+  );
+  const title = (text) => (
+    <h1 ref={heading} tabIndex={-1}>
+      {text}
+    </h1>
+  );
+  if (at === "kitchen")
+    return (
+      <Frame>
+        <div class="stack">
+          {title("Where is your kitchen?")}
+          <p class="muted">
+            The address your household opens Kooks at in a browser. Whoever runs
+            Kooks knows it.
+          </p>
+        </div>
+        {alert}
+        <form class="stack" onSubmit={findKitchen}>
+          <div class="field">
+            <label for="signin-kitchen">Kitchen address</label>
+            <input
+              id="signin-kitchen"
+              class="input"
+              type="url"
+              inputMode="url"
+              autocapitalize="none"
+              autocomplete="url"
+              required
+              placeholder="kooks.example.com"
+              value={address}
+              onInput={(event) => setAddress(event.currentTarget.value)}
+            />
+          </div>
+          <button
+            type="submit"
+            class="btn btn-primary btn-block"
+            disabled={busy}
+          >
+            <Icon icon={ArrowRight} />
+            {busy ? "Looking…" : "Continue"}
+          </button>
+        </form>
+      </Frame>
+    );
+  if (at === "email")
+    return (
+      <Frame>
+        <div class="stack">
+          {title("Welcome to your kitchen.")}
+          <p class="muted">
+            We’ll email you a code to sign in to{" "}
+            <strong>{kitchen.value}</strong>.
+          </p>
+        </div>
+        {alert}
+        <form class="stack" onSubmit={sendCode}>
+          <div class="field">
+            <label for="signin-email">Email address</label>
+            <input
+              id="signin-email"
+              class="input"
+              type="email"
+              required
+              autocomplete="username"
+              placeholder="you@example.com"
+              value={email}
+              onInput={(event) => setEmail(event.currentTarget.value)}
+            />
+          </div>
+          <button
+            type="submit"
+            class="btn btn-primary btn-block"
+            disabled={busy}
+          >
+            <Icon icon={Mail} />
+            Email me a code
+          </button>
+        </form>
+        <button
+          type="button"
+          class="btn btn-quiet"
+          onClick={() => go("kitchen")}
+        >
+          Use a different kitchen
+        </button>
+      </Frame>
+    );
+  return (
+    <Frame>
+      <div class="stack">
+        {title("Check your inbox.")}
+        <p class="muted">
+          We sent a six-digit code to <strong>{email.trim()}</strong>. It works
+          once, for 10 minutes.
+        </p>
       </div>
-    </main>
+      {alert}
+      <form class="stack" onSubmit={confirm}>
+        <div class="field">
+          <label for="signin-code">Code</label>
+          <input
+            id="signin-code"
+            class="input input-code"
+            required
+            inputMode="numeric"
+            autocomplete="one-time-code"
+            pattern="[0-9 ]*"
+            maxLength={7}
+            placeholder="123456"
+            value={code}
+            onInput={(event) => setCode(event.currentTarget.value)}
+          />
+        </div>
+        <button type="submit" class="btn btn-primary btn-block" disabled={busy}>
+          <Icon icon={KeyRound} />
+          Sign in
+        </button>
+      </form>
+      <div class="row">
+        <button
+          type="button"
+          class="btn btn-quiet"
+          disabled={busy}
+          onClick={sendCode}
+        >
+          Send a new code
+        </button>
+        <button type="button" class="btn btn-quiet" onClick={() => go("email")}>
+          Use a different address
+        </button>
+      </div>
+    </Frame>
   );
 }

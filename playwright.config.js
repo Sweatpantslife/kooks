@@ -42,14 +42,6 @@ export default defineConfig({
   use: { trace: "retain-on-failure", ...browser },
   projects: [
     {
-      name: "mobile",
-      testDir: "./test/mobile-e2e",
-      use: {
-        baseURL: "http://127.0.0.1:4173",
-        viewport: { width: 390, height: 844 },
-      },
-    },
-    {
       // The app, served by both servers below: 4318 without sign-in and
       // 4319 with it.
       name: "web",
@@ -61,11 +53,6 @@ export default defineConfig({
     },
   ],
   webServer: [
-    {
-      command: "npm run build:mobile && npm run preview:mobile",
-      url: "http://127.0.0.1:4173",
-      reuseExistingServer: !process.env.CI,
-    },
     {
       command: "npm run build:client && node web/server.js",
       url: "http://127.0.0.1:4318/",

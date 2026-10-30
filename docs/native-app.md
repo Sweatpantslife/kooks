@@ -1,6 +1,6 @@
 # Kooks for iOS and Android
 
-Kooks now has a Capacitor 8 application in `app/`, with Xcode and Android Studio projects in `ios/` and `android/`. The bundled app works without a running desktop server or internet connection. The existing MCP server and desktop web app keep their own data and commands. Its page carries the browser app's content security policy as a meta tag: no inline or evaluated script (zod runs without its compiled parsers for that reason), and video players only from the embed origins in `shared/links.js`; the mobile Playwright suite fails on any violation.
+The phone app is the same app as the browser's (`client/`, [the IA and UX guide](ia-ux.md)), packaged with Capacitor 8 in the Xcode and Android Studio projects in `ios/` and `android/`. It signs in to the household's kitchen, the Kooks server the household already runs, and works on the same recipes, plans and groceries as everyone's browsers. The phone keeps no cookbook of its own.
 
 ## Run and build
 
@@ -8,15 +8,14 @@ Use Node.js 22.13 or newer. From this project directory:
 
 ```sh
 npm ci
-npm run dev:mobile
+npm run cap:sync       # Build client/dist and copy it into both native projects
 ```
 
-The Capacitor packages are development dependencies: Vite bundles them into the mobile app and the native projects read them from `node_modules`, so build from a full `npm ci`. `npm ci --omit=dev`, which the server's Docker image uses, leaves them out.
+The Capacitor packages are development dependencies: Vite bundles them into the app and the native projects read them from `node_modules`, so build from a full `npm ci`. `npm ci --omit=dev`, which the server's Docker image uses, leaves them out. In a browser the plugins never load.
 
-Open `http://127.0.0.1:5173` to preview the mobile interface in a browser. This uses IndexedDB for browser data. The packaged native apps use Capacitor Filesystem in the app's private data directory.
+To try the phone's screens without a phone, run a kitchen with sign-in on, open it in a browser and set `localStorage["kooks.phone"] = "1"` in the developer tools: the page then signs in the phone's way, with the kitchen's address, an emailed code and a device token, and hands files over as downloads.
 
 ```sh
-npm run cap:sync       # Build the bundled interface and sync both native projects
 npm run native:doctor  # Check the local native build tools
 npm run cap:ios        # Sync and open Xcode
 npm run cap:android    # Sync and open Android Studio
@@ -40,45 +39,43 @@ Native requirements follow [Capacitor's environment guide](https://capacitorjs.c
 
 For a physical iPhone, select your Apple development team in Xcode's Signing & Capabilities. Store releases also require your signing credentials and distribution setup. The development identifier is `app.kooks.household`; confirm the identifier before a store release and update it consistently in Capacitor, the Xcode target, and `android/app/build.gradle` if needed. No signing credentials are stored here.
 
-## Included experience
+## Signing in
 
-- The previous browser app's navigation: Today, Recipes, Plan (Week and Meals), Shop and Cook, with backup, preferences, timer alerts and the assistant preview under the Settings gear. The redesigned browser app ([the IA and UX guide](ia-ux.md)) replaces it when the mobile app moves onto the same client.
-- Recipe library, ingredient search, favorites, manual/paste entry, editing, original recipe text, serving adjustments, required equipment, cooking notes, and links and videos: YouTube, Vimeo, Facebook, Instagram and TikTok players load from the provider only when play is pressed; other links open in the browser.
-- Composed meals with independent dish portions and combined equipment. Reviewed shopping contributions combine matching ingredients, avoid duplicate additions, and clear checkmarks when amounts change.
-- A simple Monday–Sunday plan with saved dish portions.
-- Cooking sessions with independent dish progress and timers that retain their deadlines after navigation and app restarts.
-- Native timer notifications, share sheet, haptics, Android back navigation, safe-area spacing, app icons, and launch screens.
-- Course, cuisine, diet labels and tags on every recipe, with library filters built from the cookbook's own values and matching shared with the browser app (`shared/taxonomy.js`). The editor offers existing cuisines and tags; a filter never matches an unrecorded course or cuisine.
-- Settings with theme (system, light or dark), palette, layout and spacing choices, measurement display, and mobile backup export/restore. Restores validate the whole backup and ask explicitly before replacing the current device's cookbook.
+The first screen asks where the kitchen is: the address the household opens Kooks at, such as `kooks.example.com`. The app checks that it answers like a Kooks kitchen with sign-in on, then asks for the member's email address and emails a six-digit code, which the member types in. The app keeps the kitchen's address and a device token in its web storage and sends the token with every request; [the hosting guide](hosting.md) describes the server's side. The kitchen must be reachable over https: Android refuses plain-http traffic, and so does the page's own policy. **Household › This phone** signs out, or signs out and forgets the kitchen to use another one.
 
-Six labeled example recipes and one example meal help with first launch. English and metric remain the initial defaults. The inherited kitchen-volume convention is stated in the editor: cup = 240 mL, tablespoon = 15 mL, teaspoon = 5 mL. It is defined once as `kitchenVolumes` in `shared/quantities.js`, and the US kitchen display uses the same sizes, so a pasted amount reads back as written. Every other mass and volume (pounds, milligrams, `us_cup`, `metric_cup` and the rest) converts with the shared unit table. Mass-to-volume conversions are not inferred. Temperatures in steps convert to Fahrenheit with or without a space before the degree sign, with decimals and across ranges such as 180–200 °C.
+Sign-in links and passkeys stay browser-only: an emailed link would open in the browser, not in the app, and a passkey belongs to the kitchen's own web address.
 
-## Storage and scope
+## What the phone adds
 
-The native app keeps `kooks/cookbook.json` and the last validated snapshot `kooks/cookbook.previous.json` in `Directory.Data`. Writes are serialized; a temporary file is written before replacing the primary file. If a saved file is corrupt, the previous valid snapshot is recovered. When neither file can be read, or reading is not permitted, loading stops with a plain message and both files stay as they were. Storage failures remain visible and allow an export of the in-memory cookbook.
+- The Android back button goes back through the app's pages, and leaves the app from Week.
+- Cooking timers ring as notifications with the phone locked or the app closed. Kooks asks for permission when the first timer starts. Every timer still counting in an active cooking session is scheduled, and a timer that is cancelled, changed or done is taken off again, whichever device did it, the next time the app is open. Android uses ordinary notifications without special exact-alarm access, so alerts can be late; Focus, Do Not Disturb and battery settings affect them too. See the [Local Notifications plugin](https://capacitorjs.com/docs/apis/local-notifications).
+- A light tap when a cooking step is done.
+- Photos and books come with the device token, so they load into memory rather than by address. **Download** and **Open** on a book, the backup and the bookmarks file hand the file to the phone's share sheet (Books, Files, Mail). The file is written to an `exports` folder in the app's cache first, the only folder Android's file provider shares (`android/app/src/main/res/xml/file_paths.xml`).
+- The status and navigation bars follow the phone's light or dark look, and the layout keeps to the safe areas.
+- Coming back to the app fetches what changed while it was away.
 
-Use **Settings › Backup › Export backup** to save or share a `kooks-mobile` JSON file. Restore is supported across the iOS, Android, and browser versions of this interface. Backups written before recipe facets still restore: their single recipe label becomes a tag (trimmed, and cut to the 100-character tag limit), and course, cuisine and diet labels start unset. Exported files are named after the local day, `kooks-YYYY-MM-DD.json`. On a device the export is written to an `exports` folder in the app's cache, the only folder Android's file provider shares (`android/app/src/main/res/xml/file_paths.xml`), and each export replaces the previous one. Device OS backup services may also include app data according to the user's system settings; on Android the backup and new-phone transfer rules (`backup_rules.xml`, `data_extraction_rules.xml`) carry the `kooks` folder and nothing else, so exports and caches never enter Google's backup. Uninstalling removes local app data; keep exported copies.
+## Recipes from the previous phone app
 
-The mobile cookbook is separate from `.data/kooks.sqlite`, the MCP tools, and the desktop server. It does not yet synchronize household members or import the MCP backup format. Settings › Assistant shows explicitly labeled sample actions; AI account login and live AI inference have not been connected. Incoming share-menu imports, website/photo extraction, multi-day batch planning, and production household authentication are outside this native implementation.
+The phone app before this one kept a cookbook of its own in `kooks/cookbook.json` in the app's private data folder. When that file is there, Recipes offers **Recipes on this phone**: **Bring them in** saves each recipe written on the phone as a new recipe in the kitchen, with its ingredients, steps, equipment, links, labels and notes, and then renames the file `kooks/cookbook.imported.json`, so nothing is lost and nothing is offered twice. Its six sample recipes, its plans, meals and settings stay behind. **Not now** hides the offer until the app starts again. Each recipe is saved under its own key, so a bring-in that stopped half way carries on without saving any recipe twice.
 
-Notifications are requested when the user starts a timer or enables alerts in Settings › Timers. Pausing, removing, or completing timers cancels their pending notifications; resuming schedules the new deadline. Android uses ordinary notifications without requesting special exact-alarm access, so alerts can be delayed. Permission, Focus/Do Not Disturb, and battery settings affect delivery. These are reminders, not a guarantee of exact or audible locked-screen alarms. See the [Local Notifications plugin](https://capacitorjs.com/docs/apis/local-notifications).
+Android's backup and new-phone transfer rules (`backup_rules.xml`, `data_extraction_rules.xml`) carry that `kooks` folder and nothing else, so the device token, which lives in the app's web storage, never enters Google's backup. On iOS the app's web storage is part of the device backup, like the rest of its data.
 
-The iOS privacy manifest is included in the Xcode Resources build phase and declares file-timestamp and UserDefaults access used by storage/plugins, following the [Filesystem](https://capacitorjs.com/docs/apis/filesystem) and [Preferences privacy guidance](https://capacitorjs.com/docs/apis/preferences). No analytics, account credentials, or remote server URL are configured in the native app.
+## Page policy
+
+The built page carries a content security policy in a meta tag (`client/page-policy.js`), because on a phone no server sends one: script, styles, fonts and images only from the app, requests to the app and to https addresses, and video players only from the embed origins in `shared/links.js`. In a browser the server's stricter policy applies as well.
+
+The iOS privacy manifest is included in the Xcode Resources build phase and declares the file-timestamp and UserDefaults access the plugins use, following the [Filesystem](https://capacitorjs.com/docs/apis/filesystem) and [Preferences privacy guidance](https://capacitorjs.com/docs/apis/preferences). No analytics are configured.
 
 ## Development and verification
 
 ```sh
-npm test                    # Existing MCP workflows plus mobile storage/timer/logic tests
-npm run test:mobile          # Just mobile unit tests
-npm run test:e2e             # Playwright suites for this interface and the browser app
-npm run test:mobile:e2e      # Only the mobile project
+npm test                    # Unit tests, including the phone's notification, address and import logic
+npm run test:e2e            # Playwright, including the phone's sign-in in a browser
 npm run native:assets       # Regenerate checked-in icons/splashes from resources/logo.svg
 ```
 
 Playwright uses its managed Chromium by default (run `npx playwright install chromium` once). Set `PLAYWRIGHT_CHANNEL=chrome` to use an installed Chrome, or `PLAYWRIGHT_EXECUTABLE_PATH` to point at a specific browser binary.
 
-The mobile build and `cap sync` succeed. Browser verification covers adding/editing/scaling recipes, persistence after reload, meal shopping and changed quantities, cooking progress, paused timers, backup restore, early-iOS API fallbacks, and 320/390/768/1280-pixel layouts. Unit tests exercise failed/interrupted storage, recovery, invalid backups, and timer notification reconciliation. The browser checks do not validate native plugin execution.
-
-On the implementation machine, Xcode, Java, and the Android SDK are missing. Consequently no native binary, simulator run, signing, or physical-device notification delivery has been verified. Before distribution, run both native builds and exercise cold launch, safe areas/keyboard, back navigation, share/export/restore, offline editing, app termination/relaunch, and timer permissions/delivery on actual iOS and Android devices. Also confirm that embedded players load inside the native WebView and that recipe links open in the system browser; both were checked in Chromium only.
+The phone's screens are checked in Chromium, not in a native WebView. On the implementation machine Xcode, Java and the Android SDK are missing, so no native binary, simulator run, signing or physical-device notification delivery has been verified. Before distribution, run both native builds and exercise cold launch, sign-in against a real kitchen, safe areas and the keyboard, back navigation, sharing a book and a backup, timer permission and delivery, and bringing in recipes from the previous app, on actual iOS and Android devices.
 
 `npm audit` reports no vulnerabilities. The Capacitor CLI's build-only `xcode → uuid` advisory is gone from CLI 8.6.0, whose `xcode` 4 no longer depends on `uuid`; the CLI was never part of the app bundle.

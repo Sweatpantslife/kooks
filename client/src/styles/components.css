@@ -1945,3 +1945,24 @@ a.plan-title:hover {
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow);
 }
+
+/* ---------- Files from the kitchen ---------- */
+/* A photo a phone is still fetching keeps its place. */
+.asset-wait {
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+  background: var(--sunken);
+}
+/* On a phone a link to a file is a button, and still reads as a link. */
+.link-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent-ink);
+  text-underline-offset: 0.2em;
+  font: inherit;
+  text-align: start;
+  text-decoration: underline;
+  cursor: pointer;
+}

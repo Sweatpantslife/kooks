@@ -1,8 +1,8 @@
 {
   "appId": "app.kooks.household",
   "appName": "Kooks",
-  "webDir": "dist",
-  "backgroundColor": "#f6f5ef",
+  "webDir": "client/dist",
+  "backgroundColor": "#faf8f4",
   "ios": {
     "contentInset": "never",
     "preferredContentMode": "mobile"
@@ -11,11 +11,11 @@
     "SystemBars": {
       "insetsHandling": "native",
       "initialViewportFitValueHint": "cover",
-      "style": "DARK"
+      "style": "DEFAULT"
     },
     "LocalNotifications": {
       "smallIcon": "ic_stat_kooks",
-      "iconColor": "#385740",
+      "iconColor": "#2e6a4c",
       "presentationOptions": ["sound", "banner", "list"]
     }
   }
