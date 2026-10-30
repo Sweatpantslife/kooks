@@ -19,9 +19,12 @@ export const route = signal(read());
 
 // The tab a route belongs to, for the navigation's current item.
 export const section = (parts) =>
-  ({ recipes: "recipes", groceries: "groceries", household: "household" })[
-    parts[0]
-  ] ?? "week";
+  ({
+    recipes: "recipes",
+    groceries: "groceries",
+    household: "household",
+    ask: "ask",
+  })[parts[0]] ?? "week";
 
 export const href = (...parts) =>
   `#/${parts.map((part) => encodeURIComponent(part)).join("/")}`;

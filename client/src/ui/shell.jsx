@@ -4,9 +4,10 @@ import {
   ShoppingBasket,
   CookingPot,
   House,
+  Sparkles,
 } from "lucide";
 import { route, section, href } from "../lib/router.js";
-import { account } from "../lib/store.js";
+import { account, assistant } from "../lib/store.js";
 import { Icon } from "./icon.jsx";
 import { NowCooking } from "./now-cooking.jsx";
 import { Offline } from "./offline.jsx";
@@ -58,14 +59,26 @@ export function Shell({ children }) {
       </a>
       <header class="topbar">
         <Brand />
-        <a
-          class="btn btn-quiet btn-icon"
-          href={href("household")}
-          aria-label="Household"
-          aria-current={here("household")}
-        >
-          <Badge />
-        </a>
+        <div class="topbar-end">
+          {assistant.value && (
+            <a
+              class="btn btn-quiet btn-icon"
+              href={href("ask")}
+              aria-label="Ask Kooks"
+              aria-current={here("ask")}
+            >
+              <Icon icon={Sparkles} />
+            </a>
+          )}
+          <a
+            class="btn btn-quiet btn-icon"
+            href={href("household")}
+            aria-label="Household"
+            aria-current={here("household")}
+          >
+            <Badge />
+          </a>
+        </div>
       </header>
       <header class="rail">
         <Brand />
@@ -83,6 +96,12 @@ export function Shell({ children }) {
           ))}
         </nav>
         <div class="rail-foot">
+          {assistant.value && (
+            <a class="rail-link" href={href("ask")} aria-current={here("ask")}>
+              <Icon icon={Sparkles} />
+              Ask Kooks
+            </a>
+          )}
           <a
             class="rail-link"
             href={href("household")}

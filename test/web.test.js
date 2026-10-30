@@ -9,6 +9,7 @@ import { createWebServer } from "../web/server.js";
 import { embedOrigins } from "../shared/links.js";
 import { createAuthenticator } from "./helpers/authenticator.js";
 import { fakeBuild } from "./helpers/build.js";
+import { fakeClaude, says } from "./helpers/claude.js";
 
 const DAY = 24 * 60 * 60 * 1000;
 const member = "cook@example.test";
@@ -37,6 +38,7 @@ async function setup(t, options = {}) {
   t.after(async () => {
     await new Promise((resolve) => server.close(resolve));
     server.auth?.close();
+    server.assistant?.close();
     store.close();
   });
   const origin = `http://127.0.0.1:${server.address().port}`;
@@ -63,6 +65,7 @@ async function setup(t, options = {}) {
               cookie: response.headers["set-cookie"]?.[0] ?? null,
               json: () =>
                 JSON.parse(Buffer.concat(chunks).toString() || "null"),
+              text: () => Buffer.concat(chunks).toString(),
             }),
           );
         },
@@ -1248,4 +1251,87 @@ test("recipe pages are read two at a time, and a few dozen an hour from one addr
   const over = await read(31);
   assert.equal(over.status, 429);
   assert.equal(over.json().error, "RATE_LIMITED");
+});
+
+test("the assistant answers in lines of JSON, one question at a time per member, and only with a key", async (t) => {
+  const question = {
+    today: "2026-10-30",
+    messages: [{ role: "user", text: "What can we make tonight?" }],
+  };
+  const off = await setup(t, { clientRoot: fakeBuild(t) });
+  assert.equal((await off.get("/api/state")).json().assistant, false);
+  const missing = await off.post("/api/assistant", question);
+  assert.equal(missing.status, 404);
+  assert.equal(missing.json().error, "ASSISTANT_OFF");
+
+  let release;
+  const held = new Promise((resolve) => (release = resolve));
+  const client = fakeClaude([
+    async () => {
+      await held;
+      return says("Toast, with what you have.");
+    },
+  ]);
+  const on = await setup(t, {
+    clientRoot: fakeBuild(t),
+    assistantOptions: { client },
+  });
+  assert.equal((await on.get("/api/state")).json().assistant, true);
+  const first = on.post("/api/assistant", question);
+  while (!client.calls.length)
+    await new Promise((resolve) => setImmediate(resolve));
+  const busy = await on.post("/api/assistant", question);
+  assert.equal(busy.status, 429);
+  assert.equal(busy.json().error, "BUSY");
+  release();
+  const answered = await first;
+  assert.equal(answered.status, 200);
+  assert.match(answered.headers["content-type"], /^application\/x-ndjson/);
+  assert.equal(answered.headers["cache-control"], "no-store");
+  assert.deepEqual(
+    answered
+      .text()
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line)),
+    [
+      { step: "Thinking" },
+      { answer: { reply: "Toast, with what you have.", proposals: [] } },
+    ],
+  );
+  // A failure after the answer has begun arrives as its last line.
+  const failed = await on.post("/api/assistant", question);
+  assert.deepEqual(
+    failed
+      .text()
+      .trim()
+      .split("\n")
+      .map((l) => JSON.parse(l)),
+    [
+      { step: "Thinking" },
+      { error: "Kooks couldn’t answer just now. Try again in a moment." },
+    ],
+  );
+  for (const input of [
+    { ...question, messages: [] },
+    {
+      ...question,
+      messages: [...question.messages, { role: "assistant", text: "Hm" }],
+    },
+    {
+      ...question,
+      messages: [{ role: "user", text: "x".repeat(4001) }],
+    },
+    { ...question, today: "tomorrow" },
+  ]) {
+    const refused = await on.post("/api/assistant", input);
+    assert.equal(refused.status, 400);
+    assert.equal(refused.json().error, "INVALID_INPUT");
+  }
+  // Another site cannot ask on a member's behalf.
+  const elsewhere = await on.post("/api/assistant", question, {
+    Origin: "https://elsewhere.example",
+  });
+  assert.equal(elsewhere.status, 403);
+  assert.equal(client.calls.length, 2);
 });

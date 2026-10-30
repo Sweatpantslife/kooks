@@ -24,6 +24,7 @@ import {
   wrongCode,
 } from "./auth.js";
 import { createMailer, isEmail } from "./mail.js";
+import { askInput, createAssistant } from "./assistant.js";
 
 // The app, built by `npm run build:client`, is the files in client/dist.
 const builtClient = fileURLToPath(new URL("../client/dist/", import.meta.url));
@@ -137,6 +138,15 @@ function onPrivateNetwork(hostname) {
     /\.(local|lan|internal|localhost|home\.arpa)$/.test(name)
   );
 }
+// The assistant's daily allowance, in tokens.
+function dailyTokens(value) {
+  const tokens = Number(value);
+  if (!Number.isSafeInteger(tokens) || tokens < 1)
+    throw new Error(
+      "KOOKS_ASSISTANT_DAILY_TOKENS must be a whole number of tokens, such as 2000000.",
+    );
+  return tokens;
+}
 // The address members open, when one is configured: HTTPS behind a proxy,
 // or plain HTTP on the household's own network.
 function parseOrigin(value) {
@@ -171,6 +181,7 @@ const KB = 1024,
   MB = 1024 * KB;
 const authBody = 64 * KB;
 const toolBody = 2 * MB;
+const askBody = 1 * MB;
 const largeBodies = new Map([
   ["asset_save", 96 * MB],
   ["backup_restore", 96 * MB],
@@ -238,6 +249,7 @@ export function createWebServer({
   authOptions = {},
   clientRoot = builtClient,
   toolOptions = {},
+  assistantOptions = {},
 }) {
   const external = publicOrigin ? parseOrigin(publicOrigin) : null;
   // Kooks speaks plain HTTP, so an HTTPS origin means a proxy in front.
@@ -267,6 +279,12 @@ export function createWebServer({
   const tools = new Map(
     createTools(store, toolOptions).map((t) => [t.name, t]),
   );
+  // The assistant is there when the host gives the kitchen a Claude API key.
+  const assistant =
+    assistantOptions.apiKey || assistantOptions.client
+      ? createAssistant({ store, tools, ...assistantOptions })
+      : null;
+  const asking = new Set();
   const clientDir = resolve(clientRoot) + sep;
   const limits = new Map();
   // Wrong sign-in codes per address, for the day: exact for the household's
@@ -606,6 +624,7 @@ export function createWebServer({
           const result = {
             revision,
             sharing: Boolean(auth),
+            assistant: Boolean(assistant),
             account: session
               ? { email: session.email, method: session.method }
               : null,
@@ -679,6 +698,62 @@ export function createWebServer({
           // A dropped connection is not a failure worth logging.
           if (error.code !== "ERR_STREAM_PREMATURE_CLOSE") console.error(error);
           res.destroy();
+        }
+        return;
+      }
+      // A question for the assistant. The answer streams as lines of JSON:
+      // what it is doing, then the answer or why there is none.
+      if (url.pathname === "/api/assistant" && req.method === "POST") {
+        if (!assistant)
+          return send(res, 404, {
+            error: "ASSISTANT_OFF",
+            message: "The assistant isn’t set up on this kitchen.",
+          });
+        const who = session?.email ?? "this computer";
+        if (asking.has(who))
+          return send(res, 429, {
+            error: "BUSY",
+            message: "Kooks is still answering your last question.",
+          });
+        if (
+          limited(`ask:${who}`, 30, 60 * MINUTE) ||
+          limited("ask:kitchen", 300, 24 * 60 * MINUTE)
+        )
+          return send(res, 429, {
+            error: "RATE_LIMITED",
+            message:
+              "That’s a lot of questions in a short time. Try again in a while.",
+          });
+        const input = askInput.parse(await body(req, askBody));
+        asking.add(who);
+        const ended = new AbortController();
+        res.on("close", () => ended.abort());
+        res.writeHead(200, {
+          "Content-Type": "application/x-ndjson; charset=utf-8",
+          "Cache-Control": "no-store",
+          "X-Accel-Buffering": "no",
+        });
+        const line = (value) => res.write(`${JSON.stringify(value)}\n`);
+        try {
+          line({
+            answer: await assistant.ask({
+              ...input,
+              signal: ended.signal,
+              onStep: (step) => line({ step }),
+            }),
+          });
+        } catch (error) {
+          if (!(error instanceof KooksError) && !ended.signal.aborted)
+            console.error(error);
+          line({
+            error:
+              error instanceof KooksError
+                ? error.message
+                : "Kooks couldn’t answer just now. Try again in a moment.",
+          });
+        } finally {
+          asking.delete(who);
+          res.end();
         }
         return;
       }
@@ -815,6 +890,7 @@ export function createWebServer({
   // slow household connection may take a few minutes to send.
   server.requestTimeout = 300000;
   server.auth = auth;
+  server.assistant = assistant;
   // How many addresses have wrong codes counted, for the tests.
   server.wrongCodes = () => ({
     members: missed.members.size,
@@ -861,12 +937,29 @@ if (
       publicOrigin: process.env.KOOKS_PUBLIC_ORIGIN ?? "",
       members,
       mailer,
+      assistantOptions: {
+        apiKey: process.env.KOOKS_ANTHROPIC_API_KEY,
+        ...(process.env.KOOKS_ASSISTANT_MODEL
+          ? { model: process.env.KOOKS_ASSISTANT_MODEL }
+          : {}),
+        ...(process.env.KOOKS_ASSISTANT_DAILY_TOKENS
+          ? {
+              dailyTokens: dailyTokens(
+                process.env.KOOKS_ASSISTANT_DAILY_TOKENS,
+              ),
+            }
+          : {}),
+      },
     });
     server.listen(port, host, () => {
       console.log(`Kooks is ready at http://${host}:${port}`);
       if (server.auth)
         console.log(
           `Sign-in is on for ${members.length} household address${members.length === 1 ? "" : "es"}; sign-in links go ${mailer.description}.`,
+        );
+      if (server.assistant)
+        console.log(
+          `The assistant is on, with ${server.assistant.model}; questions and what it reads to answer them go to Anthropic.`,
         );
     });
   } catch (error) {
@@ -878,6 +971,7 @@ if (
     process.once(signal, () => {
       server.close(() => {
         server.auth?.close();
+        server.assistant?.close();
         store.close();
         process.exit(0);
       });

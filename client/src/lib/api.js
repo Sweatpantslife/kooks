@@ -13,7 +13,7 @@ export class ApiError extends Error {
 
 // A phone sends its device token and never a cookie; a browser sends its
 // cookie to its own server.
-function send(path, input) {
+function send(path, input, signal) {
   const token = deviceToken();
   const headers = {
     ...(input === undefined ? {} : { "Content-Type": "application/json" }),
@@ -22,6 +22,7 @@ function send(path, input) {
   return fetch(`${base()}${path}`, {
     credentials: phone ? "omit" : "same-origin",
     headers,
+    signal,
     ...(input === undefined
       ? {}
       : { method: "POST", body: JSON.stringify(input) }),
@@ -71,6 +72,53 @@ export const tool = (name, input = {}) =>
   request(`/api/tools/${encodeURIComponent(name)}`, input);
 
 export const auth = (path, input) => request(`/api/auth/${path}`, input);
+
+// A question for the assistant. The answer streams as lines of JSON: what
+// it is doing, as it does it, then the answer or why there is none.
+export async function ask(input, { signal, onStep }) {
+  const stopped = () => new ApiError("Stopped.", "STOPPED", 0);
+  let response;
+  try {
+    response = await send("/api/assistant", input, signal);
+  } catch {
+    if (signal?.aborted) throw stopped();
+    throw new ApiError(
+      "Could not reach the kitchen. Check your connection and try again.",
+      "OFFLINE",
+      0,
+    );
+  }
+  if (!response.ok) {
+    const value = await response.json().catch(() => ({}));
+    throw new ApiError(
+      value.message ?? "Kooks couldn’t answer just now.",
+      value.error,
+      response.status,
+    );
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let pending = "";
+  for (;;) {
+    let chunk;
+    try {
+      chunk = await reader.read();
+    } catch {
+      if (signal?.aborted) throw stopped();
+      throw new ApiError("The answer was cut off. Try again.", "CUT_OFF", 0);
+    }
+    if (chunk.done) break;
+    pending += decoder.decode(chunk.value, { stream: true });
+    for (let end; (end = pending.indexOf("\n")) >= 0;) {
+      const line = JSON.parse(pending.slice(0, end));
+      pending = pending.slice(end + 1);
+      if (line.step) onStep(line.step);
+      if (line.answer) return line.answer;
+      if (line.error) throw new ApiError(line.error, "NO_ANSWER", 200);
+    }
+  }
+  throw new ApiError("The answer was cut off. Try again.", "CUT_OFF", 0);
+}
 
 export async function state(revision) {
   let response;

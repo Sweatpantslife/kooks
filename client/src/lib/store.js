@@ -15,6 +15,8 @@ export const loadError = signal("");
 export const account = signal(null);
 // True when the server is shared beyond this computer (sign-in is on).
 export const sharing = signal(false);
+// Whether the kitchen has the assistant: its host gave it an API key.
+export const assistant = signal(false);
 // Why the last sign-in attempt failed, shown on the sign-in page.
 export const signInError = signal("");
 // When the kitchen last answered, while it does not: what the tab shows is
@@ -67,6 +69,7 @@ function signedOut() {
   batch(() => {
     db.value = {};
     account.value = null;
+    assistant.value = false;
     offline.value = null;
     status.value = "signin";
   });
@@ -113,6 +116,7 @@ async function load() {
         : value.records;
       sharing.value = value.sharing;
       account.value = value.account ?? null;
+      assistant.value = Boolean(value.assistant);
       status.value = "ready";
     });
     revision = value.revision;

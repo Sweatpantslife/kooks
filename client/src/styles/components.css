@@ -1982,3 +1982,130 @@ a.plan-title:hover {
   text-decoration: underline;
   cursor: pointer;
 }
+
+/* ---------- Ask Kooks ---------- */
+.topbar-end {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.turns {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 0;
+  list-style: none;
+}
+/* A new answer scrolls into view from its start, clear of the top bar. */
+.turn {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  scroll-margin-block-start: 72px;
+}
+.turn ul,
+.turn ol {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-inline-start: 1.25em;
+}
+.turn-who {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: 700;
+}
+/* The member's own words sit apart from the assistant's. */
+.turn-you {
+  align-self: flex-end;
+  max-width: min(36em, 90%);
+  padding: 12px 16px;
+  border-radius: var(--radius-md);
+  background: var(--sunken);
+}
+.turn-kooks .turn-who {
+  color: var(--accent-ink);
+}
+.proposals {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0;
+  list-style: none;
+}
+.turn .proposals {
+  padding-inline-start: 0;
+}
+.proposal {
+  display: flex;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+.proposal-icon {
+  display: grid;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+.proposal-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.proposal-title {
+  font-weight: 700;
+}
+.turn .proposal-items {
+  gap: 2px;
+  font-size: var(--text-sm);
+}
+.proposal-state {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+.proposal-done {
+  color: var(--herb-ink);
+}
+.ask-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 1.5em;
+  color: var(--muted);
+}
+.ask-pulse {
+  color: var(--accent);
+  animation: ask-pulse 1.4s ease-in-out infinite;
+}
+@keyframes ask-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ask-pulse {
+    animation: none;
+  }
+}
+.ask-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
