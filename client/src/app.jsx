@@ -12,20 +12,50 @@ import { Week, Groceries } from "./pages/placeholders.jsx";
 import { Recipes } from "./pages/recipes.jsx";
 import { Recipe } from "./pages/recipe.jsx";
 import { Meal } from "./pages/meal.jsx";
+import { Add, Idea, Paste, Photo } from "./pages/add.jsx";
+import { Editor } from "./pages/editor.jsx";
 
 const named = (kind, id, fallback) => record(kind, id)?.data.title ?? fallback;
 
+const ADD = {
+  "": ["Add to your cookbook", Add],
+  paste: ["Paste a recipe", Paste],
+  photo: ["Photograph a recipe", Photo],
+  idea: ["Save an idea", Idea],
+};
+const EDIT = {
+  edit: "Edit recipe",
+  variation: "Your own version",
+};
+
 // The page for an address, and the title the browser tab shows for it.
-function pageFor([first = "week", second, third]) {
+function pageFor([first = "week", second, third, fourth]) {
   if (first === "week") return { title: "This week", page: <Week /> };
-  if (first === "recipes" && second === "meal" && third)
+  if (first === "recipes" && second === "add" && !fourth && ADD[third ?? ""]) {
+    const [title, Page] = ADD[third ?? ""];
+    return { title, page: <Page /> };
+  }
+  if (first === "recipes" && second === "new" && !third)
+    return { title: "New recipe", page: <Editor mode="new" /> };
+  if (first === "recipes" && second === "draft" && third && !fourth)
+    return {
+      title: "Check the draft",
+      page: <Editor mode="draft" id={third} />,
+    };
+  if (first === "recipes" && second === "meal" && third && !fourth)
     return { title: named("meal", third, "Meal"), page: <Meal id={third} /> };
-  if (first === "recipes" && second)
+  if (first === "recipes" && second && EDIT[third] && !fourth)
+    return {
+      title: `${EDIT[third]} · ${named("recipe", second, "Recipe")}`,
+      page: <Editor mode={third} id={second} />,
+    };
+  if (first === "recipes" && second && !third)
     return {
       title: named("recipe", second, "Recipe"),
       page: <Recipe id={second} />,
     };
-  if (first === "recipes") return { title: "Recipes", page: <Recipes /> };
+  if (first === "recipes" && !second)
+    return { title: "Recipes", page: <Recipes /> };
   if (first === "groceries") return { title: "Groceries", page: <Groceries /> };
   if (first === "household") return { title: "Household", page: <Household /> };
   return { title: "Not found", page: <NotFound /> };

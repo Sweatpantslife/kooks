@@ -25,6 +25,13 @@ const canMake = signal(false);
 // recipe_suggest's answer for "What can I make?": recipe id → what's missing.
 const suggestions = signal(null);
 
+// Open the tab on one kind, as after saving an idea to try.
+export function showKind(k) {
+  query.value = "";
+  favorites.value = quick.value = canMake.value = false;
+  kind.value = k;
+}
+
 const quickEnough = (d) => (d.total_minutes ?? d.active_minutes ?? 999) <= 30;
 
 async function suggest() {
@@ -113,7 +120,7 @@ export function Recipes() {
   };
 
   const add = (
-    <a class="btn btn-primary" href="../#/recipes/add">
+    <a class="btn btn-primary" href="#/recipes/add">
       <Icon icon={Plus} />
       Add a recipe
     </a>

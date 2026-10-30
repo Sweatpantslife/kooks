@@ -2,10 +2,12 @@ import { useState } from "preact/hooks";
 import {
   ArrowLeft,
   Clock,
+  CopyPlus,
   ExternalLink,
   Flame,
   Heart,
   Minus,
+  Pencil,
   Plus,
   Timer,
   UtensilsCrossed,
@@ -321,7 +323,8 @@ export function Recipe({ id }) {
         >
           <Icon icon={Heart} />
         </button>
-        <a class="btn" href={`../#/recipes/${encodeURIComponent(id)}/edit`}>
+        <a class="btn" href={`#/recipes/${encodeURIComponent(id)}/edit`}>
+          <Icon icon={Pencil} />
           Edit
         </a>
         <a
@@ -338,6 +341,15 @@ export function Recipe({ id }) {
         <Method d={d} />
       </div>
       <More r={r} />
+      <div class="row">
+        <a
+          class="btn btn-quiet"
+          href={`#/recipes/${encodeURIComponent(id)}/variation`}
+        >
+          <Icon icon={CopyPlus} />
+          Make your own version
+        </a>
+      </div>
     </article>
   );
 }

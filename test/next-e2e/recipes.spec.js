@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import AxeBuilder from "@axe-core/playwright";
+import { scan } from "../axe-scan.js";
 
 // The Recipes tab of the redesigned app, against the server without sign-in.
 // Other suites share this database, so every name carries this run's tag.
@@ -105,14 +105,10 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
+// The accessibility suites' scan: WCAG 2.2 A and AA plus axe's best
+// practices, in the light and the dark theme.
 async function expectAccessible(page, label) {
-  const { violations } = await new AxeBuilder({ page })
-    .withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa", "best-practice"])
-    .analyze();
-  expect(
-    violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(" ")}`),
-    label,
-  ).toEqual([]);
+  expect(await scan(page, label)).toEqual([]);
 }
 
 const tile = (page, title) =>
@@ -164,10 +160,7 @@ test("the cookbook can be searched by ingredient and narrowed to a kind, and kee
     .click();
   await expect(search).toHaveValue(tag);
 
-  for (const scheme of ["light", "dark"]) {
-    await page.emulateMedia({ colorScheme: scheme });
-    await expectAccessible(page, `Recipes, ${scheme}`);
-  }
+  await expectAccessible(page, "Recipes");
 });
 
 test("a favorite is marked from its tile and can be undone", async ({
@@ -244,10 +237,7 @@ test("a recipe page scales its ingredients, shows what is at home and links its 
     page.getByRole("link", { name: /From example\.com/ }),
   ).toHaveAttribute("href", "https://example.com/lemon-orzo");
 
-  for (const scheme of ["light", "dark"]) {
-    await page.emulateMedia({ colorScheme: scheme });
-    await expectAccessible(page, `Recipe, ${scheme}`);
-  }
+  await expectAccessible(page, "Recipe");
 
   await page
     .getByRole("link", { name: new RegExp(`^Lemon orzo with peas ${tag}`) })
