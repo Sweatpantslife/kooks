@@ -70,6 +70,11 @@ test("the sign-in screens meet WCAG 2.2 AA in both themes", async ({
   ).toBeVisible();
   await check("sign-in settings");
   await page.getByRole("button", { name: "Sign out" }).click();
+  // Opening the link before the sign-out lands races it: the link is read
+  // while still signed in, and the sign-out then clears its reason.
+  await expect(
+    page.getByRole("heading", { name: "Welcome to your kitchen." }),
+  ).toBeVisible();
   await page.goto(link);
   await expect(page.locator("[data-login-error]")).toContainText(
     "expired or was already used",

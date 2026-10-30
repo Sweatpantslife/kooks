@@ -32,7 +32,7 @@ The new app's tests now use the accessibility suites' shared scan (`test/axe-sca
 
 The Week tab at `/next/#/week` shows the days from today on, with days gone by folded into "Earlier this week", and pages back and forward a week at a time (`#/week/<monday>` for any other week). Each day lists what is planned, by meal (breakfast, lunch, dinner), with its picture, and leftovers set aside for that day. Add on a day opens a search over recipes and meals, favorites first, with a choice of breakfast, lunch or dinner. "Add to the week" on a recipe or meal page, and Move on anything planned, open a choice of the rest of this week and all of the next, each day saying how much is already planned. Taking a dish off a day offers Undo. Shopping for the week's plan comes with the Groceries tab.
 
-`npm run format:check`, `npm run lint`, `npm test` and `npm run test:e2e` (62 passed; 4 new for the Week, with axe scans of the week, adding to a day and moving).
+`npm run format:check`, `npm run lint`, `npm test` and `npm run test:e2e` (62 passed; 4 new for the Week, with axe scans of the week, adding to a day and moving). Two sign-in tests of the current app now wait for the sign-out to land before opening a spent link: opened sooner, the link was read while still signed in and the sign-out then cleared its reason, which failed CI once on Node 22 and fails every time with the sign-out held back 0.8 s.
 
 ### A failed passkey suggestion stays silent on the sign-in screen
 
