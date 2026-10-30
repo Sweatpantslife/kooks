@@ -16,6 +16,12 @@ Recipes in the new app at `/next/#/recipes`: one search over recipes, meals, ide
 
 `npm run format:check`, `npm run lint`, `npm test` (116 tests: 115 passed, the OCR case skipped; 1 new for amounts) and `npm run test:e2e` (43 passed; 5 new, with axe-core scans of the list, a recipe and a meal in light and dark at 0 violations) pass. "What can I make?" uses the server's matching, which needs the preparation to match too, so "lemon, zested" is not covered by "lemon" at home.
 
+### A failed passkey suggestion stays silent on the sign-in screen
+
+When the browser turns down the quiet passkey suggestion in the email field (no authenticator, nothing saved, or the request abandoned), both apps now say nothing, instead of putting the browser's raw message ("Resident credentials or empty 'allowCredentials' lists are not supported at this time.") in the sign-in alert, where it replaced a real reason such as "This sign-in link has expired or was already used." Only the kitchen turning down a passkey the person picked is shown. The quiet request's own failure to load its options is silent too.
+
+`npm run format:check`, `npm run lint` and `npm run test:e2e` for `web-auth` and `next` (16 passed; 1 new for the current app, which failed before the fix with the browser's message, and the new app's spent-link test now checks the exact reason after the suggestion settles).
+
 ### Undo kept for 90 days, older history trimmed to its summary ([#39](https://github.com/Sweatpantslife/kooks/pull/39))
 
 Actions older than 90 days keep their history line (the kinds, ids and versions they changed) but drop the before and after copies undo needs and the result a retry would replay: `history_list` marks them `trimmed`, `history_undo` refuses them with `UNDO_EXPIRED`, and polling still sees which records they changed. Kooks trims when it opens a database and once a day while it writes. In a simulated year of 30 saves a day, history falls from 89 MB to 23.5 MB and then stays at about 90 days' worth; that first trim takes 0.4 s and a daily one 4 ms. `test/history.test.js` covers trimming, refused undo, replays and polling, and with mocked clocks the daily trim, the 90-day boundary and the trim on open; removing either trim fails it. `npm run lint`, `npm run format:check`, `npm test` (110 passed, the OCR case skipped) and `npm run test:e2e` (30 passed) pass. An older Kooks server opening a trimmed database fails to page history back past 90 days or undo those actions.

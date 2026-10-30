@@ -50,9 +50,14 @@ export const message = (error) =>
 // browser lists the passkey among the email field's suggestions, and the
 // request is abandoned when the signal aborts. Returns whether it signed in.
 export async function signIn(signal) {
-  const { options } = await auth("passkey/options", {});
+  let options, credential;
+  try {
+    ({ options } = await auth("passkey/options", {}));
+  } catch (error) {
+    if (signal) return false;
+    throw error;
+  }
   if (signal?.aborted) return false;
-  let credential;
   try {
     credential = await navigator.credentials.get({
       publicKey: {
@@ -67,7 +72,8 @@ export async function signIn(signal) {
     });
   } catch (error) {
     // A quiet request that the browser cannot make, or that is abandoned,
-    // is nobody's business: the button is still there.
+    // is nobody's business: the button is still there, and a real reason on
+    // the page, such as an expired link, stays.
     if (signal) return false;
     throw error;
   }

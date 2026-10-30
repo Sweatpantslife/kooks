@@ -1828,7 +1828,13 @@ async function passkeySignIn(quiet = false) {
   // A quiet (suggestion) request can be abandoned while its options load.
   const controller = quiet ? new AbortController() : null;
   if (quiet) conditional = controller;
-  const { options } = await authApi("passkey/options", {});
+  let options, credential;
+  try {
+    ({ options } = await authApi("passkey/options", {}));
+  } catch (error) {
+    if (quiet) return;
+    throw error;
+  }
   if (controller?.signal.aborted) return;
   const request = {
     publicKey: {
@@ -1844,7 +1850,14 @@ async function passkeySignIn(quiet = false) {
     request.mediation = "conditional";
     request.signal = controller.signal;
   }
-  const credential = await navigator.credentials.get(request);
+  try {
+    credential = await navigator.credentials.get(request);
+  } catch (error) {
+    // A suggestion the browser cannot offer, or that is abandoned, stays
+    // silent: it must never replace a real reason such as an expired link.
+    if (quiet) return;
+    throw error;
+  }
   await authApi("passkey/signin", {
     credential: serializeCredential(credential),
   });
@@ -1864,10 +1877,11 @@ async function offerConditionalPasskey() {
     return;
   }
   if (!$('input[autocomplete~="webauthn"]')) return;
+  // Only the kitchen turning down a passkey the person picked is shown.
   try {
     await passkeySignIn(true);
   } catch (error) {
-    if (error.name !== "AbortError") loginError(passkeyMessage(error));
+    loginError(passkeyMessage(error));
   }
 }
 async function addPasskey() {
