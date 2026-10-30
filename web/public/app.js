@@ -6,6 +6,12 @@ import {
 } from "/shared/links.js";
 import { announce, findPlace, keepPlace, placeOf } from "/shared/a11y.js";
 import { icon } from "/shared/icons.js";
+import {
+  editedIngredients,
+  editedSteps,
+  ingredientLine,
+  stepsText,
+} from "/shared/ingredients.js";
 import { unitLabel } from "/shared/quantities.js";
 import {
   courseLabel,
@@ -40,10 +46,12 @@ const uid = () => {
   const hex = [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 };
-const today = () => {
-  const d = new Date();
+// The local calendar day of a moment: now, or a stored ISO timestamp.
+const localDay = (moment = new Date()) => {
+  const d = new Date(moment);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
+const today = () => localDay();
 const addDays = (date, days) => {
   const d = new Date(`${date}T12:00:00Z`);
   d.setUTCDate(d.getUTCDate() + days);
@@ -272,11 +280,6 @@ const matching = (scope, parts) => {
   const q = (searches[scope] ?? "").trim().toLowerCase();
   return !q || parts.join(" ").toLowerCase().includes(q);
 };
-const paragraphs = (text) =>
-  String(text ?? "")
-    .split(/\n\s*\n/)
-    .map((s) => s.trim())
-    .filter(Boolean);
 function linksFrom(text) {
   const links = parseLinkLines(text);
   if (links.invalid.length)
@@ -726,7 +729,7 @@ function libraryResults() {
   const drafts = records("import").filter((r) => r.data.status === "draft");
   if (library.drafts)
     return drafts.length
-      ? `<div class="grid grid-3">${drafts.map((r) => `<article class="card">${tag("Draft", "tag-warm")}<h2 class="card-title"><a href="#/imports/${esc(r.id)}">${esc(r.data.title)}</a></h2><p>Check the extracted text against the original, then save it.</p><div class="card-end"><span class="small muted">${dateLabel(r.created_at.slice(0, 10))}</span>${link("Review", `imports/${r.id}`, { cls: "btn-sm" })}</div></article>`).join("")}</div>`
+      ? `<div class="grid grid-3">${drafts.map((r) => `<article class="card">${tag("Draft", "tag-warm")}<h2 class="card-title"><a href="#/imports/${esc(r.id)}">${esc(r.data.title)}</a></h2><p>Check the extracted text against the original, then save it.</p><div class="card-end"><span class="small muted">${dateLabel(localDay(r.created_at))}</span>${link("Review", `imports/${r.id}`, { cls: "btn-sm" })}</div></article>`).join("")}</div>`
       : emptyState("Nothing is waiting for review.");
   const term = (searches.recipes ?? "").trim().toLowerCase();
   const found = all.filter(
@@ -845,11 +848,7 @@ function recipeEditor(id, mode = "edit", seed = null) {
       : seed
         ? { label: seed.data.title, route: `inspiration/${seed.id}` }
         : { label: "Recipes", route: "recipes" };
-  const ingredientText = data.ingredients
-    .map((i) =>
-      `${i.quantity == null ? "" : `${i.quantity} ${i.unit ?? ""} `}${i.name}${i.preparation ? `, ${i.preparation}` : ""}`.trim(),
-    )
-    .join("\n");
+  const ingredientText = data.ingredients.map(ingredientLine).join("\n");
   const effortSet = [
     data.active_minutes,
     data.total_minutes,
@@ -866,7 +865,7 @@ function recipeEditor(id, mode = "edit", seed = null) {
     .map((name) => `<option value="${esc(name)}"></option>`)
     .join(
       "",
-    )}</datalist></div>${field("Tags, separated by commas", "tags", formatLabels(data.tags ?? []), "text", 'placeholder="Weeknight, Shabbat, kid-friendly"', vocabulary.tags.length ? "Press one of your tags below to add it." : "")}${vocabulary.tags.length ? `<p class="small muted">Your tags: ${vocabulary.tags.map((t) => `<button type="button" class="link-button" data-action="append-tag" data-value="${esc(t.name)}">${esc(t.name)}</button>`).join(" ")}</p>` : ""}<div class="stack-sm"><span class="label">Diet labels</span><div class="chips">${diets.map((d) => `<label class="chip-input"><input type="checkbox" name="diets" value="${d.key}" ${(data.diets ?? []).includes(d.key) ? "checked" : ""}><span>${d.label}</span></label>`).join("")}</div><span class="help">What you know about this recipe, not an allergen check.</span></div></section><section class="panel stack"><h2>Ingredients</h2>${area("Ingredients · one per line", "ingredients", ingredientText, 'rows="9" placeholder="250 g orzo\n30 mL olive oil\nSalt to taste"', "Amount, unit, name, then an optional preparation after a comma. Unclear amounts stay as written.")}</section><section class="panel stack"><h2>Method</h2>${area("Method · separate steps with a blank line", "steps", data.steps.map((s) => s.text).join("\n\n"), 'rows="9"')}</section><section class="panel stack"><h2>Equipment</h2>${area("Equipment · one per line", "equipment", data.equipment.map((e) => e.name).join("\n"), 'rows="3" placeholder="Wide pan\nMeasuring jug"', "Leave blank if the recipe does not specify its tools.")}</section>${disclosure(
+    )}</datalist></div>${field("Tags, separated by commas", "tags", formatLabels(data.tags ?? []), "text", 'placeholder="Weeknight, Shabbat, kid-friendly"', vocabulary.tags.length ? "Press one of your tags below to add it." : "")}${vocabulary.tags.length ? `<p class="small muted">Your tags: ${vocabulary.tags.map((t) => `<button type="button" class="link-button" data-action="append-tag" data-value="${esc(t.name)}">${esc(t.name)}</button>`).join(" ")}</p>` : ""}<div class="stack-sm"><span class="label">Diet labels</span><div class="chips">${diets.map((d) => `<label class="chip-input"><input type="checkbox" name="diets" value="${d.key}" ${(data.diets ?? []).includes(d.key) ? "checked" : ""}><span>${d.label}</span></label>`).join("")}</div><span class="help">What you know about this recipe, not an allergen check.</span></div></section><section class="panel stack"><h2>Ingredients</h2>${area("Ingredients · one per line", "ingredients", ingredientText, 'rows="9" placeholder="250 g orzo\n30 mL olive oil\nSalt to taste"', "Amount, unit, name, then an optional preparation after a comma. Unclear amounts stay as written.")}</section><section class="panel stack"><h2>Method</h2>${area("Method · separate steps with a blank line", "steps", stepsText(data.steps), 'rows="9"')}</section><section class="panel stack"><h2>Equipment</h2>${area("Equipment · one per line", "equipment", data.equipment.map((e) => e.name).join("\n"), 'rows="3" placeholder="Wide pan\nMeasuring jug"', "Leave blank if the recipe does not specify its tools.")}</section>${disclosure(
     "Effort and spice",
     `<div class="form-grid form-grid-4">${field("Hands-on minutes", "active_minutes", data.active_minutes ?? "", "number", 'min="0" max="10080" placeholder="Unknown"')}${field("Total minutes", "total_minutes", data.total_minutes ?? "", "number", 'min="0" max="10080" placeholder="Unknown"')}${field("Cooking pans", "pan_count", data.pan_count ?? "", "number", 'min="0" max="100" placeholder="Unknown"')}${select("Cleanup effort", "cleanup", cleanupOptions, data.cleanup ?? "")}</div>${select("Spice level", "spice_level", spiceOptions, data.spice_level ?? "")}`,
     { open: effortSet },
@@ -904,7 +903,7 @@ async function recipePage(id) {
     api("cost_estimate", { source, currency, as_of: today() }),
   ]);
   const d = scaled.recipe;
-  const content = `${pageHeader({ title: r.data.title, eyebrow: r.data.original_recipe_id ? "Your own variation" : (r.data.tags[0] ?? "Recipe"), back: { label: "Recipes", route: "recipes" }, actions: `${button("", "favorite", `data-id="${esc(id)}" aria-label="${r.data.favorite ? "Remove from favorites" : "Add to favorites"}" aria-pressed="${Boolean(r.data.favorite)}"`, `btn-quiet btn-icon favorite ${r.data.favorite ? "is-favorite" : ""}`, "heart")}${link("Edit recipe", `recipes/${id}/edit`, { ico: "pencil" })}` })}${effort(r)}${facetChips(r.data, { course: true, cls: "chips chips-sm spacer-sm" })}<div class="actions spacer">${button("Cook", "cook", `data-kind="recipe" data-id="${esc(id)}"`, "btn-primary", "flame")}${link("Shop", `shop/review/recipe/${id}`, { ico: "shopping-basket" })}${button("Plan", "toggle", 'data-target="#plan-form" aria-expanded="false" aria-controls="plan-form"', "", "calendar-days")}</div><form id="plan-form" data-form="plan" class="panel stack spacer" hidden>${hidden("source", `recipe:${id}`)}<h2>Add to the plan</h2><div class="form-grid">${field("Date", "date", today(), "date", "required")}${field("Meal", "slot", "Dinner", "text", "required")}</div>${errorSlot()}<div class="form-footer">${submit("Add to plan", "calendar-days")}${button("Cancel", "toggle", 'data-target="#plan-form"', "btn-quiet")}</div></form>${memory.preferred_recipe && memory.preferred_recipe.id !== id ? `<div class="spacer">${callout(`Your preferred version: ${esc(memory.preferred_recipe.data.title)} <a href="#/recipes/${esc(memory.preferred_recipe.id)}">Open variation</a>`, { ico: "star" })}</div>` : ""}${memory.latest ? `<div class="spacer">${callout(`<div class="eyebrow">Remember for next time</div><p class="preline">${esc(memory.latest.data.next_time || memory.latest.data.changes || memory.latest.data.text)}</p><small class="muted">${esc(memory.latest.data.cooked_on ?? memory.latest.created_at.slice(0, 10))}</small>`, { kind: "callout-warning", ico: "notebook-pen" })}</div>` : ""}<div class="cols spacer"><section class="panel stack"><div class="row between"><h2>Ingredients</h2><form data-form="servings" class="row row-nowrap servings-form">${hidden("id", id)}${field("Portions", "servings", d.servings ?? "", "number", `min="0.01" max="10000" step="any" ${r.data.servings === null ? 'disabled placeholder="Unknown"' : "required"}`)}${r.data.servings !== null ? '<button class="btn btn-sm self-end" type="submit">Update</button>' : ""}</form></div><div>${d.ingredients.map((i) => `<div class="ingredient"><span>${esc(i.name)}${i.preparation ? `<small>${esc(i.preparation)}</small>` : ""}</span><span class="amount">${esc(amount(i))}</span></div>`).join("") || '<p class="small muted">Ingredients have not been recorded.</p>'}</div>${d.equipment.length ? `<div><h3>What you’ll use</h3><div class="chips spacer-sm">${d.equipment.map((e) => tag(`${e.quantity > 1 ? `${e.quantity} × ` : ""}${e.name}${e.capacity ? ` · ${e.capacity}` : ""}`, "tag-neutral")).join("")}</div></div>` : ""}<div><h3>Estimated ingredient cost</h3><p class="small spacer-xs">${cost.complete ? `<strong>${money(cost.total)}</strong> <span class="muted">· ${cost.dishes[0].per_portion == null ? "" : `${money(cost.dishes[0].per_portion)} per portion`}</span>` : `<strong>${money(cost.known_cost)}</strong> <span class="muted">known subtotal · incomplete</span>`}</p>${cost.missing_prices.length ? `<p class="small muted">Missing amounts or prices: ${esc([...new Set(cost.missing_prices.map((l) => l.ingredient.name))].join(", "))}.</p>` : ""}<a class="small" href="#/settings/prices">Prices</a></div></section><section class="stack"><h2>Method</h2><ol class="method">${d.steps.map((s) => `<li>${esc(s.text)}${s.duration_seconds ? `<small class="muted">${num(s.duration_seconds / 60)} minutes</small>` : ""}</li>`).join("") || '<li class="small muted">No method recorded.</li>'}</ol>${d.warnings.length ? callout(d.warnings.map(esc).join("<br>"), { kind: "callout-warning", ico: "triangle-alert" }) : ""}${r.data.notes ? `<div class="panel panel-soft"><p class="preline">${esc(r.data.notes)}</p></div>` : ""}${linksSection(r.data)}${recipeConnections(id)}<details class="disclosure quiet"><summary>Original recipe and sources</summary><div class="disclosure-body">${r.data.source_url ? `<a href="${esc(r.data.source_url)}" target="_blank" rel="noreferrer">Original source</a>` : ""}${(r.data.source_image_ids ?? []).map((id) => `<img class="source-image" src="/api/assets/${encodeURIComponent(id)}" alt="Original recipe photo">`).join("")}<pre class="source-text">${esc(r.data.original_text || "No original text was provided.")}</pre></div></details></section></div><section class="section"><div class="section-header"><h2>Cooking notes</h2><div class="actions">${link("Add a cooking note", `recipes/${id}/memory`, { cls: "btn-sm", ico: "notebook-pen" })}${link("Make a variation", `recipes/${memory.original_recipe_id}/variant`, { cls: "btn-sm", ico: "copy" })}${link("Record a cooked batch", `plan/leftovers/new/${id}`, { cls: "btn-sm", ico: "package" })}</div></div>${memory.notes.length ? `<div class="grid">${memory.notes.map((n) => `<article class="panel stack-sm"><div class="row between"><span class="eyebrow">${esc(n.data.cooked_on ?? n.created_at.slice(0, 10))}</span><span class="small">${n.data.rating ? "★".repeat(n.data.rating) : ""}${n.data.cook_again === true ? " · Cook again" : n.data.cook_again === false ? " · Try something else" : ""}</span></div><p class="preline">${esc(n.data.text)}</p>${n.data.changes ? `<p class="small preline"><strong>Changed:</strong> ${esc(n.data.changes)}</p>` : ""}${n.data.next_time ? `<p class="small preline"><strong>Next time:</strong> ${esc(n.data.next_time)}</p>` : ""}</article>`).join("")}</div>` : '<p class="small muted">Your notes and successful changes will appear here before the next cook.</p>'}${memory.variants.length ? `<div class="spacer"><h3>Ways you make it</h3><div class="chips spacer-sm">${memory.variants.map((v) => `<a class="chip" href="#/recipes/${esc(v.id)}">${esc(v.data.title)}${v.data.preferred ? " · Preferred" : ""}</a>`).join("")}</div></div>` : ""}</section>`;
+  const content = `${pageHeader({ title: r.data.title, eyebrow: r.data.original_recipe_id ? "Your own variation" : (r.data.tags[0] ?? "Recipe"), back: { label: "Recipes", route: "recipes" }, actions: `${button("", "favorite", `data-id="${esc(id)}" aria-label="${r.data.favorite ? "Remove from favorites" : "Add to favorites"}" aria-pressed="${Boolean(r.data.favorite)}"`, `btn-quiet btn-icon favorite ${r.data.favorite ? "is-favorite" : ""}`, "heart")}${link("Edit recipe", `recipes/${id}/edit`, { ico: "pencil" })}` })}${effort(r)}${facetChips(r.data, { course: true, cls: "chips chips-sm spacer-sm" })}<div class="actions spacer">${button("Cook", "cook", `data-kind="recipe" data-id="${esc(id)}"`, "btn-primary", "flame")}${link("Shop", `shop/review/recipe/${id}`, { ico: "shopping-basket" })}${button("Plan", "toggle", 'data-target="#plan-form" aria-expanded="false" aria-controls="plan-form"', "", "calendar-days")}</div><form id="plan-form" data-form="plan" class="panel stack spacer" hidden>${hidden("source", `recipe:${id}`)}<h2>Add to the plan</h2><div class="form-grid">${field("Date", "date", today(), "date", "required")}${field("Meal", "slot", "Dinner", "text", "required")}</div>${errorSlot()}<div class="form-footer">${submit("Add to plan", "calendar-days")}${button("Cancel", "toggle", 'data-target="#plan-form"', "btn-quiet")}</div></form>${memory.preferred_recipe && memory.preferred_recipe.id !== id ? `<div class="spacer">${callout(`Your preferred version: ${esc(memory.preferred_recipe.data.title)} <a href="#/recipes/${esc(memory.preferred_recipe.id)}">Open variation</a>`, { ico: "star" })}</div>` : ""}${memory.latest ? `<div class="spacer">${callout(`<div class="eyebrow">Remember for next time</div><p class="preline">${esc(memory.latest.data.next_time || memory.latest.data.changes || memory.latest.data.text)}</p><small class="muted">${esc(memory.latest.data.cooked_on ?? localDay(memory.latest.created_at))}</small>`, { kind: "callout-warning", ico: "notebook-pen" })}</div>` : ""}<div class="cols spacer"><section class="panel stack"><div class="row between"><h2>Ingredients</h2><form data-form="servings" class="row row-nowrap servings-form">${hidden("id", id)}${field("Portions", "servings", d.servings ?? "", "number", `min="0.01" max="10000" step="any" ${r.data.servings === null ? 'disabled placeholder="Unknown"' : "required"}`)}${r.data.servings !== null ? '<button class="btn btn-sm self-end" type="submit">Update</button>' : ""}</form></div><div>${d.ingredients.map((i) => `<div class="ingredient"><span>${esc(i.name)}${i.preparation ? `<small>${esc(i.preparation)}</small>` : ""}</span><span class="amount">${esc(amount(i))}</span></div>`).join("") || '<p class="small muted">Ingredients have not been recorded.</p>'}</div>${d.equipment.length ? `<div><h3>What you’ll use</h3><div class="chips spacer-sm">${d.equipment.map((e) => tag(`${e.quantity > 1 ? `${e.quantity} × ` : ""}${e.name}${e.capacity ? ` · ${e.capacity}` : ""}`, "tag-neutral")).join("")}</div></div>` : ""}<div><h3>Estimated ingredient cost</h3><p class="small spacer-xs">${cost.complete ? `<strong>${money(cost.total)}</strong> <span class="muted">· ${cost.dishes[0].per_portion == null ? "" : `${money(cost.dishes[0].per_portion)} per portion`}</span>` : `<strong>${money(cost.known_cost)}</strong> <span class="muted">known subtotal · incomplete</span>`}</p>${cost.missing_prices.length ? `<p class="small muted">Missing amounts or prices: ${esc([...new Set(cost.missing_prices.map((l) => l.ingredient.name))].join(", "))}.</p>` : ""}<a class="small" href="#/settings/prices">Prices</a></div></section><section class="stack"><h2>Method</h2><ol class="method">${d.steps.map((s) => `<li>${esc(s.text)}${s.duration_seconds ? `<small class="muted">${num(s.duration_seconds / 60)} minutes</small>` : ""}</li>`).join("") || '<li class="small muted">No method recorded.</li>'}</ol>${d.warnings.length ? callout(d.warnings.map(esc).join("<br>"), { kind: "callout-warning", ico: "triangle-alert" }) : ""}${r.data.notes ? `<div class="panel panel-soft"><p class="preline">${esc(r.data.notes)}</p></div>` : ""}${linksSection(r.data)}${recipeConnections(id)}<details class="disclosure quiet"><summary>Original recipe and sources</summary><div class="disclosure-body">${r.data.source_url ? `<a href="${esc(r.data.source_url)}" target="_blank" rel="noreferrer">Original source</a>` : ""}${(r.data.source_image_ids ?? []).map((id) => `<img class="source-image" src="/api/assets/${encodeURIComponent(id)}" alt="Original recipe photo">`).join("")}<pre class="source-text">${esc(r.data.original_text || "No original text was provided.")}</pre></div></details></section></div><section class="section"><div class="section-header"><h2>Cooking notes</h2><div class="actions">${link("Add a cooking note", `recipes/${id}/memory`, { cls: "btn-sm", ico: "notebook-pen" })}${link("Make a variation", `recipes/${memory.original_recipe_id}/variant`, { cls: "btn-sm", ico: "copy" })}${link("Record a cooked batch", `plan/leftovers/new/${id}`, { cls: "btn-sm", ico: "package" })}</div></div>${memory.notes.length ? `<div class="grid">${memory.notes.map((n) => `<article class="panel stack-sm"><div class="row between"><span class="eyebrow">${esc(n.data.cooked_on ?? localDay(n.created_at))}</span><span class="small">${n.data.rating ? "★".repeat(n.data.rating) : ""}${n.data.cook_again === true ? " · Cook again" : n.data.cook_again === false ? " · Try something else" : ""}</span></div><p class="preline">${esc(n.data.text)}</p>${n.data.changes ? `<p class="small preline"><strong>Changed:</strong> ${esc(n.data.changes)}</p>` : ""}${n.data.next_time ? `<p class="small preline"><strong>Next time:</strong> ${esc(n.data.next_time)}</p>` : ""}</article>`).join("")}</div>` : '<p class="small muted">Your notes and successful changes will appear here before the next cook.</p>'}${memory.variants.length ? `<div class="spacer"><h3>Ways you make it</h3><div class="chips spacer-sm">${memory.variants.map((v) => `<a class="chip" href="#/recipes/${esc(v.id)}">${esc(v.data.title)}${v.data.preferred ? " · Preferred" : ""}</a>`).join("")}</div></div>` : ""}</section>`;
   return { title: r.data.title, active: "recipes", content };
 }
 
@@ -1197,14 +1196,14 @@ function cookPage() {
     .slice(0, 6);
   const content = `${pageHeader({ title: "Cook", subtitle: "Follow each dish, share the preparation, and keep the timers in view." })}${
     active.length
-      ? `<div class="grid grid-3">${active.map((s) => `<article class="card">${tag("On the stove", "tag-warm")}<h2 class="card-title"><a href="#/cook/${esc(s.id)}">${esc(s.data.title)}</a></h2><p>${plural(s.data.dishes.length, "dish", "dishes")} · ${s.data.progress.reduce((n, p) => n + p.completed_steps.length, 0)} of ${s.data.dishes.reduce((n, d) => n + d.steps.length, 0)} steps done</p><div class="card-end"><span class="small muted">Started ${dateLabel(s.created_at.slice(0, 10))}</span>${link("Continue", `cook/${s.id}`, { primary: true, cls: "btn-sm", ico: "flame" })}</div></article>`).join("")}</div>`
+      ? `<div class="grid grid-3">${active.map((s) => `<article class="card">${tag("On the stove", "tag-warm")}<h2 class="card-title"><a href="#/cook/${esc(s.id)}">${esc(s.data.title)}</a></h2><p>${plural(s.data.dishes.length, "dish", "dishes")} · ${s.data.progress.reduce((n, p) => n + p.completed_steps.length, 0)} of ${s.data.dishes.reduce((n, d) => n + d.steps.length, 0)} steps done</p><div class="card-end"><span class="small muted">Started ${dateLabel(localDay(s.created_at))}</span>${link("Continue", `cook/${s.id}`, { primary: true, cls: "btn-sm", ico: "flame" })}</div></article>`).join("")}</div>`
       : emptyState(
           "Nothing on the stove.",
           "Open a recipe, a meal or a planned day and press Cook to start.",
           `${link("Pick a recipe", "recipes", { primary: true })}${link("Open this week", "plan")}`,
           "flame",
         )
-  }${finished.length ? `<section class="section"><div class="section-header"><h2>Recently finished</h2></div><div class="panel"><div class="list">${finished.map((s) => `<div class="list-item"><div class="list-body"><strong>${esc(s.data.title)}</strong><p>${plural(s.data.dishes.length, "dish", "dishes")} · ${dateLabel(s.created_at.slice(0, 10))}</p></div>${link("Notes & leftovers", `cook/${s.id}`, { cls: "btn-sm" })}</div>`).join("")}</div></div></section>` : ""}`;
+  }${finished.length ? `<section class="section"><div class="section-header"><h2>Recently finished</h2></div><div class="panel"><div class="list">${finished.map((s) => `<div class="list-item"><div class="list-body"><strong>${esc(s.data.title)}</strong><p>${plural(s.data.dishes.length, "dish", "dishes")} · ${dateLabel(localDay(s.created_at))}</p></div>${link("Notes & leftovers", `cook/${s.id}`, { cls: "btn-sm" })}</div>`).join("")}</div></div></section>` : ""}`;
   return { title: "Cook", active: "cook", content };
 }
 function sessionPage(id) {
@@ -1530,7 +1529,7 @@ function techniqueEditor(id) {
     photo_ids: [],
     recipe_ids: [],
   };
-  const content = `${pageHeader({ title: t ? "Edit technique" : "New technique", subtitle: "A method you want to remember. Add the videos that taught you and the recipes it belongs to.", back: t ? { label: t.data.title, route: `techniques/${t.id}` } : { label: "Techniques", route: "techniques" } })}<form data-form="technique" class="panel stack" data-id="${esc(t?.id ?? "")}" data-version="${t?.version ?? ""}">${field("Technique name", "title", d.title, "text", 'required maxlength="500" placeholder="Reverse sear"')}${area("In short", "summary", d.summary, 'rows="3" placeholder="Cook low in the oven first, then sear hard for the crust."')}${area("Steps · separate steps with a blank line", "steps", d.steps.map((s) => s.text).join("\n\n"), 'rows="7"')}${area("Tips and pitfalls", "tips", d.tips, 'rows="3"')}${field("Tags, separated by commas", "tags", d.tags.join(", "), "text", 'placeholder="Meat, knife skills"')}${area("Links and videos · one per line", "links", formatLinkLines(d.links), 'rows="3" placeholder="https://youtu.be/… The video that explains it"', "A web address, then an optional title. YouTube, Vimeo, Facebook, Instagram and TikTok videos play on the technique page.")}${photoFields(d.photo_ids)}${recipePicker(d.recipe_ids, "Recipes that use this technique")}${errorSlot()}<div class="form-footer">${submit(t ? "Save technique" : "Add technique", "check")}${link("Cancel", t ? `techniques/${t.id}` : "techniques", { cls: "btn-quiet" })}</div></form>`;
+  const content = `${pageHeader({ title: t ? "Edit technique" : "New technique", subtitle: "A method you want to remember. Add the videos that taught you and the recipes it belongs to.", back: t ? { label: t.data.title, route: `techniques/${t.id}` } : { label: "Techniques", route: "techniques" } })}<form data-form="technique" class="panel stack" data-id="${esc(t?.id ?? "")}" data-version="${t?.version ?? ""}">${field("Technique name", "title", d.title, "text", 'required maxlength="500" placeholder="Reverse sear"')}${area("In short", "summary", d.summary, 'rows="3" placeholder="Cook low in the oven first, then sear hard for the crust."')}${area("Steps · separate steps with a blank line", "steps", stepsText(d.steps), 'rows="7"')}${area("Tips and pitfalls", "tips", d.tips, 'rows="3"')}${field("Tags, separated by commas", "tags", d.tags.join(", "), "text", 'placeholder="Meat, knife skills"')}${area("Links and videos · one per line", "links", formatLinkLines(d.links), 'rows="3" placeholder="https://youtu.be/… The video that explains it"', "A web address, then an optional title. YouTube, Vimeo, Facebook, Instagram and TikTok videos play on the technique page.")}${photoFields(d.photo_ids)}${recipePicker(d.recipe_ids, "Recipes that use this technique")}${errorSlot()}<div class="form-footer">${submit(t ? "Save technique" : "Add technique", "check")}${link("Cancel", t ? `techniques/${t.id}` : "techniques", { cls: "btn-quiet" })}</div></form>`;
   return {
     title: t ? "Edit technique" : "New technique",
     active: "recipes",
@@ -1913,7 +1912,7 @@ async function accountTab() {
       ? passkeys
           .map(
             (p) =>
-              `<div class="list-item"><div class="list-body"><strong>${esc(p.name)}</strong><p>Added ${dateLabel(p.created_at.slice(0, 10))}${p.used_at ? ` · Last used ${dateLabel(p.used_at.slice(0, 10))}` : ""}${p.backed_up ? " · Synced by your password manager" : ""}</p></div>${button("Remove", "passkey-remove", `data-id="${esc(p.id)}" aria-label="Remove passkey ${esc(p.name)}"`, "btn-quiet btn-sm btn-danger")}</div>`,
+              `<div class="list-item"><div class="list-body"><strong>${esc(p.name)}</strong><p>Added ${dateLabel(localDay(p.created_at))}${p.used_at ? ` · Last used ${dateLabel(localDay(p.used_at))}` : ""}${p.backed_up ? " · Synced by your password manager" : ""}</p></div>${button("Remove", "passkey-remove", `data-id="${esc(p.id)}" aria-label="Remove passkey ${esc(p.name)}"`, "btn-quiet btn-sm btn-danger")}</div>`,
           )
           .join("")
       : '<p class="small muted">No passkeys yet. Add one on each phone or computer you cook from.</p>'
@@ -2121,26 +2120,16 @@ async function saveRecipe(form, values) {
     mode === "import"
       ? record("import", id)?.data.recipe
       : record("recipe", id)?.data;
-  const ingredientsText = values.get("ingredients"),
-    stepsText = values.get("steps");
-  const parsed = await api("recipe_parse", {
-    text: `${values.get("title")}\n${values.get("servings") ? `Serves ${values.get("servings")}` : ""}\nIngredients\n${ingredientsText}\nMethod\n${stepsText}`,
-  });
-  const steps = String(stepsText)
-    .split(/\n\s*\n/)
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .map((text) => original?.steps.find((s) => s.text === text) ?? { text });
+  // What the cook left as shown keeps its stored form; only changed lines
+  // and steps are read again.
+  const ingredients = editedIngredients(
+    values.get("ingredients"),
+    original?.ingredients,
+  );
+  const steps = editedSteps(values.get("steps"), original?.steps);
   const equipment = lineList(values.get("equipment")).map(
     (name) => original?.equipment.find((e) => e.name === name) ?? { name },
   );
-  const ingredients = parsed.recipe.ingredients.map((i) => ({
-    ...i,
-    category:
-      original?.ingredients.find(
-        (old) => old.name === i.name && old.preparation === i.preparation,
-      )?.category ?? "Other",
-  }));
   const links = parseLinkLines(values.get("links"));
   if (links.invalid.length)
     throw new Error(
@@ -2282,7 +2271,7 @@ document.addEventListener("submit", async (event) => {
           ...(t?.data ?? {}),
           title: v.get("title"),
           summary: v.get("summary"),
-          steps: paragraphs(v.get("steps")).map((text) => ({ text })),
+          steps: editedSteps(v.get("steps"), t?.data.steps),
           tips: v.get("tips"),
           tags: comma(v.get("tags")),
           links: linksFrom(v.get("links")),

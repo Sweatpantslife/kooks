@@ -105,7 +105,12 @@ test("browser API shares persistent actions, reports revisions and rejects stale
   const a11y = await fetch(`${origin}/shared/a11y.js`);
   assert.equal(a11y.status, 200);
   assert.match(await a11y.text(), /export function keepPlace/);
-  assert.equal((await fetch(`${origin}/shared/ingredients.js`)).status, 404);
+  const ingredients = await fetch(`${origin}/shared/ingredients.js`);
+  assert.equal(ingredients.status, 200);
+  assert.match(await ingredients.text(), /export function editedIngredients/);
+  // Only the listed modules are served, never the rest of the repository.
+  assert.equal((await fetch(`${origin}/shared/missing.js`)).status, 404);
+  assert.equal((await fetch(`${origin}/mcp/store.js`)).status, 404);
   const initial = await (await fetch(`${origin}/api/state`)).json();
   assert.equal(initial.sharing, false);
   assert.equal(initial.account, null);

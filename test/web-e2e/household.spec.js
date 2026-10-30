@@ -427,6 +427,64 @@ test("links and videos save with a recipe, play on request and round-trip throug
   ).toHaveAttribute("href", "https://www.instagram.com/reel/C1abcdefg/");
 });
 
+test("editing one ingredient keeps every line and step the cook left alone", async ({
+  page,
+  request,
+  baseURL,
+}) => {
+  const { record } = await seed(request, baseURL, "recipe_save", {
+    recipe: recipe("Buttered orzo", {
+      ingredients: [
+        {
+          name: "butter",
+          quantity: 1,
+          unit: "knob",
+          category: "Dairy & eggs",
+          original_text: "a knob of butter",
+        },
+        {
+          name: "orzo",
+          quantity: 250,
+          unit: "g",
+          category: "Pantry",
+          original_text: "250g orzo",
+        },
+        { name: "parsley", preparation: "chopped", category: "Produce" },
+      ],
+      steps: [
+        { text: "Toast the orzo.\n\nStir often.", duration_seconds: 300 },
+        { text: "Simmer until tender.", duration_seconds: 600 },
+      ],
+    }),
+  });
+  await page.reload();
+  await page.goto(`/#/recipes/${record.id}/edit`);
+  const ingredients = page.getByLabel("Ingredients · one per line");
+  await expect(ingredients).toHaveValue(
+    "1 knob butter\n250 g orzo\nparsley, chopped",
+  );
+  await expect(
+    page.getByLabel("Method · separate steps with a blank line"),
+  ).toHaveValue("Toast the orzo.\nStir often.\n\nSimmer until tender.");
+  await ingredients.fill("1 knob butter\n300 g orzo\nparsley, chopped");
+  await page.getByRole("button", { name: "Save recipe" }).click();
+  await expect(h1(page, record.data.title)).toBeVisible();
+  await expect(
+    page.locator(".ingredient", { hasText: "butter" }),
+  ).toContainText("1 knob");
+  const saved = await request.post(`${baseURL}/api/tools/kooks_get`, {
+    data: { kind: "recipe", id: record.id },
+    headers: { Origin: baseURL },
+  });
+  const { data } = (await saved.json()).record;
+  expect(data.ingredients).toEqual([
+    { ...record.data.ingredients[0] },
+    { ...record.data.ingredients[1], quantity: 300 },
+    { ...record.data.ingredients[2] },
+  ]);
+  expect(data.steps).toEqual(record.data.steps);
+});
+
 test("every section fits phone, tablet and desktop widths without sideways scrolling", async ({
   page,
 }) => {
