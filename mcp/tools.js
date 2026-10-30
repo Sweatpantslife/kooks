@@ -473,7 +473,7 @@ export function createTools(store) {
   );
   tool(
     "backup_export",
-    "Export all cookbook records and snapshots as versioned JSON. The host should save the returned backup to a file. This data export excludes action history and credentials.",
+    "Export all cookbook records and snapshots as versioned JSON. The host should save the returned backup to a file. This data export excludes action history and credentials. A cookbook whose photos and ebooks exceed 64 MB is refused with BACKUP_TOO_LARGE; the household then downloads its backup from the browser app (Settings › Backup) or runs node scripts/backup.mjs export.",
     {},
     true,
     () => ({ backup: exportBackup(store) }),

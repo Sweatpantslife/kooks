@@ -4,6 +4,10 @@ What changed in Kooks and how each change was verified, newest first. Kooks has 
 
 ## Unreleased
 
+### Backups stream, so a full ebook shelf exports and restores ([#31](https://github.com/Sweatpantslife/kooks/pull/31))
+
+Settings › Backup downloads the same JSON as before, streamed record by record with each file in 3 MB slices, and `node scripts/backup.mjs export` and `restore` write and restore a backup of any size on the computer that keeps the cookbook. Through MCP, `backup_export` refuses with `BACKUP_TOO_LARGE` beyond 64 MB of photos and ebooks. `test/backup.test.js` checks that the stream matches `backup_export`, that restores read at 1 MiB, 4,093 and 1,021 bytes (and indented files) re-export identically, and that bad files restore nothing. By hand with seven 64 MB PDFs and 300 recipes, `main` fails with "Invalid string length"; the script exports the 626 MB file in 4.3 s, the download streams in 2.6 s with the server peaking at 380 MB, and the restore takes 18 s and re-exports identically. `npm run lint`, `npm run format:check`, `npm test` (105 passed, the OCR case skipped) and `npm run test:e2e` (30 passed) pass. The download was fetched over HTTP, not saved through a real browser's download manager.
+
 ### Capacitor packages installed only for development
 
 The eight Capacitor runtime packages moved to `devDependencies`, so `npm ci --omit=dev`, which the server's Docker image runs, leaves them out: a production install shrinks from 20.8 MB to 17 MB. From that install the browser server answers `/healthz` and the MCP server initialises. After a full `npm ci`, `npx cap sync` still finds the same five plugins for Android and iOS and changes no tracked files. The native apps were not compiled here.

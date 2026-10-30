@@ -2,6 +2,8 @@ import http from "node:http";
 import { isIPv4, isIPv6 } from "node:net";
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
+import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import { fileURLToPath } from "node:url";
 import { resolve, extname } from "node:path";
 import { ZodError } from "zod";
@@ -9,6 +11,7 @@ import { Store, KooksError } from "../mcp/store.js";
 import { createTools } from "../mcp/tools.js";
 import { kind } from "../mcp/schemas.js";
 import { batchView } from "../mcp/features.js";
+import { backupChunks } from "../mcp/backup.js";
 import { shoppingItems } from "../mcp/shopping.js";
 import { embedOrigins } from "../shared/links.js";
 import { AuthError, createAuth, normalizeEmail, parseMembers } from "./auth.js";
@@ -482,6 +485,22 @@ export function createWebServer({
           ),
         });
         return res.end(asset.bytes);
+      }
+      // The portable backup streams as it is written, so a shelf of large
+      // ebooks downloads like a small cookbook; the page names the file.
+      if (url.pathname === "/api/backup" && req.method === "GET") {
+        res.writeHead(200, {
+          "Content-Type": "application/json; charset=utf-8",
+          "Content-Disposition": "attachment",
+        });
+        try {
+          await pipeline(Readable.from(backupChunks(store)), res);
+        } catch (error) {
+          // A dropped connection is not a failure worth logging.
+          if (error.code !== "ERR_STREAM_PREMATURE_CLOSE") console.error(error);
+          res.destroy();
+        }
+        return;
       }
       if (url.pathname.startsWith("/api/tools/") && req.method === "POST") {
         const tool = tools.get(
