@@ -30,6 +30,10 @@ export const digest = (value) =>
 // Schema 2 keeps asset bytes in the blobs table. Records, listings, polling,
 // history and undo only ever see asset metadata.
 const SCHEMA_VERSION = 2;
+// Undo needs the before and after copies of every record an action changed.
+// Kooks keeps them this long; older actions keep only their history line.
+export const UNDO_DAYS = 90;
+const DAY = 24 * 60 * 60 * 1000;
 const hasInlineBytes = (kind, data) =>
   kind === "asset" && typeof data?.base64 === "string";
 
@@ -51,11 +55,20 @@ export function splitAsset(data) {
 // Rows in the order SQLite sorts their TEXT ids: by UTF-8 bytes.
 const byId = (a, b) => Buffer.compare(Buffer.from(a.id), Buffer.from(b.id));
 const active = (record) => !record.archived;
+// An action's history line for one record: what changed, between which
+// versions.
+const summary = ({ kind, id, before, after }) => ({
+  kind,
+  id,
+  before_version: before?.version ?? null,
+  after_version: after.version,
+});
 
 // SQLite serializes transactions across MCP processes. The domain layer never
 // awaits while a transaction is open, so reads and writes form one atomic action.
 export class Store {
   #statements = new Map();
+  #trimmedAt = 0;
   constructor(path) {
     if (path !== ":memory:")
       mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
@@ -93,11 +106,14 @@ export class Store {
         CREATE INDEX IF NOT EXISTS recipe_originals
           ON records(json_extract(document, '$.data.original_recipe_id'))
           WHERE kind = 'recipe';
+        -- Finds the actions old enough to trim without reading the history.
+        CREATE INDEX IF NOT EXISTS actions_created ON actions(created_at);
       `);
       // Re-read inside the transaction: another process may have upgraded
       // the file between the first check and the lock.
       if (this.userVersion() < SCHEMA_VERSION) moved = this.#migrateAssets();
       this.db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
+      this.#trim(Date.now());
       this.db.exec("COMMIT");
     } catch (error) {
       this.db.exec("ROLLBACK");
@@ -362,6 +378,8 @@ export class Store {
         JSON.stringify(this.changes),
         JSON.stringify(result),
       );
+      // A server can run for months; trim once a day as it writes.
+      if (Date.now() - this.#trimmedAt >= DAY) this.#trim(Date.now());
       this.db.exec("COMMIT");
       return result;
     } catch (error) {
@@ -369,6 +387,42 @@ export class Store {
       throw error;
     } finally {
       this.changes = null;
+    }
+  }
+  // Reduce actions older than UNDO_DAYS to their history line. The record
+  // copies undo needs and the result a retry would replay are dropped, so
+  // history stops growing with every save; polling still sees which records
+  // an old action changed. Runs inside a write transaction.
+  #trim(now) {
+    const cutoff = new Date(now - UNDO_DAYS * DAY).toISOString();
+    // Only full entries hold "after":; a history line has after_version.
+    const select = this.#query(
+      `SELECT seq, id, changes FROM actions
+       WHERE created_at < ? AND instr(changes, '"after":') > 0 LIMIT 100`,
+    );
+    const update = this.#query(
+      "UPDATE actions SET changes = ?, result = ? WHERE seq = ?",
+    );
+    let trimmed = 0;
+    for (let rows; (rows = select.all(cutoff)).length; trimmed += rows.length)
+      for (const row of rows)
+        update.run(
+          JSON.stringify(JSON.parse(row.changes).map(summary)),
+          JSON.stringify({ action_id: row.id, trimmed: true }),
+          row.seq,
+        );
+    this.#trimmedAt = now;
+    return trimmed;
+  }
+  trimHistory(now = Date.now()) {
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      const trimmed = this.#trim(now);
+      this.db.exec("COMMIT");
+      return trimmed;
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
     }
   }
   // The position of the last committed action. Every record change is part
@@ -397,15 +451,16 @@ export class Store {
         "SELECT id, action, request_id, created_at, changes FROM actions ORDER BY seq DESC LIMIT ? OFFSET ?",
       )
       .all(limit, offset)
-      .map((row) => ({
-        ...row,
-        changes: JSON.parse(row.changes).map((change) => ({
-          kind: change.kind,
-          id: change.id,
-          before_version: change.before?.version ?? null,
-          after_version: change.after.version,
-        })),
-      }));
+      .map((row) => {
+        const changes = JSON.parse(row.changes);
+        return {
+          ...row,
+          changes: changes.map((change) =>
+            change.after ? summary(change) : change,
+          ),
+          trimmed: changes.some((change) => !change.after),
+        };
+      });
   }
   undo(actionId) {
     const row = this.db
@@ -413,6 +468,11 @@ export class Store {
       .get(actionId);
     requireThat(row, "NOT_FOUND", "Action does not exist.");
     const changes = JSON.parse(row.changes);
+    requireThat(
+      changes.every((change) => change.after),
+      "UNDO_EXPIRED",
+      `This action is more than ${UNDO_DAYS} days old. Kooks keeps undo for ${UNDO_DAYS} days.`,
+    );
     for (const change of changes) {
       requireThat(
         digest(this.get(change.kind, change.id, true)) === digest(change.after),
