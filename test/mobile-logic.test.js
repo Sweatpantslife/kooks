@@ -129,6 +129,60 @@ test("mobile amounts format fractions, scale, convert for display and pluralize"
   assert.equal(scaledText("Bake at 200°C", "metric"), "Bake at 200°C");
 });
 
+test("mobile amounts choose the plural after rounding and use the shared cup size", () => {
+  // A US cup is 236.6 mL and a metric cup 250 mL: both read as about one cup.
+  assert.equal(amount({ q: 236.6, u: "ml" }, 1, "us"), "1 cup");
+  assert.equal(amount({ q: 250, u: "ml" }, 1, "us"), "1 cup");
+  assert.equal(amount({ q: 120, u: "ml" }, 1, "us"), "½ cup");
+  assert.equal(amount({ q: 360, u: "ml" }, 1, "us"), "1½ cups");
+  assert.equal(amount({ q: 0.5, u: "can" }), "½ can");
+  assert.equal(amount({ q: 1, u: "clove" }), "1 clove");
+  assert.equal(amount({ q: 3, u: "bunch" }), "3 bunches");
+  assert.equal(
+    amount({ q: 480, u: "ml", original: { q: 2, u: "cups" } }, 0.5, "original"),
+    "1 cup",
+  );
+  assert.equal(
+    amount({ q: 480, u: "ml", original: { q: 2, u: "cup" } }, 1, "original"),
+    "2 cups",
+  );
+  // Parsing and display use the same sizes, so a pasted amount reads back.
+  for (const line of ["1 cup milk", "2 tbsp oil", "1 tsp salt", "3 cups rice"])
+    assert.equal(
+      `${amount(parseIngredient(line), 1, "us")} ${parseIngredient(line).n}`,
+      line,
+    );
+});
+
+test("mobile parsing converts every mass and volume in the shared unit table", () => {
+  const beef = parseIngredient("2 lbs beef");
+  assert.equal(beef.u, "g");
+  assert.ok(Math.abs(beef.q - 907.18474) < 1e-9);
+  assert.deepEqual(beef.original, { q: 2, u: "lbs" });
+  assert.equal(parseIngredient("1 pound beef").u, "g");
+  assert.equal(parseIngredient("500 mg saffron").q, 0.5);
+  const milk = parseIngredient("1 us_cup milk");
+  assert.equal(milk.u, "ml");
+  assert.ok(Math.abs(milk.q - 236.5882365) < 1e-9);
+  assert.equal(parseIngredient("1 metric_cup milk").q, 250);
+  assert.equal(parseIngredient("1.1 l stock").q, 1100);
+  assert.equal(parseIngredient("2 pieces ginger").u, "piece");
+  assert.equal(parseIngredient("3 each lemons").u, "each");
+});
+
+test("mobile temperatures convert with spaces, decimals and ranges", () => {
+  assert.equal(scaledText("Bake at 180 °C.", "us"), "Bake at 356°F.");
+  assert.equal(scaledText("Bake at 180ºC.", "us"), "Bake at 356°F.");
+  assert.equal(scaledText("Roast at 175.5°C", "us"), "Roast at 348°F");
+  assert.equal(scaledText("Bake at 180–200 °C", "us"), "Bake at 356–392°F");
+  assert.equal(
+    scaledText("Bake at 180 to 200°C", "us"),
+    "Bake at 356 to 392°F",
+  );
+  assert.equal(scaledText("Heat to 400°F", "us"), "Heat to 400°F");
+  assert.equal(scaledText("Add 2 cups.", "us"), "Add 2 cups.");
+});
+
 test("mobile timer clocks respect pauses", () => {
   assert.equal(timeLeft({ pausedMs: 20000, endAt: 0 }, 5000), 20000);
   assert.equal(timeLeft({ pausedMs: null, endAt: 65000 }, 5000), 60000);
@@ -240,7 +294,24 @@ test("mobile equipment summary flags shared tools, unknown tools and oven temper
   assert.equal(summary.conflict, true);
   assert.deepEqual(
     summary.ovens.map((o) => o.temps),
-    [["200"], ["220", "180"]],
+    [[200], [220, 180]],
+  );
+  const spaced = (text) => ({
+    title: "Bread",
+    equipment: ["Oven"],
+    steps: [{ text }],
+  });
+  assert.deepEqual(
+    equipmentSummary([{ snapshot: spaced("Bake at 175.5 °C.") }], byId).ovens[0]
+      .temps,
+    [175.5],
+  );
+  assert.equal(
+    equipmentSummary(
+      [{ snapshot: spaced("Bake at 180 °C.") }, { recipeId: "a" }],
+      byId,
+    ).conflict,
+    true,
   );
   assert.equal(
     equipmentSummary([{ snapshot: byId("a") }], byId).conflict,

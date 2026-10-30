@@ -1,5 +1,13 @@
 // Pure display and measurement helpers for the mobile cookbook. Nothing here
 // touches the DOM or app state, so the browser suite can exercise it directly.
+import { kitchenVolumes, unitInfo, unitLabel } from "../shared/quantities.js";
+
+// The value an amount shows: the nearest eighth when it is that close,
+// otherwise one decimal.
+function shown(n) {
+  const f = Math.round(n * 8) / 8;
+  return Math.abs(n - f) < 0.015 ? f : Math.round(n * 10) / 10;
+}
 
 export function formatNumber(n) {
   if (!Number.isFinite(n)) return "";
@@ -12,8 +20,12 @@ export function formatNumber(n) {
   return new Intl.NumberFormat("en", { maximumFractionDigits: 1 }).format(n);
 }
 
+const ounce = unitInfo("oz").factor;
+
 // Ingredient amount in the chosen display system. Stored quantities are
 // metric; "us" converts for display and "original" shows the pasted units.
+// Cups and spoons use the same sizes as parsing, so a pasted amount reads
+// back as written.
 export function amount(i, multiplier = 1, units = "metric") {
   if (i.q === null || i.q === undefined) return i.note || "As needed";
   let q = i.q * multiplier,
@@ -24,20 +36,20 @@ export function amount(i, multiplier = 1, units = "metric") {
   }
   if (units === "us") {
     if (u === "g") {
-      q /= 28.349523125;
+      q /= ounce;
       u = "oz";
     } else if (u === "kg") {
-      q = (q * 1000) / 28.349523125;
+      q = (q * 1000) / ounce;
       u = "oz";
     } else if (u === "ml") {
-      if (q >= 60) {
-        q /= 240;
+      if (q >= kitchenVolumes.cup / 4) {
+        q /= kitchenVolumes.cup;
         u = "cup";
-      } else if (q >= 15) {
-        q /= 15;
+      } else if (q >= kitchenVolumes.tbsp) {
+        q /= kitchenVolumes.tbsp;
         u = "tbsp";
       } else {
-        q /= 5;
+        q /= kitchenVolumes.tsp;
         u = "tsp";
       }
     }
@@ -49,7 +61,8 @@ export function amount(i, multiplier = 1, units = "metric") {
     q /= 1000;
     u = "L";
   }
-  if (["cup", "can", "clove"].includes(u) && q !== 1) u += "s";
+  // The plural follows the number shown: 0.986 cups reads "1 cup".
+  u = unitLabel(u, shown(q));
   return `${formatNumber(q)}${u ? " " + u : ""}`;
 }
 
@@ -60,11 +73,25 @@ export function originalText(r) {
   );
 }
 
+// A Celsius temperature in recipe text: "180°C", "180 °C", "175.5ºC", or a
+// range such as "180–200 °C" or "180 to 200°C".
+const celsius =
+  /(\d+(?:[.,]\d+)?)(?:(\s*(?:-|–|to)\s*)(\d+(?:[.,]\d+)?))?\s*[°º]\s*C\b/g;
+const degrees = (value) => Number(value.replace(",", "."));
+const fahrenheit = (value) => Math.round((degrees(value) * 9) / 5 + 32);
+
+// Every Celsius value the text mentions, both ends of a range included.
+export const celsiusValues = (text) =>
+  [...text.matchAll(celsius)].flatMap(([, low, , high]) =>
+    (high === undefined ? [low] : [low, high]).map(degrees),
+  );
+
 export function scaledText(text, units) {
   return units === "us"
-    ? text.replace(
-        /(\d+)°C/g,
-        (_, c) => `${Math.round((Number(c) * 9) / 5 + 32)}°F`,
+    ? text.replace(celsius, (_, low, between, high) =>
+        high === undefined
+          ? `${fahrenheit(low)}°F`
+          : `${fahrenheit(low)}${between}${fahrenheit(high)}°F`,
       )
     : text;
 }
