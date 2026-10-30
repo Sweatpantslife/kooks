@@ -4,6 +4,10 @@ What changed in Kooks and how each change was verified, newest first. Kooks has 
 
 ## Unreleased
 
+### Undo kept for 90 days, older history trimmed to its summary ([#39](https://github.com/Sweatpantslife/kooks/pull/39))
+
+Actions older than 90 days keep their history line (the kinds, ids and versions they changed) but drop the before and after copies undo needs and the result a retry would replay: `history_list` marks them `trimmed`, `history_undo` refuses them with `UNDO_EXPIRED`, and polling still sees which records they changed. Kooks trims when it opens a database and once a day while it writes. In a simulated year of 30 saves a day, history falls from 89 MB to 23.5 MB and then stays at about 90 days' worth; that first trim takes 0.4 s and a daily one 4 ms. `test/history.test.js` covers trimming, refused undo, replays and polling, and with mocked clocks the daily trim, the 90-day boundary and the trim on open; removing either trim fails it. `npm run lint`, `npm run format:check`, `npm test` (110 passed, the OCR case skipped) and `npm run test:e2e` (30 passed) pass. An older Kooks server opening a trimmed database fails to page history back past 90 days or undo those actions.
+
 ### Direction-neutral layout CSS ([#30](https://github.com/Sweatpantslife/kooks/pull/30))
 
 Every left and right margin, padding, border, offset and text alignment in `shared/ui.css` and `app/styles.css` is now logical (`inline-start`/`inline-end`, `start`/`end`), so `dir="rtl"` mirrors both apps; the disclosure chevron and safe-area padding stay physical on purpose, and a unit test rejects new physical directions. The status message now centres with auto margins, which also stops it wrapping into half the screen width on phones. Screenshots of 7 web routes at 1280 and 390 px and 4 mobile views at both widths are pixel-identical in left-to-right apart from that message, and mirror correctly with `dir="rtl"`. `npm run format:check`, `npm run lint`, `npm test` (110 tests: 109 passed, the OCR case skipped) and `npx playwright test` (30 passed) pass. No right-to-left language, translated strings or mirrored icons exist yet.

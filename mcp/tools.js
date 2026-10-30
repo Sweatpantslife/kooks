@@ -454,14 +454,14 @@ export function createTools(store) {
   );
   tool(
     "history_list",
-    "Read the local action history, affected IDs and versions, and action IDs for undo.",
+    "Read the local action history, affected IDs and versions, and action IDs for undo. Actions older than 90 days are trimmed: they keep this history line but can no longer be undone.",
     s.pagination,
     true,
     (args) => ({ actions: store.history(args.limit, args.offset) }),
   );
   tool(
     "history_undo",
-    "Undo one action atomically if none of its records changed later. Creation is undone by archiving. A newer edit or active dependency blocks undo; it never overwrites another change.",
+    "Undo one action atomically if none of its records changed later. Creation is undone by archiving. A newer edit or active dependency blocks undo; it never overwrites another change. Actions older than 90 days return UNDO_EXPIRED.",
     {
       ...s.write,
       action_id: s.id,
