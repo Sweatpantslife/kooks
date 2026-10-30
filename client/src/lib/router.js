@@ -74,7 +74,6 @@ export function guardLeaving(ask) {
 const legacy = {
   today: "week",
   plan: "week",
-  cook: "week",
   capture: "recipes/add",
   imports: "recipes/add",
   library: "recipes",
@@ -103,7 +102,7 @@ export function startRouter() {
     mark();
     const parts = read();
     if (legacy[parts[0]]) navigate(legacy[parts[0]], { replace: true });
-    else if (parts[0] === "signin" && !parts[1])
+    else if ((parts[0] === "signin" || parts[0] === "cook") && !parts[1])
       navigate("week", { replace: true });
     else route.value = parts;
   };

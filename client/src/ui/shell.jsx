@@ -8,6 +8,7 @@ import {
 import { route, section, href } from "../lib/router.js";
 import { account } from "../lib/store.js";
 import { Icon } from "./icon.jsx";
+import { NowCooking } from "./now-cooking.jsx";
 
 const TABS = [
   { id: "week", label: "Week", icon: CalendarDays },
@@ -97,6 +98,7 @@ export function Shell({ children }) {
             You’re trying the new Kooks while it’s being built.
             <a href="../">Back to the current app</a>
           </p>
+          <NowCooking />
           {children}
         </div>
       </main>

@@ -42,6 +42,7 @@ import { FormError, useWork } from "../ui/form.jsx";
 import { Empty, PageHeader } from "../ui/page.jsx";
 import { Icon } from "../ui/icon.jsx";
 import { slotOrder, weekTitle } from "./week.jsx";
+import { slotNow } from "../lib/cooking.js";
 
 // What the last tap did, said out loud: a row that moves to another part of
 // the page is otherwise gone without a word.
@@ -375,12 +376,6 @@ export function Groceries() {
       {list && <Sources list={list} />}
     </>
   );
-}
-
-// Breakfast before eleven, lunch before four, then dinner.
-function slotNow() {
-  const hour = new Date().getHours();
-  return hour < 11 ? "Breakfast" : hour < 16 ? "Lunch" : "Dinner";
 }
 
 function Leftovers() {

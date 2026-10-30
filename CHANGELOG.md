@@ -40,6 +40,12 @@ The Groceries tab at `/next/#/groceries` has two parts. To buy is the shopping l
 
 `npm run format:check`, `npm run lint`, `npm test` (117 passed, 1 skipped; 2 new for aisles, amounts and names) and `npm run test:e2e` (66 passed; 4 new for Groceries, with axe scans of shopping for the week, To buy, putting away and At home).
 
+### Cooking in the redesigned app
+
+Cook on a recipe or meal, or on one of today's plans in the Week tab, opens cooking at `/next/#/cook/<session>`. It fills the screen, without the navigation, and shows one step at a time in large type, with Back and Next, and each dish of a meal in turn. Beside the step are the dish's ingredients, every step to jump to, and the timers. A step with a time offers a timer of that length, and any timer can be started by minutes; when one runs out, on any page, the app says so, chimes and buzzes. The screen stays on where the browser allows it. Leaving the stove keeps the cooking: a Now cooking bar on every page shows the step or the next timer and goes back to it, and Cook on the same recipe, meal or plan picks it up where it was. Finishing asks how it went for each dish (a rating out of 5, what to do next time, notes, and the portions left over, in the fridge or freezer): the note shows as "Last time" on the recipe and the first step of its next cooking, and leftovers go to At home. Portions eaten no longer show on the Week as leftovers set aside.
+
+`npm run format:check`, `npm run lint`, `npm test` (118 passed, 1 skipped; 1 new for timer clocks) and `npm run test:e2e` (69 passed; 3 new for cooking, with axe scans of a step, a running timer, the Now cooking bar and finishing).
+
 ### A failed passkey suggestion stays silent on the sign-in screen
 
 When the browser turns down the quiet passkey suggestion in the email field (no authenticator, nothing saved, or the request abandoned), both apps now say nothing, instead of putting the browser's raw message ("Resident credentials or empty 'allowCredentials' lists are not supported at this time.") in the sign-in alert, where it replaced a real reason such as "This sign-in link has expired or was already used." Only the kitchen turning down a passkey the person picked is shown. The quiet request's own failure to load its options is silent too.
