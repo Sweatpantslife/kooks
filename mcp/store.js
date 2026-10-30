@@ -362,6 +362,26 @@ export class Store {
       this.changes = null;
     }
   }
+  // The position of the last committed action. Every record change is part
+  // of an action, so this moves exactly when the cookbook does, whichever
+  // process wrote it.
+  sequence() {
+    return this.db
+      .prepare("SELECT coalesce(max(seq), 0) AS seq FROM actions")
+      .get().seq;
+  }
+  // The kind and id of every record changed by actions after a position.
+  changedSince(seq) {
+    return this.db
+      .prepare(
+        `SELECT DISTINCT json_extract(change.value, '$.kind') AS kind,
+           json_extract(change.value, '$.id') AS id
+         FROM actions, json_each(actions.changes) AS change
+         WHERE actions.seq > ?`,
+      )
+      .all(seq)
+      .map(({ kind, id }) => ({ kind, id }));
+  }
   history(limit, offset) {
     return this.db
       .prepare(

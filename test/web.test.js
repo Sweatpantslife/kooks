@@ -120,10 +120,16 @@ test("browser API shares persistent actions, reports revisions and rejects stale
   });
   assert.equal(response.status, 200);
   const saved = await response.json();
+  // A tab that knows the previous revision receives only what changed.
   const next = await (
     await fetch(`${origin}/api/state?revision=${initial.revision}`)
   ).json();
-  assert.equal(next.records.recipe[0].id, saved.record.id);
+  assert.equal(next.records, undefined);
+  assert.deepEqual(
+    next.changes.map((change) => [change.kind, change.id, change.record.id]),
+    [["recipe", saved.record.id, saved.record.id]],
+  );
+  assert.equal(next.sharing, false);
   assert.notEqual(next.revision, initial.revision);
   const unchanged = await (
     await fetch(`${origin}/api/state?revision=${next.revision}`)

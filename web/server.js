@@ -1,10 +1,11 @@
 import http from "node:http";
 import { isIPv4, isIPv6 } from "node:net";
+import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { resolve, extname } from "node:path";
 import { ZodError } from "zod";
-import { Store, KooksError, digest } from "../mcp/store.js";
+import { Store, KooksError } from "../mcp/store.js";
 import { createTools } from "../mcp/tools.js";
 import { kind } from "../mcp/schemas.js";
 import { batchView } from "../mcp/features.js";
@@ -43,6 +44,9 @@ const mime = {
   ".svg": "image/svg+xml",
 };
 const MINUTE = 60000;
+// A tab that is this many actions behind gets everything again instead of
+// the changed records.
+const maxChangedActions = 200;
 const isLoopback = (host) => ["127.0.0.1", "localhost", "::1"].includes(host);
 // Plain HTTP is only for the household's own network: loopback, private and
 // link-local addresses (100.64.0.0/10 is Tailscale's), and names that only
@@ -193,6 +197,9 @@ export function createWebServer({
     : null;
   const tools = new Map(createTools(store).map((t) => [t.name, t]));
   const limits = new Map();
+  // Revisions are this server start plus the action sequence, so a tab that
+  // was open before a restart, or against another database, reloads fully.
+  const started = randomUUID().slice(0, 8);
   // Video players load only from the embed origins the shared module
   // produces, and only once the person presses play; the book reader frames
   // PDFs from this origin, which asset responses allow in turn.
@@ -402,33 +409,54 @@ export function createWebServer({
         return askToSignIn(res);
       if (url.pathname === "/api/state" && req.method === "GET") {
         const state = store.read(() => {
-          const all = store.all();
-          const revision = digest(
-            all.map((r) => [r.kind, r.id, r.version, r.archived]),
-          );
-          if (url.searchParams.get("revision") === revision)
-            return { unchanged: true, revision };
-          const records = Object.fromEntries(
-            kind.options.map((k) => [
-              k,
-              all
-                .filter((r) => r.kind === k && !r.archived)
-                .map((r) => {
-                  if (k === "batch") return batchView(r);
-                  if (k === "shopping")
-                    return { ...r, items: shoppingItems(r.data) };
-                  return r;
-                }),
-            ]),
-          );
-          return {
-            records,
+          const sequence = store.sequence();
+          const revision = `${started}-${sequence}`;
+          const known = url.searchParams.get("revision") ?? "";
+          if (known === revision) return { unchanged: true, revision };
+          const view = (k, r) => {
+            if (k === "batch") return batchView(r);
+            if (k === "shopping") return { ...r, items: shoppingItems(r.data) };
+            return r;
+          };
+          const result = {
             revision,
             sharing: Boolean(auth),
             account: session
               ? { email: session.email, method: session.method }
               : null,
           };
+          // A tab that polled recently gets only the records changed since,
+          // each as its current view or null once archived.
+          const [prefix, since] = known.split("-");
+          if (
+            prefix === started &&
+            /^\d+$/.test(since) &&
+            Number(since) < sequence &&
+            sequence - Number(since) <= maxChangedActions
+          )
+            return {
+              ...result,
+              changes: store
+                .changedSince(Number(since))
+                .filter((change) => kind.options.includes(change.kind))
+                .map((change) => {
+                  const r = store.get(change.kind, change.id, true);
+                  return {
+                    ...change,
+                    record: r.archived ? null : view(change.kind, r),
+                  };
+                }),
+            };
+          const all = store.all();
+          const records = Object.fromEntries(
+            kind.options.map((k) => [
+              k,
+              all
+                .filter((r) => r.kind === k && !r.archived)
+                .map((r) => view(k, r)),
+            ]),
+          );
+          return { records, ...result };
         });
         return send(res, 200, state);
       }

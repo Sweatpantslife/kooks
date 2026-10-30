@@ -355,9 +355,23 @@ function toast(message, error = false, undo = false) {
   toastTime.left = error || offersUndo ? 20000 : 7000;
   toastCountdown();
 }
+// Merge the records changed since this tab's revision, keeping each list in
+// the server's id order; an archived record arrives as null and leaves.
+function applyChanges(changes) {
+  for (const { kind, id, record } of changes) {
+    const list = records(kind).filter((r) => r.id !== id);
+    if (record) {
+      const index = list.findIndex((r) => r.id > id);
+      list.splice(index < 0 ? list.length : index, 0, record);
+    }
+    db[kind] = list;
+  }
+}
+// Bring the tab up to date. Returns whether to draw: false after asking to
+// sign in, and for a poll that found nothing new or kept a draft.
 async function loadState({ polling = false } = {}) {
   const response = await fetch(
-    `/api/state${polling ? `?revision=${encodeURIComponent(revision)}` : ""}`,
+    `/api/state${revision ? `?revision=${encodeURIComponent(revision)}` : ""}`,
   );
   if (response.status === 401) {
     revision = "";
@@ -369,7 +383,7 @@ async function loadState({ polling = false } = {}) {
       "Could not open the kitchen. Check that the server is running.",
     );
   const value = await response.json();
-  if (value.unchanged) return false;
+  if (value.unchanged) return !polling;
   // A draft or a playing video survives other cooks' changes until this
   // page is left; redrawing would discard the one and restart the other.
   const dirty = document.querySelector('form[data-dirty="true"]'),
@@ -386,7 +400,8 @@ async function loadState({ polling = false } = {}) {
     }
     return false;
   }
-  db = value.records;
+  if (value.changes) applyChanges(value.changes);
+  else db = value.records;
   revision = value.revision;
   sharing = value.sharing;
   account = value.account ?? null;
