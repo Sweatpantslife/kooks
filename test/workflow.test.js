@@ -618,3 +618,19 @@ test("list search matches record values, not field names", (t) => {
   assert.equal(call("kooks_list", { kind: "recipe", query: "soup" }).total, 1);
   assert.equal(call("kooks_list", { kind: "recipe", query: "250" }).total, 2);
 });
+
+test("an oversized list fails its size limit before any entry is read", (t) => {
+  const { call } = harness(t);
+  const ingredients = Array.from({ length: 20000 }, () => ({}));
+  assert.throws(
+    () => call("recipe_save", { recipe: { ...dish(), ingredients } }),
+    (error) => {
+      assert.deepEqual(
+        error.issues.map(({ code, path }) => ({ code, path })),
+        [{ code: "too_big", path: ["recipe", "ingredients"] }],
+      );
+      return true;
+    },
+  );
+  assert.equal(call("kooks_status").counts.recipe, 0);
+});

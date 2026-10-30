@@ -266,5 +266,7 @@ test("mobile facets validate against the shared lists and older single labels be
   const session = validateBackup(book).state.session;
   assert.deepEqual(session.snapshot.tags, ["Comfort food"]);
   assert.equal("tag" in session.snapshot, false);
-  assert.deepEqual(parseBackup(JSON.stringify(newCookbook())), newCookbook());
+  // One cookbook: two calls a millisecond apart would differ in savedAt.
+  const fresh = newCookbook();
+  assert.deepEqual(parseBackup(JSON.stringify(fresh)), fresh);
 });
