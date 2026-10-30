@@ -376,14 +376,14 @@ test("links and videos save with a recipe, play on request and round-trip throug
     "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?start=65&autoplay=1",
   );
   await expect(
-    section.getByRole("button", { name: "Play Original source on YouTube" }),
+    section.getByRole("button", { name: "Play on YouTube: Original source" }),
   ).toBeVisible();
   await expect(
     section.getByRole("link", { name: "The written recipe" }),
   ).toHaveAttribute("href", "https://example.com/orzo");
   await expect(section.locator("iframe")).toHaveCount(0);
   await section
-    .getByRole("button", { name: "Play Vimeo version on Vimeo" })
+    .getByRole("button", { name: "Play on Vimeo: Vimeo version" })
     .click();
   await expect(section.locator("iframe")).toHaveCount(1);
   await expect(section.locator("iframe")).toHaveAttribute(
@@ -406,7 +406,7 @@ test("links and videos save with a recipe, play on request and round-trip throug
   await page.getByRole("button", { name: "Save recipe" }).click();
   await expect(h1(page, dish.title)).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Play Folding the dough on Instagram" }),
+    page.getByRole("button", { name: "Play on Instagram: Folding the dough" }),
   ).toBeVisible();
   await expect(section.getByRole("button", { name: /on Vimeo/ })).toHaveCount(
     0,
@@ -577,7 +577,7 @@ test("techniques, ideas and books: a video technique, an idea written up as a re
   await expect(h1(page, technique)).toBeVisible();
   // The video waits for play, exactly as on a recipe page.
   await expect(
-    page.getByRole("button", { name: "Play Watch it on YouTube" }),
+    page.getByRole("button", { name: "Play on YouTube: Watch it" }),
   ).toBeVisible();
   await expect(page.locator(".links iframe")).toHaveCount(0);
   await page.getByRole("link", { name: dish.title }).click();
@@ -596,7 +596,7 @@ test("techniques, ideas and books: a video technique, an idea written up as a re
   await expect(h1(page, idea)).toBeVisible();
   await expect(page.locator(".tag", { hasText: "Want to try" })).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Play The reel on Instagram" }),
+    page.getByRole("button", { name: "Play on Instagram: The reel" }),
   ).toBeVisible();
   await page.getByRole("button", { name: "We tried it" }).click();
   await expect(page.locator(".tag", { hasText: "Tried it" })).toBeVisible();

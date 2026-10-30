@@ -478,10 +478,11 @@ function dayEntries(date) {
 }
 // Links and videos of a recipe. A recognised video shows a play button that
 // loads the provider's player only when pressed; everything else is a link.
-function linksSection(data, heading = "Links and videos") {
+function linksSection(data, heading = "Links and videos", level = 3) {
   const items = displayLinks(data);
   if (!items.length) return "";
-  return `<section class="links"><h3>${esc(heading)}</h3>${items.map(linkView).join("")}</section>`;
+  const h = level === 3 ? "<h3>" : `<h${level} class="h-sub">`;
+  return `<section class="links">${h}${esc(heading)}</h${level}>${items.map(linkView).join("")}</section>`;
 }
 function linkView(item) {
   const info = describeLink(item.url);
@@ -489,7 +490,7 @@ function linkView(item) {
   const title = item.title || (info.embed ? `${info.label} video` : item.url);
   const line = `<p class="small"><a href="${esc(item.url)}" target="_blank" rel="noreferrer">${esc(title)}</a> <span class="muted">· ${esc(info.site)}</span></p>`;
   if (!info.embed) return line;
-  return `<div class="link-item"><div class="embed" data-shape="${info.embed.shape}" data-src="${esc(info.embed.autoplay_src)}" data-title="${esc(title)}">${button(`Play on ${info.label}`, "embed-load", `aria-label="${esc(item.title ? `Play ${item.title} on ${info.label}` : `Play on ${info.label}`)}"`, "embed-load", "play")}<small>Loads the video from ${esc(info.label)} when you press play.</small></div>${line}</div>`;
+  return `<div class="link-item"><div class="embed" data-shape="${info.embed.shape}" data-src="${esc(info.embed.autoplay_src)}" data-title="${esc(title)}">${button(`Play on ${info.label}`, "embed-load", item.title ? `aria-label="${esc(`Play on ${info.label}: ${item.title}`)}"` : "", "embed-load", "play")}<small>Loads the video from ${esc(info.label)} when you press play.</small></div>${line}</div>`;
 }
 function linkLine(links) {
   if (!links?.length) return "";
@@ -612,7 +613,7 @@ function libraryPage() {
     hasFacetFilters(library);
   const facetRow = (label, items) =>
     items.length
-      ? `<div class="facet-row"><span class="facet-label">${esc(label)}</span>${items.join("")}</div>`
+      ? `<div class="facet-row" role="group" aria-label="${esc(label)}"><span class="facet-label" aria-hidden="true">${esc(label)}</span>${items.join("")}</div>`
       : "";
   const chosen = (facet, value) =>
     Array.isArray(library[facet])
@@ -640,7 +641,7 @@ function libraryPage() {
           ...options(facet, entries, nameOf, labelOf),
         ]
       : [];
-  const content = `${pageHeader({ title: "Recipes", subtitle: all.length ? `${plural(all.length, "recipe")} in your cookbook. Old favorites, small discoveries, and your own adjustments.` : "Your cookbook is empty. Start with something you already love to cook.", actions: link("Add recipe", "recipes/add", { primary: true, ico: "plus" }) })}${segmented(RECIPE_TABS, "recipes", "Recipes sections")}<div class="toolbar">${searchBar("recipes", "Find a recipe, ingredient, cuisine or tag", "Find a recipe, ingredient, cuisine or tag…")}</div><div class="facets" aria-label="Recipe filters">${facetRow(
+  const content = `${pageHeader({ title: "Recipes", subtitle: all.length ? `${plural(all.length, "recipe")} in your cookbook. Old favorites, small discoveries, and your own adjustments.` : "Your cookbook is empty. Start with something you already love to cook.", actions: link("Add recipe", "recipes/add", { primary: true, ico: "plus" }) })}${segmented(RECIPE_TABS, "recipes", "Recipes sections")}<div class="toolbar">${searchBar("recipes", "Find a recipe, ingredient, cuisine or tag", "Find a recipe, ingredient, cuisine or tag…")}</div><div class="facets" role="group" aria-label="Recipe filters">${facetRow(
     "Show",
     [
       chip(
@@ -993,7 +994,7 @@ function mealForm(editId) {
       content: emptyState("Meal not found.", "", link("Meals", "plan/meals")),
     };
   const recipes = records("recipe");
-  const content = `${pageHeader({ title: editing ? "Edit meal" : "New meal", subtitle: "Choose the dishes and the portions you want to make.", back: { label: "Meals", route: "plan/meals" } })}<form data-form="meal" class="panel stack" data-id="${esc(editing?.id ?? "")}" data-version="${editing?.version ?? ""}">${field("Meal name", "title", editing?.data.title ?? "", "text", 'required placeholder="Friday dinner"')}<div><h3>Dishes</h3><div class="list">${
+  const content = `${pageHeader({ title: editing ? "Edit meal" : "New meal", subtitle: "Choose the dishes and the portions you want to make.", back: { label: "Meals", route: "plan/meals" } })}<form data-form="meal" class="panel stack" data-id="${esc(editing?.id ?? "")}" data-version="${editing?.version ?? ""}">${field("Meal name", "title", editing?.data.title ?? "", "text", 'required placeholder="Friday dinner"')}<div><h2 class="h-sub">Dishes</h2><div class="list">${
     recipes
       .map((r) => {
         const dish = editing?.data.dishes.find((d) => d.recipe_id === r.id);
@@ -1428,7 +1429,7 @@ async function photoIds(values) {
   return ids;
 }
 const photoFields = (ids) =>
-  `<div class="field"><span>Photos</span>${ids.length ? `<div class="photos">${ids.map((id) => `<label class="photo-keep"><img class="photo" src="/api/assets/${encodeURIComponent(id)}" alt="" loading="lazy"><span class="check"><input type="checkbox" name="keep_photo" value="${esc(id)}" checked><span>Keep</span></span></label>`).join("")}</div>` : ""}<input type="file" name="photos" accept="image/png,image/jpeg,image/webp" multiple>${help("PNG, JPEG or WebP up to 8 MB each. Photos stay on this household server.")}</div>`;
+  `<div class="field"><span id="photos-label">Photos</span>${ids.length ? `<div class="photos">${ids.map((id) => `<label class="photo-keep"><img class="photo" src="/api/assets/${encodeURIComponent(id)}" alt="" loading="lazy"><span class="check"><input type="checkbox" name="keep_photo" value="${esc(id)}" checked><span>Keep</span></span></label>`).join("")}</div>` : ""}<input type="file" name="photos" accept="image/png,image/jpeg,image/webp" multiple aria-labelledby="photos-label" aria-describedby="photos-help"><span class="help" id="photos-help">PNG, JPEG or WebP up to 8 MB each. Photos stay on this household server.</span></div>`;
 const photoStrip = (ids) =>
   ids.length
     ? `<div class="photos">${ids.map((id) => `<a href="/api/assets/${encodeURIComponent(id)}" target="_blank" rel="noopener"><img class="photo" src="/api/assets/${encodeURIComponent(id)}" alt="Photo" loading="lazy"></a>`).join("")}</div>`
@@ -1499,7 +1500,7 @@ function techniquePage(id) {
     };
   const d = t.data;
   const used = d.recipe_ids.map((r) => record("recipe", r)).filter(Boolean);
-  const content = `${pageHeader({ title: d.title, eyebrow: "Technique", back: { label: "Techniques", route: "techniques" }, actions: `${link("Edit", `techniques/${id}/edit`, { ico: "pencil" })}${button("Archive", "archive", `data-kind="technique" data-id="${esc(id)}" data-target="techniques"`, "btn-quiet", "archive")}` })}${d.tags.length ? `<div class="chips">${d.tags.map((label) => tag(label)).join("")}</div>` : ""}<div class="learn-columns spacer"><section class="stack">${d.summary ? `<p class="preline lead">${esc(d.summary)}</p>` : ""}${d.steps.length ? `<div><h2>How it’s done</h2><ol class="method spacer">${d.steps.map((s) => `<li>${esc(s.text)}</li>`).join("")}</ol></div>` : ""}${d.tips ? callout(`<div class="eyebrow">Tips and pitfalls</div><p class="preline">${esc(d.tips)}</p>`, { kind: "callout-warning", ico: "notebook-pen" }) : ""}${photoStrip(d.photo_ids)}${linksSection(d, "Watch and read")}</section><aside class="panel stack-sm"><h3>Recipes that use it</h3>${used.length ? `<div class="chips">${used.map((r) => `<a class="chip" href="#/recipes/${esc(r.id)}">${esc(r.data.title)}</a>`).join("")}</div>` : '<p class="small muted">Link recipes from the editor and this technique appears on their pages.</p>'}</aside></div>`;
+  const content = `${pageHeader({ title: d.title, eyebrow: "Technique", back: { label: "Techniques", route: "techniques" }, actions: `${link("Edit", `techniques/${id}/edit`, { ico: "pencil" })}${button("Archive", "archive", `data-kind="technique" data-id="${esc(id)}" data-target="techniques"`, "btn-quiet", "archive")}` })}${d.tags.length ? `<div class="chips">${d.tags.map((label) => tag(label)).join("")}</div>` : ""}<div class="learn-columns spacer"><section class="stack">${d.summary ? `<p class="preline lead">${esc(d.summary)}</p>` : ""}${d.steps.length ? `<div><h2>How it’s done</h2><ol class="method spacer">${d.steps.map((s) => `<li>${esc(s.text)}</li>`).join("")}</ol></div>` : ""}${d.tips ? callout(`<div class="eyebrow">Tips and pitfalls</div><p class="preline">${esc(d.tips)}</p>`, { kind: "callout-warning", ico: "notebook-pen" }) : ""}${photoStrip(d.photo_ids)}${linksSection(d, "Watch and read", 2)}</section><aside class="panel stack-sm"><h2 class="h-sub">Recipes that use it</h2>${used.length ? `<div class="chips">${used.map((r) => `<a class="chip" href="#/recipes/${esc(r.id)}">${esc(r.data.title)}</a>`).join("")}</div>` : '<p class="small muted">Link recipes from the editor and this technique appears on their pages.</p>'}</aside></div>`;
   return { title: d.title, active: "recipes", content };
 }
 function techniqueEditor(id) {
@@ -1591,7 +1592,7 @@ function inspirationDetail(id) {
   const d = i.data,
     [state, cls] = ideaState(d);
   const made = d.recipe_id ? record("recipe", d.recipe_id) : null;
-  const content = `${pageHeader({ title: d.title, eyebrow: d.source ? `From ${d.source}` : "An idea to try", back: { label: "Ideas", route: "inspiration" }, actions: `${link("Edit", `inspiration/${id}/edit`, { ico: "pencil" })}${button("Archive", "archive", `data-kind="inspiration" data-id="${esc(id)}" data-target="inspiration"`, "btn-quiet", "archive")}` })}<div class="chips">${tag(state, cls)}${d.tags.map((t) => tag(t, "tag-neutral")).join("")}</div><div class="actions spacer">${made ? link(`Open ${made.data.title}`, `recipes/${made.id}`, { primary: true, ico: "book-open" }) : d.recipe_id ? '<span class="small muted">The recipe it became was archived.</span>' : `${link("Write it up as a recipe", `recipes/new/inspiration/${id}`, { primary: true, ico: "pen-line" })}${button(d.status === "tried" ? "Still want to try it" : "We tried it", "idea-status", `data-id="${esc(id)}"`, "", "check")}`}</div><div class="learn-columns spacer"><section class="stack">${d.notes ? `<p class="preline lead">${esc(d.notes)}</p>` : ""}${photoStrip(d.photo_ids)}${linksSection(d, "Watch and read")}</section><aside class="panel stack-sm"><h3>What happens next</h3><p class="small muted">Write it up as a recipe when it’s worth keeping; the idea stays linked to the recipe. Mark it tried to remember you gave it a go.</p></aside></div>`;
+  const content = `${pageHeader({ title: d.title, eyebrow: d.source ? `From ${d.source}` : "An idea to try", back: { label: "Ideas", route: "inspiration" }, actions: `${link("Edit", `inspiration/${id}/edit`, { ico: "pencil" })}${button("Archive", "archive", `data-kind="inspiration" data-id="${esc(id)}" data-target="inspiration"`, "btn-quiet", "archive")}` })}<div class="chips">${tag(state, cls)}${d.tags.map((t) => tag(t, "tag-neutral")).join("")}</div><div class="actions spacer">${made ? link(`Open ${made.data.title}`, `recipes/${made.id}`, { primary: true, ico: "book-open" }) : d.recipe_id ? '<span class="small muted">The recipe it became was archived.</span>' : `${link("Write it up as a recipe", `recipes/new/inspiration/${id}`, { primary: true, ico: "pen-line" })}${button(d.status === "tried" ? "Still want to try it" : "We tried it", "idea-status", `data-id="${esc(id)}"`, "", "check")}`}</div><div class="learn-columns spacer"><section class="stack">${d.notes ? `<p class="preline lead">${esc(d.notes)}</p>` : ""}${photoStrip(d.photo_ids)}${linksSection(d, "Watch and read", 2)}</section><aside class="panel stack-sm"><h2 class="h-sub">What happens next</h2><p class="small muted">Write it up as a recipe when it’s worth keeping; the idea stays linked to the recipe. Mark it tried to remember you gave it a go.</p></aside></div>`;
   return { title: d.title, active: "recipes", content };
 }
 function inspirationEditor(id) {
@@ -1667,7 +1668,7 @@ function shelfPage() {
   return { title: "Books", active: "recipes", content };
 }
 function bookForm() {
-  const content = `${pageHeader({ title: "Add a book", subtitle: "A cookbook you own, as a file. It stays on this household server and goes into your backups.", back: { label: "Books", route: "library" } })}<form data-form="book" class="panel stack"><label class="upload">${icon("upload")}<strong>Choose a PDF or EPUB</strong><span class="small muted">Up to 64 MB. Stays on this household server.</span><input type="file" name="file" accept="application/pdf,application/epub+zip,.pdf,.epub" required></label><div class="form-grid">${field("Title", "title", "", "text", 'required maxlength="500"')}${field("Author", "author", "", "text", 'maxlength="500"')}</div>${field("Tags, separated by commas", "tags", "", "text", 'placeholder="Baking, Middle Eastern"')}${area("Notes", "notes", "", 'rows="2" placeholder="A gift from Noa. The lamb chapter is the one."')}<div class="field"><span>Cover photo (optional)</span><input type="file" name="cover" accept="image/png,image/jpeg,image/webp">${help("PNG, JPEG or WebP up to 8 MB.")}</div>${errorSlot()}<div class="form-footer">${submit("Add to shelf", "check")}${link("Cancel", "library", { cls: "btn-quiet" })}</div></form>`;
+  const content = `${pageHeader({ title: "Add a book", subtitle: "A cookbook you own, as a file. It stays on this household server and goes into your backups.", back: { label: "Books", route: "library" } })}<form data-form="book" class="panel stack"><label class="upload">${icon("upload")}<strong>Choose a PDF or EPUB</strong><span class="small muted">Up to 64 MB. Stays on this household server.</span><input type="file" name="file" accept="application/pdf,application/epub+zip,.pdf,.epub" required></label><div class="form-grid">${field("Title", "title", "", "text", 'required maxlength="500"')}${field("Author", "author", "", "text", 'maxlength="500"')}</div>${field("Tags, separated by commas", "tags", "", "text", 'placeholder="Baking, Middle Eastern"')}${area("Notes", "notes", "", 'rows="2" placeholder="A gift from Noa. The lamb chapter is the one."')}<label class="field"><span>Cover photo (optional)</span><input type="file" name="cover" accept="image/png,image/jpeg,image/webp">${help("PNG, JPEG or WebP up to 8 MB.")}</label>${errorSlot()}<div class="form-footer">${submit("Add to shelf", "check")}${link("Cancel", "library", { cls: "btn-quiet" })}</div></form>`;
   return { title: "Add a book", active: "recipes", content };
 }
 const fileName = (d, file) =>
@@ -1691,12 +1692,12 @@ function bookPage(id, editing = false) {
     readable = kind === "PDF";
   const href = `/api/assets/${encodeURIComponent(d.file_id)}`;
   const written = d.recipe_ids.map((r) => record("recipe", r)).filter(Boolean);
-  const content = `${pageHeader({ title: editing ? "Edit book" : d.title, eyebrow: editing ? "" : d.author ? `By ${d.author}` : "On your shelf", back: editing ? { label: d.title, route: `library/${id}` } : { label: "Books", route: "library" }, actions: editing ? "" : `${link("Edit details", `library/${id}/edit`, { ico: "pencil" })}${button("Remove from shelf", "archive", `data-kind="book" data-id="${esc(id)}" data-target="library"`, "btn-quiet", "archive")}` })}<div class="book-columns"><aside class="stack">${bookCover(b)}<div class="actions">${file ? `<a class="btn" href="${href}?download=1" download="${esc(fileName(d, file))}">${icon("download")}Download ${kind} · ${size(file.data.byte_length)}</a>${readable ? `<a class="btn" href="${href}" target="_blank" rel="noopener">${icon("external-link")}Open in a new tab</a>` : ""}` : '<p class="small muted">The file for this book is missing.</p>'}</div>${d.tags.length ? `<div class="chips">${d.tags.map((t) => tag(t, "tag-neutral")).join("")}</div>` : ""}${d.notes ? `<div class="panel panel-soft"><p class="preline">${esc(d.notes)}</p></div>` : ""}<section class="panel stack-sm"><h3>Bookmarks</h3><div class="list">${d.bookmarks.map((m, index) => `<div class="list-item"><div class="list-body"><strong>${esc(m.label)}</strong>${m.page ? `<p>Page ${m.page}</p>` : ""}</div><div class="list-actions">${readable && m.page ? button("Read", "reader-page", `data-page="${m.page}" aria-label="Read ${esc(m.label)} on page ${m.page}"`, "btn-sm", "play") : ""}${button("", "bookmark-remove", `data-id="${esc(id)}" data-index="${index}" aria-label="Remove bookmark ${esc(m.label)}"`, "btn-quiet btn-icon btn-sm", "x")}</div></div>`).join("") || '<p class="small muted">The pages you keep coming back to.</p>'}</div><form data-form="bookmark" class="stack-sm" data-id="${esc(id)}" data-version="${b.version}"><div class="form-grid">${field("What’s there", "label", "", "text", 'required maxlength="500" placeholder="The braise"')}${field("Page", "page", "", "number", 'min="1" max="100000" placeholder="Optional"')}</div>${errorSlot()}<div>${submit("Add bookmark", "plus")}</div></form></section>${written.length ? `<section class="panel stack-sm"><h3>Written up from this book</h3><div class="chips">${written.map((r) => `<a class="chip" href="#/recipes/${esc(r.id)}">${esc(r.data.title)}</a>`).join("")}</div></section>` : ""}</aside><section class="stack">${editing ? bookEditor(b) : readable ? `<div class="embed reader" data-shape="page" data-src="${esc(href)}" data-title="${esc(d.title)}">${button("Read here", "embed-load", `aria-label="Read ${esc(d.title)} here"`, "embed-load", "book-open")}<small>Opens the PDF from this household server on this page.</small></div>` : `<div class="panel"><h3>Read it in your reading app</h3><p class="small muted spacer-sm">${kind ? `${kind} books don’t open in the browser. Download the file and open it in your reader.` : "This book has no readable file."}</p></div>`}</section></div>`;
+  const content = `${pageHeader({ title: editing ? "Edit book" : d.title, eyebrow: editing ? "" : d.author ? `By ${d.author}` : "On your shelf", back: editing ? { label: d.title, route: `library/${id}` } : { label: "Books", route: "library" }, actions: editing ? "" : `${link("Edit details", `library/${id}/edit`, { ico: "pencil" })}${button("Remove from shelf", "archive", `data-kind="book" data-id="${esc(id)}" data-target="library"`, "btn-quiet", "archive")}` })}<div class="book-columns"><aside class="stack">${bookCover(b)}<div class="actions">${file ? `<a class="btn" href="${href}?download=1" download="${esc(fileName(d, file))}">${icon("download")}Download ${kind} · ${size(file.data.byte_length)}</a>${readable ? `<a class="btn" href="${href}" target="_blank" rel="noopener">${icon("external-link")}Open in a new tab</a>` : ""}` : '<p class="small muted">The file for this book is missing.</p>'}</div>${d.tags.length ? `<div class="chips">${d.tags.map((t) => tag(t, "tag-neutral")).join("")}</div>` : ""}${d.notes ? `<div class="panel panel-soft"><p class="preline">${esc(d.notes)}</p></div>` : ""}<section class="panel stack-sm"><h2 class="h-sub">Bookmarks</h2><div class="list">${d.bookmarks.map((m, index) => `<div class="list-item"><div class="list-body"><strong>${esc(m.label)}</strong>${m.page ? `<p>Page ${m.page}</p>` : ""}</div><div class="list-actions">${readable && m.page ? button("Read", "reader-page", `data-page="${m.page}" aria-label="Read ${esc(m.label)} on page ${m.page}"`, "btn-sm", "play") : ""}${button("", "bookmark-remove", `data-id="${esc(id)}" data-index="${index}" aria-label="Remove bookmark ${esc(m.label)}"`, "btn-quiet btn-icon btn-sm", "x")}</div></div>`).join("") || '<p class="small muted">The pages you keep coming back to.</p>'}</div><form data-form="bookmark" class="stack-sm" data-id="${esc(id)}" data-version="${b.version}"><div class="form-grid">${field("What’s there", "label", "", "text", 'required maxlength="500" placeholder="The braise"')}${field("Page", "page", "", "number", 'min="1" max="100000" placeholder="Optional"')}</div>${errorSlot()}<div>${submit("Add bookmark", "plus")}</div></form></section>${written.length ? `<section class="panel stack-sm"><h2 class="h-sub">Written up from this book</h2><div class="chips">${written.map((r) => `<a class="chip" href="#/recipes/${esc(r.id)}">${esc(r.data.title)}</a>`).join("")}</div></section>` : ""}</aside><section class="stack">${editing ? bookEditor(b) : readable ? `<div class="embed reader" data-shape="page" data-src="${esc(href)}" data-title="${esc(d.title)}">${button("Read here", "embed-load", `aria-label="Read here: ${esc(d.title)}"`, "embed-load", "book-open")}<small>Opens the PDF from this household server on this page.</small></div>` : `<div class="panel"><h2 class="h-sub">Read it in your reading app</h2><p class="small muted spacer-sm">${kind ? `${kind} books don’t open in the browser. Download the file and open it in your reader.` : "This book has no readable file."}</p></div>`}</section></div>`;
   return { title: editing ? "Edit book" : d.title, active: "recipes", content };
 }
 function bookEditor(b) {
   const d = b.data;
-  return `<form data-form="book" class="panel stack" data-id="${esc(b.id)}" data-version="${b.version}"><h2>Details</h2><div class="form-grid">${field("Title", "title", d.title, "text", 'required maxlength="500"')}${field("Author", "author", d.author, "text", 'maxlength="500"')}</div>${field("Tags, separated by commas", "tags", d.tags.join(", "), "text")}${area("Notes", "notes", d.notes, 'rows="3"')}<div class="field"><span>${d.cover_id ? "Replace the cover" : "Cover photo (optional)"}</span><input type="file" name="cover" accept="image/png,image/jpeg,image/webp">${help("PNG, JPEG or WebP up to 8 MB.")}</div>${d.cover_id ? check("Remove the current cover", "remove_cover") : ""}${recipePicker(d.recipe_ids, "Recipes written up from this book")}${errorSlot()}<div class="form-footer">${submit("Save book", "check")}${link("Cancel", `library/${b.id}`, { cls: "btn-quiet" })}</div></form>`;
+  return `<form data-form="book" class="panel stack" data-id="${esc(b.id)}" data-version="${b.version}"><h2>Details</h2><div class="form-grid">${field("Title", "title", d.title, "text", 'required maxlength="500"')}${field("Author", "author", d.author, "text", 'maxlength="500"')}</div>${field("Tags, separated by commas", "tags", d.tags.join(", "), "text")}${area("Notes", "notes", d.notes, 'rows="3"')}<label class="field"><span>${d.cover_id ? "Replace the cover" : "Cover photo (optional)"}</span><input type="file" name="cover" accept="image/png,image/jpeg,image/webp">${help("PNG, JPEG or WebP up to 8 MB.")}</label>${d.cover_id ? check("Remove the current cover", "remove_cover") : ""}${recipePicker(d.recipe_ids, "Recipes written up from this book")}${errorSlot()}<div class="form-footer">${submit("Save book", "check")}${link("Cancel", `library/${b.id}`, { cls: "btn-quiet" })}</div></form>`;
 }
 
 // What a recipe is connected to beyond its own page: the techniques it uses,
@@ -1930,7 +1931,7 @@ function renderLogin() {
   if (!sent) void offerConditionalPasskey();
 }
 const notFound = () => ({
-  title: "Kooks",
+  title: "Not found",
   active: "today",
   content: emptyState(
     "That page isn’t in the kitchen.",
@@ -2055,7 +2056,7 @@ async function render({ focus = false } = {}) {
     if (token !== draw) return;
     if (error.code === "SIGN_IN") return renderLogin();
     view = {
-      title: "Kooks",
+      title: NAV.find(([key]) => key === page)?.[2] ?? "Kooks",
       active: page,
       content: emptyState(
         "Something needs a second look.",
@@ -2066,6 +2067,10 @@ async function render({ focus = false } = {}) {
     };
   }
   if (token !== draw) return;
+  // A page that is only a message (a missing record, an error) still gets
+  // its title as the one level-one heading.
+  if (!/<h1[\s>]/.test(view.content))
+    view.content = pageHeader({ title: view.title }) + view.content;
   const paint = () => {
     $("#app").innerHTML = shell({
       ...view,
@@ -3011,5 +3016,5 @@ try {
   else if (await loadState()) await render();
 } catch (error) {
   $("#app").innerHTML =
-    `<main class="page">${emptyState("Your kitchen is taking a moment.", error.message, button("Try again", "reload"), "circle-alert")}</main>`;
+    `<main id="main" class="page" tabindex="-1">${pageHeader({ title: "Kooks" })}${emptyState("Your kitchen is taking a moment.", error.message, button("Try again", "reload"), "circle-alert")}</main>`;
 }

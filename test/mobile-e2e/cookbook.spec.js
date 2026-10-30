@@ -238,7 +238,7 @@ test("links and videos save with a recipe, play on request and survive a reload"
   await page.getByRole("button", { name: "Save recipe" }).click();
   await expect(h1(page, "Lemon & chickpea orzo")).toBeVisible();
   const play = page.getByRole("button", {
-    name: "Play Watch the method on YouTube",
+    name: "Play on YouTube: Watch the method",
   });
   await expect(play).toBeVisible();
   await expect(
