@@ -1,6 +1,7 @@
 import { useState } from "preact/hooks";
 import {
   ArrowLeft,
+  CalendarPlus,
   Clock,
   CopyPlus,
   ExternalLink,
@@ -329,9 +330,10 @@ export function Recipe({ id }) {
         </a>
         <a
           class="btn btn-primary"
-          href={`../#/recipes/${encodeURIComponent(id)}`}
+          href={`#/week/when/recipe/${encodeURIComponent(id)}`}
         >
-          Plan or cook
+          <Icon icon={CalendarPlus} />
+          Add to the week
         </a>
       </PageHeader>
       <Facts d={d} />
