@@ -124,6 +124,33 @@ test("a member signs in by email link, adds a passkey and returns with one tap",
   );
 });
 
+test("a quiet passkey suggestion that fails leaves the reason a link did not work", async ({
+  page,
+}) => {
+  // No authenticator here, so the browser turns the suggestion down.
+  await page.addInitScript(() => {
+    const get = navigator.credentials.get.bind(navigator.credentials);
+    navigator.credentials.get = (options) => {
+      const request = get(options);
+      if (options?.mediation === "conditional")
+        window.quietPasskey = request.then(
+          () => "picked",
+          (error) => error.name,
+        );
+      return request;
+    };
+  });
+  await page.goto("/#/signin/not-a-real-token");
+  await expect(
+    page.getByRole("heading", { name: "Welcome to your kitchen." }),
+  ).toBeVisible();
+  await page.waitForFunction(() => window.quietPasskey);
+  expect(await page.evaluate(() => window.quietPasskey)).not.toBe("picked");
+  await expect(page.locator("[data-login-error]")).toHaveText(
+    "This sign-in link has expired or was already used. Request a new one.",
+  );
+});
+
 test("a browser that suggests the saved passkey signs the member in without a tap", async ({
   page,
   context,

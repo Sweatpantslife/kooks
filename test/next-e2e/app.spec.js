@@ -233,8 +233,26 @@ test("a browser that suggests the saved passkey signs the member in without a ta
 test("a used or unknown sign-in link explains itself on the sign-in page", async ({
   page,
 }) => {
+  // This browser has no authenticator, so its quiet passkey suggestion fails;
+  // that failure must not replace the reason the link did not work.
+  await page.addInitScript(() => {
+    const get = navigator.credentials.get.bind(navigator.credentials);
+    navigator.credentials.get = (options) => {
+      const request = get(options);
+      if (options?.mediation === "conditional")
+        window.quietPasskey = request.then(
+          () => "picked",
+          (error) => error.name,
+        );
+      return request;
+    };
+  });
   await page.goto(`${signedIn}#/signin/not-a-real-token`);
   await expect(title(page)).toHaveText("Welcome to your kitchen.");
   await expect(page).toHaveURL(/#\/week$/);
-  await expect(page.getByRole("alert")).not.toBeEmpty();
+  await page.waitForFunction(() => window.quietPasskey);
+  expect(await page.evaluate(() => window.quietPasskey)).not.toBe("picked");
+  await expect(page.getByRole("alert")).toHaveText(
+    "This sign-in link has expired or was already used. Request a new one.",
+  );
 });
