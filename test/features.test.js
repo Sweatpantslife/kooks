@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { performance } from "node:perf_hooks";
 import { Store } from "../mcp/store.js";
+import * as s from "../mcp/schemas.js";
 import { createTools } from "../mcp/tools.js";
 import { extractRecipe, parseIngredient, imageBytes } from "../mcp/imports.js";
 
@@ -740,4 +742,71 @@ test("recipe facets are normalized, filter listings and suggestions, and are cou
   assert.deepEqual(legacy.call("recipe_taxonomy").tags, [
     { name: "Family", count: 1 },
   ]);
+});
+
+// A cookbook of a thousand recipes, a note on every third, written in one
+// action so the setup itself stays quick.
+function largeCookbook(store, count = 1000) {
+  const ingredients = ["Rice", "Onion", "Garlic", "Lemon", "Feta", "Carrot"];
+  const ids = [];
+  store.mutate("seed", { request_id: "seed" }, () => {
+    for (let i = 0; i < count; i++) {
+      const data = s.recipe.parse(
+        recipe(`Recipe ${i}`, {
+          ingredients: Array.from({ length: 12 }, (_, k) => ({
+            name: ingredients[(i + k) % ingredients.length],
+            quantity: 10 + k,
+            unit: "g",
+          })),
+          steps: Array.from({ length: 8 }, (_, k) => ({
+            text: `Step ${k + 1}.`,
+          })),
+        }),
+      );
+      const id = store.put("recipe", data).id;
+      ids.push(id);
+      if (i % 3 === 0)
+        store.put("note", {
+          recipe_id: id,
+          session_id: null,
+          text: `Cooked ${i}.`,
+          cooked_on: "2026-10-01",
+        });
+    }
+    return {};
+  });
+  return ids;
+}
+
+test("suggestions and cooking memories stay fast for a thousand recipes", (t) => {
+  const { store, call } = setup(t);
+  const ids = largeCookbook(store);
+  call("pantry_save", { pantry: { name: "Rice", use_soon: true } });
+  const variant = call("recipe_variant_save", {
+    original_recipe_id: ids[0],
+    recipe: recipe("Recipe 0, my way"),
+  }).record;
+  let start = performance.now();
+  const result = call("recipe_suggest", { limit: 12 });
+  // Reading every recipe and note once per suggestion took 12 s here.
+  assert.ok(performance.now() - start < 1000);
+  assert.equal(result.total, 1001);
+  assert.equal(result.results.length, 12);
+  for (const suggestion of result.results)
+    assert.equal(suggestion.memory.recipe_id, suggestion.record.id);
+  const meal = call("meal_save", {
+    meal: {
+      title: "Feast",
+      dishes: ids.slice(0, 50).map((recipe_id) => ({ recipe_id })),
+    },
+  }).record;
+  start = performance.now();
+  const session = call("cooking_start", {
+    source: { kind: "meal", id: meal.id },
+  });
+  assert.ok(performance.now() - start < 1000);
+  assert.equal(session.memories.length, 50);
+  assert.equal(session.memories[0].preferred_recipe.id, variant.id);
+  assert.equal(session.memories[0].notes[0].data.text, "Cooked 0.");
+  assert.equal(session.memories[1].notes.length, 0);
 });
