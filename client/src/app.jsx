@@ -28,6 +28,7 @@ import {
   TechniquePage,
 } from "./pages/library.jsx";
 import { Cook, Finish } from "./pages/cook.jsx";
+import { Ask } from "./pages/ask.jsx";
 import { watchTimers } from "./lib/cooking.js";
 
 const named = (kind, id, fallback) => record(kind, id)?.data.title ?? fallback;
@@ -166,6 +167,7 @@ function pageFor([first = "week", second, third, fourth]) {
       title: `Add to groceries · ${named(third, fourth, "Recipe")}`,
       page: <ShopFor kind={third} id={fourth} />,
     };
+  if (first === "ask" && !second) return { title: "Ask Kooks", page: <Ask /> };
   if (first === "household" && !second)
     return { title: "Household", page: <Household /> };
   if (first === "household" && !third && Object.hasOwn(HOUSEHOLD, second)) {

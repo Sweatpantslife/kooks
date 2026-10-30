@@ -19,14 +19,15 @@ Reconciled October 9, 2026 against the source. See [the developer handoff](hando
 - Costs moved from each recipe to the week: Household › Prices and budget and one line on the Week count what the planned food comes to. Shared cooking jobs with owners live in cooking mode beside the timers, and a recipe lists every time it was cooked under "Cooked before", with Add a note for cooking done without the stove.
 - Recipe links are stored addresses. The app names YouTube, Vimeo, Facebook, Instagram and TikTok videos from `shared/links.js` and opens every link in a new tab, or the phone's browser. The server fetches a page only to add a recipe **From a link**: one public page, read for its schema.org Recipe data into a draft to check, under the guard described in SECURITY.md. Pages without that data are pasted instead; the server does not scrape page text or fetch images.
 - Techniques, the inspiration board and the ebook shelf are browser/MCP records (`mcp/library*.js`). Uploaded photos and PDF/EPUB files are immutable assets in SQLite, checked by signature, served only to the household and never read or summarized by the server; portable backups include them.
+- The built-in assistant, **Ask Kooks**, uses a Claude API key that whoever hosts the kitchen sets on the server (`KOOKS_ANTHROPIC_API_KEY`); the key never reaches the app, and members do not sign in to a model provider. Without a key there is no assistant, and the MCP server stays the way to bring an agent of one's own. Consumer accounts and subscriptions are not used for API access.
+- The assistant reads the kitchen and proposes; it never changes anything itself. Each proposal (a plan, groceries, shopping for a week or a dish, a recipe draft) is described by the app from its own records and made only when a member taps it, through the usual tools, so history and Undo apply. SECURITY.md lists what it reads and its limits.
 
 ## Open decisions and unfinished delivery
 
 - Decide which changes besides grocery ticks a phone keeps without a connection, and how each meets changes made meanwhile.
 - Decide how members join beyond the configured address list (invitations from inside the app), whether taste profiles should link to sign-in identities, and hosting for more than one household on a server.
 - Confirm the first phone release scope.
-- Select a supported OpenAI/Claude integration and credential boundary. Account login, API access, and subscription entitlements are distinct; no API-key fallback or billing policy is assumed.
-- Set assistant autonomy: reviewable proposals, reversible execution, or advisory-only behavior.
+- Decide whether the assistant should answer from the phone without a connection (it does not), and whether a household wants a monthly limit as well as the daily token allowance.
 - Validate actual device timer behavior, incoming sharing, interface/recipe languages, right-to-left needs, regional units, accessibility, and import quality.
 - Establish signing, distribution, durable operational backups, recovery, and release acceptance criteria.
 

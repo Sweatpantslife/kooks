@@ -2,7 +2,7 @@
 
 A household cooking companion for recipes, composed meals, shopping, equipment, and guided cooking. This repository contains the household server with its app, the MCP backend, and the same app packaged for iOS and Android with Capacitor.
 
-**Start here: [Developer handoff and unfinished work](docs/handoff.md).** The project is implemented for local use but is not release-ready. Native device validation and live AI/provider login remain outstanding.
+**Start here: [Developer handoff and unfinished work](docs/handoff.md).** The project is implemented for local use but is not release-ready. Native device validation remains outstanding, and the built-in assistant has not yet been tried by real households.
 
 ## Quick start
 
@@ -38,13 +38,15 @@ npm run cap:android
 
 ## Agent integration
 
-Connect an MCP client to `node /absolute/path/to/kooks/mcp/index.js`; adapt [the example configuration](mcp-config.example.json). The backend exposes 49 validated tools with persistent storage, request deduplication, optimistic versions, undo, and backup/restore. The host agent supplies intelligence; Kooks has no built-in model-provider connection. See [MCP setup and workflows](docs/mcp-server.md).
+Connect an MCP client to `node /absolute/path/to/kooks/mcp/index.js`; adapt [the example configuration](mcp-config.example.json). The backend exposes 49 validated tools with persistent storage, request deduplication, optimistic versions, undo, and backup/restore. The host agent supplies intelligence. Separately, the household server can run its own assistant, Ask Kooks, with a Claude API key ([hosting](docs/hosting.md#the-assistant)). See [MCP setup and workflows](docs/mcp-server.md).
 
 ## Data and privacy
 
 The local server stores its cookbook in `.data/kooks.sqlite`; `KOOKS_DB_PATH` selects another location. Keep personal recipes, photos, exports, credentials, and logs outside version control. `.gitignore` excludes local data, configuration, backups, signing material, dependencies, and generated build outputs.
 
 The browser server binds to loopback by default and asks nobody to sign in. Sharing it beyond this computer turns sign-in on: the people listed in `KOOKS_HOUSEHOLD_EMAILS` prove their address with a one-time emailed link and then add passkeys for one-tap sign-in. See [household setup](docs/household-features.md) and [hosting](docs/hosting.md); [.env.example](.env.example) lists every setting the servers read, with its default. Publishing this source repository does not deploy a running service.
+
+Nothing goes to a model provider unless the host sets `KOOKS_ANTHROPIC_API_KEY`. Then Ask Kooks sends each question, and the records it reads to answer it, to Anthropic; [SECURITY.md](SECURITY.md) lists what it reads and its limits.
 
 ## Code layout
 

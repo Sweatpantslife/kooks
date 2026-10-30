@@ -4,7 +4,7 @@ Adopted October 30, 2026, when the redesigned app replaced the previous browser 
 
 ## Principles
 
-1. **Three places for the week's work.** Week is what the household eats, Recipes what it knows how to make, Groceries what it needs and has. Household holds the people, money and settings behind them. Nothing else is a destination.
+1. **Three places for the week's work.** Week is what the household eats, Recipes what it knows how to make, Groceries what it needs and has. Household holds the people, money and settings behind them. Nothing else is a destination; Ask Kooks, where the kitchen has it, is a question about all of them rather than a place.
 2. **The title says where you are.** Every page has one `h1`, and the browser tab reads "Title · Kooks". A small eyebrow above it carries context, such as a count or the dish's course.
 3. **Cooking is a mode, not a place.** It fills the screen, one step at a time, and a Now cooking bar on every other page leads back to it.
 4. **Show, then edit.** Pages show records; every form is a page of its own with its own address, and a form with unsaved changes asks before it is left.
@@ -22,6 +22,7 @@ Adopted October 30, 2026, when the redesigned app replaced the previous browser 
 
 - At 840 px and wider a rail on the inline-start side carries the brand, the three tabs and Household at its foot. Below 840 px a top bar carries the brand and Household, and the three tabs sit at the bottom. Never both.
 - The current tab and the Household link carry `aria-current="page"`.
+- **Ask Kooks** (sparkles) sits beside Household, in the top bar and at the rail's foot, only when the kitchen has the assistant.
 - Cooking (`#/cook/<session>`) hides all navigation. Leaving it keeps the session, and the Now cooking bar at the top of every page shows its step or next timer and goes back.
 
 ### Routes
@@ -47,6 +48,7 @@ Hash routes, noun first. The address after `#` is the whole state of the page, s
 | `#/cook/<session>` · `/done`                                            | Cooking, and finishing it                                                 |
 | `#/household` · `/people` · `/prices` · `/look` · `/signin` · `/backup` | Household and its pages                                                   |
 | `#/household/people/new` · `/<id>` · `#/household/prices/new` · `/<id>` | Person and price forms                                                    |
+| `#/ask`                                                                 | Ask Kooks, or how to turn it on                                           |
 | `#/signin/<token>`                                                      | An emailed sign-in link                                                   |
 
 An unknown address shows a Not found page with a way to this week.
@@ -71,6 +73,7 @@ The previous browser app's addresses open the page that replaced them, so bookma
 | Cooking               | One step at a time in large type, the dish's ingredients, every step, timers, and jobs anyone can pick up                                 | Next                    |
 | Finishing             | How it went per dish: rating, next time, notes, portions left over                                                                        | Done                    |
 | Household pages       | People and tastes; prices, budget and currency; colors and units; passkeys; backup                                                        | Add a person or a price |
+| Ask Kooks             | A conversation about the kitchen, kept in this tab until Start over. Answers are plain text, with suggested changes as cards below them   | Ask                     |
 
 ## Key flows
 
@@ -79,6 +82,7 @@ The previous browser app's addresses open the page that replaced them, so bookma
 - **Shop:** Groceries → Shop for the week → untick what you have → the list by aisle → tick into the basket → Put it all away, which fills At home.
 - **Cook:** a recipe, meal or today's plan → Cook → steps and timers → Finish → leftovers go to At home and the note shows as "Last time" and under "Cooked before" on the recipe. Cooking without the app? A recipe → Add a note.
 - **Write up an idea:** the idea → Write it up as a recipe → the editor starts from it → Save → the idea points at the recipe.
+- **Ask:** Ask Kooks → a starter or a question → while it reads, what it is doing → the answer, with a card per suggested change (plan a day, add groceries, shop for the week or a dish, save a draft) → Plan it, Add them, Choose what to buy or Save the draft, or No thanks. Nothing changes until a card is tapped, and the next question tells the assistant what became of its suggestions.
 
 ## Components
 
@@ -125,4 +129,4 @@ Components live in `client/src/ui/`, styles in `client/src/styles/` (`tokens.css
 
 ## Out of scope
 
-The redesign changes the browser app's structure, pages and look. It does not change the MCP tools, storage or the data contracts. The unfinished items in the [handoff](handoff.md) (native verification, more of the phone working offline, live assistance) come next.
+The redesign changes the browser app's structure, pages and look. It does not change the MCP tools, storage or the data contracts. The unfinished items in the [handoff](handoff.md) (native verification, more of the phone working offline) come next. Ask Kooks was added after the redesign, on the same tools.
