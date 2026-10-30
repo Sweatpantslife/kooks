@@ -118,16 +118,42 @@ export class Kooks {
       for (const kind of checks.keys())
         for (const record of this.store.list(kind)) check(kind, record);
     for (const { kind, id } of changes ?? []) {
-      check(kind, this.store.get(kind, id, true));
+      const record = this.store.get(kind, id, true);
+      check(kind, record);
       if (kind !== "recipe") continue;
-      for (const meal of this.store.mentioning("meal", id))
-        if (meal.data.dishes.some((dish) => dish.recipe_id === id))
-          check("meal", meal);
+      const { meals, variants } = this.recipeUsers(id);
+      requireThat(
+        !record.archived || (!meals.length && !variants.length),
+        "IN_USE",
+        `This would archive ${record.data.title}, which is still used by ${this.describeUsers({ meals, variants })}. Edit or archive those first.`,
+      );
+      for (const meal of meals) check("meal", meal);
       for (const variant of this.store.recipeFamily(id))
         check("recipe", variant);
     }
     for (const [kind, records] of checks)
       for (const record of records.values()) rules[kind](this.store, record);
+  }
+
+  // The active meals and variations that use a recipe.
+  recipeUsers(id) {
+    return {
+      meals: this.store
+        .mentioning("meal", id)
+        .filter((meal) =>
+          meal.data.dishes.some((dish) => dish.recipe_id === id),
+        ),
+      variants: this.store
+        .recipeFamily(id)
+        .filter((recipe) => recipe.data.original_recipe_id === id),
+    };
+  }
+
+  describeUsers({ meals, variants }) {
+    return [
+      ...meals.map((meal) => `the meal ${meal.data.title} (${meal.id})`),
+      ...variants.map((v) => `the variation ${v.data.title} (${v.id})`),
+    ].join(", ");
   }
 
   resolve(source) {
@@ -529,19 +555,14 @@ export class Kooks {
   archive(args) {
     const record = this.store.get(args.kind, args.id, true);
     if (args.archived) {
-      const references = [];
-      if (args.kind === "recipe")
-        for (const meal of this.store.mentioning("meal", args.id))
-          if (meal.data.dishes.some((d) => d.recipe_id === args.id))
-            references.push({
-              kind: "meal",
-              id: meal.id,
-              title: meal.data.title,
-            });
+      const users =
+        args.kind === "recipe"
+          ? this.recipeUsers(args.id)
+          : { meals: [], variants: [] };
       requireThat(
-        references.length === 0,
+        !users.meals.length && !users.variants.length,
         "IN_USE",
-        `This recipe is used by active meals: ${references.map((r) => `${r.title} (${r.id})`).join(", ")}. Edit or archive those meals first.`,
+        `This recipe is still used by ${this.describeUsers(users)}. Edit or archive those first.`,
       );
     } else if (args.kind === "meal") this.validateMeal(record.data);
     return {

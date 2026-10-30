@@ -177,7 +177,8 @@ test("saving, varying and archiving a recipe reads only its family and meals", (
         expected_version: original.version,
         archived: true,
       }),
-    (error) => error.code === "ARCHIVED",
+    (error) =>
+      error.code === "IN_USE" && error.message.includes("Recipe 0, our way"),
   );
   const used = store.get("recipe", ids[1]);
   assert.throws(

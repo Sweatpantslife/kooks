@@ -373,7 +373,10 @@ test("idempotency, optimistic edits, dependencies and undo protect later changes
   });
   assert.throws(
     () => call("history_undo", { action_id: another.action_id }),
-    hasCode("ARCHIVED"),
+    (error) =>
+      error.code === "IN_USE" &&
+      error.message.includes("Dependency") &&
+      error.message.includes("Uses dependency"),
   );
   assert.equal(
     call("kooks_get", { kind: "recipe", id: another.record.id }).record

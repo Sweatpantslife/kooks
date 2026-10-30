@@ -161,7 +161,8 @@ test("dinner suggestions respect selected eaters and effort limits without assum
 
 test("cooking memories and preferred variants preserve the original and undo the whole preference change", (t) => {
   const { call } = setup(t);
-  const original = call("recipe_save", { recipe: recipe() }).record;
+  const created = call("recipe_save", { recipe: recipe() });
+  const original = created.record;
   call("note_save", {
     recipe_id: original.id,
     text: "Loved it.",
@@ -207,6 +208,11 @@ test("cooking memories and preferred variants preserve the original and undo the
       }),
     code("INVALID_VARIANT"),
   );
+  // The undone second variation is archived and no longer counts.
+  const usedByVariations = (error) =>
+    error.code === "IN_USE" &&
+    error.message.includes(first.data.title) &&
+    !error.message.includes(second.record.data.title);
   assert.throws(
     () =>
       call("record_archive", {
@@ -215,7 +221,11 @@ test("cooking memories and preferred variants preserve the original and undo the
         expected_version: original.version,
         archived: true,
       }),
-    code("ARCHIVED"),
+    usedByVariations,
+  );
+  assert.throws(
+    () => call("history_undo", { action_id: created.action_id }),
+    usedByVariations,
   );
 });
 
@@ -360,6 +370,37 @@ test("shared tasks and timer owners use session versions and finish before creat
         task: { text: "Too late" },
       }),
     code("SESSION_FINISHED"),
+  );
+  assert.throws(
+    () =>
+      call("cooking_finish", {
+        id: s.id,
+        expected_version: s.version,
+        notes: "Overwritten",
+      }),
+    code("SESSION_FINISHED"),
+  );
+  // A session that cooked a recipe without a yield cannot say how many
+  // portions it made; the refusal says what to do instead.
+  const unknown = call("recipe_save", {
+    recipe: recipe("Soup", { servings: null }),
+  }).record;
+  let soup = call("cooking_start", {
+    source: { kind: "recipe", id: unknown.id },
+  }).record;
+  soup = call("cooking_finish", {
+    id: soup.id,
+    expected_version: soup.version,
+  }).record;
+  assert.throws(
+    () =>
+      call("batch_create", {
+        ...args,
+        recipe_id: unknown.id,
+        portions: 4,
+        session_id: soup.id,
+      }),
+    (error) => error.code === "MISSING_YIELD" && /yield/.test(error.message),
   );
 });
 
