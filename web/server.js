@@ -70,7 +70,9 @@ function parseOrigin(value) {
   let url = null;
   try {
     url = new URL(value);
-  } catch {}
+  } catch {
+    // Not a URL: refused below.
+  }
   if (
     !url ||
     !(
@@ -132,6 +134,7 @@ function disposition(data, download) {
   let name =
     String(data.name ?? "")
       .trim()
+      // eslint-disable-next-line no-control-regex -- control characters are replaced on purpose
       .replace(/[\\/\0-\x1f"]/g, "_") || "file";
   if (
     !name.toLowerCase().endsWith(`.${extension}`) &&

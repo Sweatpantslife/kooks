@@ -34,6 +34,7 @@ Use Node.js 22.13 or newer. Install from the committed lockfile with `npm ci`.
 | `npm run build:mobile`  | Vite production web bundle                                                                   |
 | `npm run test:e2e`      | Playwright suites for the mobile interface and the browser app (`--project mobile` or `web`) |
 | `npm run format:check`  | Prettier check enforced by CI; `npm run format` rewrites files                               |
+| `npm run lint`          | ESLint's recommended rules, enforced by CI (`eslint.config.js`)                              |
 | `npm run cap:sync`      | Build and regenerate copied assets/plugin configuration for both native projects             |
 | `npm run native:doctor` | Diagnose required native tooling                                                             |
 | `npm run build:ios`     | Unsigned simulator app; not a physical-device IPA                                            |
@@ -49,6 +50,7 @@ Native setup expected by the checked-in project: Xcode 26+ with iOS SDK/simulato
 
 ```sh
 npm run format:check
+npm run lint
 npm test
 KOOKS_TEST_OCR=1 npm test
 npm run test:e2e

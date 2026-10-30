@@ -838,7 +838,7 @@ async function boot() {
   }
   function settingsView() {
     const tab = state.view === "byk" ? "assistant" : settingsTab;
-    let body = "";
+    let body;
     if (tab === "backup")
       body = `<section class="panel stack"><h2>Your cookbook</h2><p class="small" data-storage-label>${storageLabel()}</p><p class="small muted">Recipes, meals, shopping and cooking progress stay on this device. Export a backup to keep a copy or move to another device. Household sync and the desktop cookbook are separate.</p><div class="actions">${button("Export backup", "export-backup", "", "btn-primary", "download")}${button("Restore backup", "restore-backup", "", "", "upload")}${storageStatus === "error" ? button("Retry saving", "retry-save") : ""}</div><input type="file" id="restore-file" accept=".json,application/json" hidden>${pendingRestore ? `<div class="callout callout-warning"><div class="grow stack-sm"><strong>Replace this device’s cookbook?</strong><p>This backup has ${pendingRestore.state.custom.length} saved recipe entries, ${pendingRestore.state.meals.length} meals, and ${pendingRestore.state.plan.length} planned entries. Export your current cookbook first if you want to keep both.</p><div class="actions">${button("Replace cookbook", "confirm-restore", "", "btn-primary")}${button("Cancel", "cancel-restore")}</div></div></div>` : ""}<p class="small muted">Uninstalling the app removes its local data. Restores accept Kooks mobile backups.</p></section>`;
     else if (tab === "preferences")
