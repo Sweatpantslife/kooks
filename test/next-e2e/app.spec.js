@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import AxeBuilder from "@axe-core/playwright";
+import { scan } from "../axe-scan.js";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -20,22 +20,10 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-// WCAG 2.2 A and AA plus axe's best practices, on whatever the page shows.
+// The accessibility suites' scan: WCAG 2.2 A and AA plus axe's best
+// practices, in the light and the dark theme.
 async function expectAccessible(page, label) {
-  const { violations } = await new AxeBuilder({ page })
-    .withTags([
-      "wcag2a",
-      "wcag2aa",
-      "wcag21a",
-      "wcag21aa",
-      "wcag22aa",
-      "best-practice",
-    ])
-    .analyze();
-  expect(
-    violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(" ")}`),
-    label,
-  ).toEqual([]);
+  expect(await scan(page, label)).toEqual([]);
 }
 
 const title = (page) => page.getByRole("heading", { level: 1 });
@@ -62,23 +50,20 @@ for (const [name, viewport] of [
       "page",
     );
 
-    for (const scheme of ["light", "dark"]) {
-      await page.emulateMedia({ colorScheme: scheme });
-      for (const [tab, heading] of [
-        ["Week", "This week"],
-        ["Recipes", "Recipes"],
-        ["Groceries", "Groceries"],
-      ]) {
-        await nav.getByRole("link", { name: tab }).click();
-        await expect(title(page)).toHaveText(heading);
-        await expect(title(page)).toBeFocused();
-        await expectAccessible(page, `${tab}, ${scheme}, ${name}`);
-      }
-      await page.getByRole("link", { name: "Household" }).click();
-      await expect(title(page)).toHaveText("Household");
+    for (const [tab, heading] of [
+      ["Week", "This week"],
+      ["Recipes", "Recipes"],
+      ["Groceries", "Groceries"],
+    ]) {
+      await nav.getByRole("link", { name: tab }).click();
+      await expect(title(page)).toHaveText(heading);
       await expect(title(page)).toBeFocused();
-      await expectAccessible(page, `Household, ${scheme}, ${name}`);
+      await expectAccessible(page, `${tab}, ${name}`);
     }
+    await page.getByRole("link", { name: "Household" }).click();
+    await expect(title(page)).toHaveText("Household");
+    await expect(title(page)).toBeFocused();
+    await expectAccessible(page, `Household, ${name}`);
   });
 
 test("the look chosen in Household is kept by this browser", async ({
