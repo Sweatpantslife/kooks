@@ -50,6 +50,23 @@ const status = (page) => page.locator(".toast-region");
 const ingredientsField = (page) =>
   page.getByRole("textbox", { name: "Ingredients One per line" });
 
+test("a link to a page on this computer is refused, and pasting is offered instead", async ({
+  page,
+}) => {
+  await page.goto("/#/recipes/add");
+  await page.getByRole("link", { name: /^From a link/ }).click();
+  await expect(title(page)).toHaveText("Add from a link");
+  await expectAccessible(page, "Add from a link");
+  await page.getByLabel("The recipe’s web address").fill("127.0.0.1/admin");
+  await page.getByRole("button", { name: "Read it" }).click();
+  await expect(page.getByRole("alert")).toContainText(
+    "Kooks reads recipe pages on the public web only",
+  );
+  await expect(title(page)).toHaveText("Add from a link");
+  await page.getByRole("link", { name: "Paste it" }).click();
+  await expect(title(page)).toHaveText("Paste a recipe");
+});
+
 test("a pasted recipe becomes a draft checked beside the original, then a recipe", async ({
   page,
 }) => {

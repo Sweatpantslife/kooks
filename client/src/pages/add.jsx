@@ -5,6 +5,7 @@ import {
   Camera,
   ChefHat,
   ClipboardPaste,
+  Globe,
   Lightbulb,
   PenLine,
   ScanText,
@@ -23,11 +24,18 @@ import { showKind } from "./recipes.jsx";
 
 const WAYS = [
   {
+    href: "#/recipes/add/link",
+    icon: Globe,
+    tone: "tomato",
+    title: "From a link",
+    text: "A recipe page on the web. Your kitchen reads the recipe from it, and you check the draft.",
+  },
+  {
     href: "#/recipes/add/paste",
     icon: ClipboardPaste,
     tone: "tomato",
     title: "Paste it",
-    text: "From a message, an email or a web page. You check the draft before it’s saved.",
+    text: "From a message, an email or a page that won’t share its recipe. You check the draft before it’s saved.",
   },
   {
     href: "#/recipes/add/photo",
@@ -109,7 +117,11 @@ function Drafts() {
             >
               <span class="draft-title">{draft.data.recipe.title}</span>
               <span class="muted small">
-                {draft.data.image_id ? "Photo" : "Pasted"}
+                {draft.data.image_id
+                  ? "Photo"
+                  : draft.data.recipe.source_url
+                    ? "From a link"
+                    : "Pasted"}
                 {draft.created_at &&
                   `, ${dateLabel(localDay(draft.created_at))}`}
               </span>
@@ -162,6 +174,65 @@ const review = (result) =>
   navigate(`recipes/draft/${encodeURIComponent(result.record.id)}`, {
     replace: true,
   });
+
+// What someone types as a page's address: https unless they wrote a scheme.
+const pageAddress = (text) => {
+  const typed = text.trim();
+  return /^[a-z][a-z0-9+.-]*:/i.test(typed) ? typed : `https://${typed}`;
+};
+
+export function FromLink() {
+  const [address, setAddress] = useState("");
+  const work = useWork();
+  const submit = (event) => {
+    event.preventDefault();
+    void work.run(async () =>
+      review(await change("recipe_import_link", { url: pageAddress(address) })),
+    );
+  };
+  return (
+    <div class="stack-lg page-narrow">
+      {back("#/recipes/add", "Add to your cookbook")}
+      <PageHeader title="Add from a link" />
+      <form class="card" onSubmit={submit}>
+        <Field
+          id="link-address"
+          label="The recipe’s web address"
+          help="Your kitchen opens that one page and reads the recipe the site publishes for search engines. Nothing else on the page is fetched, and the site sees your kitchen’s address."
+        >
+          <input
+            id="link-address"
+            class="input"
+            type="text"
+            inputMode="url"
+            autocapitalize="none"
+            autocomplete="off"
+            spellcheck={false}
+            required
+            placeholder="https://"
+            aria-describedby={hint("link-address")}
+            value={address}
+            onInput={(event) => setAddress(event.currentTarget.value)}
+          />
+        </Field>
+        <p class="muted small" role="status">
+          {work.busy ? "Reading the page." : ""}
+        </p>
+        <FormError>{work.error}</FormError>
+        <div class="form-footer">
+          <button type="submit" class="btn btn-primary" disabled={work.busy}>
+            <Icon icon={ScanText} />
+            {work.busy ? "Reading…" : "Read it"}
+          </button>
+        </div>
+      </form>
+      <p class="muted">
+        No recipe on the page? <a href="#/recipes/add/paste">Paste it</a>{" "}
+        instead.
+      </p>
+    </div>
+  );
+}
 
 export function Paste() {
   const [text, setText] = useState("");

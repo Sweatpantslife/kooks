@@ -34,8 +34,8 @@ Hash routes, noun first. The address after `#` is the whole state of the page, s
 | `#/week/add/<date>`                                                     | Add a dish to a day                                                       |
 | `#/week/when/recipe/<id>` · `/meal/<id>` · `#/week/move/<plan>`         | Choose a day for a recipe or meal, or move a plan                         |
 | `#/recipes`                                                             | The cookbook                                                              |
-| `#/recipes/add` · `/paste` · `/photo` · `/idea`                         | Add to the cookbook, and each way of adding                               |
-| `#/recipes/new` · `#/recipes/draft/<id>`                                | Write a recipe; check a pasted or photographed draft                      |
+| `#/recipes/add` · `/link` · `/paste` · `/photo` · `/idea`               | Add to the cookbook, and each way of adding                               |
+| `#/recipes/new` · `#/recipes/draft/<id>`                                | Write a recipe; check a draft read from a link, a paste or a photo        |
 | `#/recipes/<id>` · `/edit` · `/variation` · `/note`                     | A recipe, its editor, your own version of it, and a note about cooking it |
 | `#/recipes/meal/new` · `/<id>` · `/<id>/edit`                           | A meal and its dishes, and putting one together                           |
 | `#/recipes/idea/<id>` · `/edit` · `/write`                              | An idea to try, its form, writing it up as a recipe                       |
@@ -61,7 +61,7 @@ The previous browser app's addresses open the page that replaced them, so bookma
 | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
 | Week                  | Seven days with their plans and leftovers; today first on phones. One line with the week's food cost against the budget.                  | Add to a day            |
 | Recipes               | Search by name or ingredient; chips for kind (recipes, meals, ideas, techniques, books) and for favorites and facets; What can I make?    | Add                     |
-| Add                   | Paste, photograph, write, save an idea, keep a technique, add a book                                                                      | One link per way        |
+| Add                   | From a link, paste, photograph, write, save an idea, keep a technique, add a book                                                         | One link per way        |
 | Recipe                | Ingredients (scaled, converted, marked when at home), method, who at the table likes it, every time it was cooked, its family and sources | Cook                    |
 | Editor                | Basics, ingredients read back line by line, method, facets, links; a draft sits beside its original                                       | Save recipe             |
 | Meal                  | Its dishes                                                                                                                                | Cook                    |
@@ -74,7 +74,7 @@ The previous browser app's addresses open the page that replaced them, so bookma
 
 ## Key flows
 
-- **Add a recipe:** Recipes → Add → Paste or Photo → check the draft beside its original → Save → the recipe.
+- **Add a recipe:** Recipes → Add → From a link, Paste or Photo → check the draft beside its original → Save → the recipe. A page that does not publish its recipe says so and offers Paste.
 - **Plan the week:** Week → Add on a day → pick a recipe or meal. Or a recipe → Add to the week → pick a day.
 - **Shop:** Groceries → Shop for the week → untick what you have → the list by aisle → tick into the basket → Put it all away, which fills At home.
 - **Cook:** a recipe, meal or today's plan → Cook → steps and timers → Finish → leftovers go to At home and the note shows as "Last time" and under "Cooked before" on the recipe. Cooking without the app? A recipe → Add a note.

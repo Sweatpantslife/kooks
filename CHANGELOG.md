@@ -108,6 +108,41 @@ A phone now keeps a copy of the kitchen as it last saw it (in the app's IndexedD
 
 `npm run format:check`, `npm run lint`, `npm test` (107 passed, 1 skipped; 1 new: waiting ticks keep only the latest per grocery, a tick changed since stays after a send, and one made online supersedes it) and `npm run test:e2e` (48 passed; 1 new: on the phone's sign-in in a browser, a member ticks a grocery with the kitchen's API cut off, sees the bar with the waiting tick, restarts the app and finds the copy with the tick, then the kitchen answers, the bar goes and the kitchen has the tick; signing out leaves no copy; axe on the page out of reach). Not exercised: a real phone losing its connection, or a WebView's IndexedDB.
 
+### A recipe from a link
+
+**Add › From a link** takes a recipe page's address, and the kitchen reads the recipe the site publishes for search engines (schema.org Recipe JSON-LD: name, yield, ingredients, steps and sections, times, course and cuisine) into a draft to check beside its original, like a paste or a photo. The page's address becomes the recipe's source. A page without that data says so and offers Paste. The new tool `recipe_import_link` does this for MCP agents too; it is the only tool marked open-world, and its description tells agents to call it only for a link the user asked to import.
+
+This is the first time the server fetches anything, so the fetch is guarded (`mcp/fetch-page.js`), with the security thread's notes:
+
+- Only http and https, on the standard ports, without credentials.
+- Literal addresses are checked on every hop. Every address a name resolves to must be public, and the connection goes to the address checked. Loopback, `0.0.0.0`, private, shared, link-local and metadata, multicast, reserved and documentation ranges are refused, with their IPv4-mapped, IPv4-compatible, NAT64, 6to4 and Teredo forms.
+- Names are resolved by DNS queries that give up after a few seconds rather than the system lookup, which holds one of Node's four pool threads until the name answers.
+- At most five redirects, 3 MB after decompression and 10 seconds.
+- Its own agents, without keep-alive or proxy, and certificates checked.
+- One generic message whatever the site answered, so nothing it says is repeated.
+- No images or other resources are fetched, and the page is not kept. Only the recipe's fields are read, as text, from blocks found by scanning rather than one pattern over the page. The scan lowercases ASCII only, so a title with "İ" (which lowercases to two characters) does not shift it.
+- At most two pages at once, and 30 an hour from one client address.
+
+SECURITY.md, the hosting guide (outbound access, and the site seeing the server's address), the MCP guide and decisions say so. Docs that still described click-to-play video players, which the redesign replaced with links that open in a new tab, are corrected.
+
+Checks:
+
+- `npm run format:check` and `npm run lint` pass.
+- `npm test`: 115 passed, 1 skipped. 8 tests are new:
+  - refusals before any connection, for 25 addresses in every form, including `2130706433`, `0x7f.1`, `0`, `[::ffff:127.0.0.1]`, `[::7f00:1]`, `[64:ff9b::7f00:1]` and `169.254.169.254`;
+  - schemes, credentials and ports;
+  - names with any non-public address, among others;
+  - redirects, including to metadata and to a name that resolves inward;
+  - errors that never repeat the site, a gzip bomb, an unknown or `constructor` encoding, and a page that never answers;
+  - reading the JSON-LD, including `@graph`, sections, entities, durations, a Turkish title before the block, a `javascript:` URL that is not used and an own `__proto__` key that pollutes nothing;
+  - the tool's draft and commit with the fetched address as source;
+  - the web server's two-at-once and hourly limits.
+
+  The MCP test also checks that only this tool is open-world.
+
+- `npm run test:e2e`: 49 passed. 1 is new: a link to this computer is refused on the page, with axe, and Paste is offered. `#/recipes/add/link` joins the layout check at four widths.
+- **Not exercised:** a real recipe site (the sandbox has no direct internet), and a household network's own hairpin.
+
 ### A failed passkey suggestion stays silent on the sign-in screen
 
 When the browser turns down the quiet passkey suggestion in the email field (no authenticator, nothing saved, or the request abandoned), both apps now say nothing, instead of putting the browser's raw message ("Resident credentials or empty 'allowCredentials' lists are not supported at this time.") in the sign-in alert, where it replaced a real reason such as "This sign-in link has expired or was already used." Only the kitchen turning down a passkey the person picked is shown. The quiet request's own failure to load its options is silent too.

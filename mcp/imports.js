@@ -74,6 +74,23 @@ export function extractRecipe(text) {
     warnings.push(
       "Method headings were not found. Copy the instructions from the source into the editor.",
     );
+  warnings.push(...toCheck(servings, ingredients));
+  return {
+    recipe: recipe.parse({
+      title,
+      servings,
+      ingredients,
+      steps,
+      original_text: text,
+    }),
+    warnings,
+  };
+}
+
+// What any draft's reviewer should look at: the yield, unclear amounts and
+// cup and spoon sizes.
+function toCheck(servings, ingredients) {
+  const warnings = [];
   if (servings === null)
     warnings.push("Serving count is unknown. Set it before scaling.");
   if (ingredients.some((i) => i.quantity === null))
@@ -84,13 +101,35 @@ export function extractRecipe(text) {
     warnings.push(
       "Cup and spoon conventions are unspecified. Original units are preserved.",
     );
+  return warnings;
+}
+
+// A draft from what a recipe page says about its recipe (recipe-page.js),
+// with the address it was read from as its source; the page's own claims
+// about its address are not used.
+export function recipeFromPage(page) {
+  const ingredients = page.ingredients.map(parseIngredient);
+  const warnings = [];
+  if (!ingredients.length)
+    warnings.push(
+      "The page lists no ingredients. Copy them from the page into the editor.",
+    );
+  if (!page.steps.length)
+    warnings.push(
+      "The page gives no method. Copy it from the page into the editor.",
+    );
+  warnings.push(...toCheck(page.servings, ingredients));
   return {
     recipe: recipe.parse({
-      title,
-      servings,
+      title: page.title,
+      servings: page.servings,
       ingredients,
-      steps,
-      original_text: text,
+      steps: page.steps.map((text) => ({ text })),
+      original_text: page.text,
+      source_url: page.url.length <= 4000 ? page.url : null,
+      total_minutes: page.total_minutes,
+      course: page.course,
+      cuisine: page.cuisine,
     }),
     warnings,
   };

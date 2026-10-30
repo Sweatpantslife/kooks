@@ -70,6 +70,12 @@ test(
       tools.tools.find((t) => t.name === "recipe_save").outputSchema.type,
       "object",
     );
+    // Only the link import reaches beyond this machine, so hosts can ask
+    // before it runs.
+    assert.deepEqual(
+      tools.tools.filter((t) => t.annotations.openWorldHint).map((t) => t.name),
+      ["recipe_import_link"],
+    );
     const workflow = await client.readResource({ uri: "kooks://workflow" });
     assert.match(workflow.contents[0].text, /do not deliver alarms/);
     const saved = await client.callTool({

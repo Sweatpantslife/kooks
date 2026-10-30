@@ -23,7 +23,7 @@ const links = z
   .max(50)
   .default([])
   .describe(
-    "Pages and videos. The household apps embed YouTube, Vimeo, Facebook, Instagram and TikTok players and open other links in the browser; the server never fetches them.",
+    "Pages and videos. The household apps name YouTube, Vimeo, Facebook, Instagram and TikTok videos and open every link in the browser; the server does not fetch them.",
   );
 const photoIds = z
   .array(s.id)

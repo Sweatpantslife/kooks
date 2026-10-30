@@ -101,7 +101,7 @@ export const recipe = z.object({
     .max(50)
     .default([])
     .describe(
-      "Reference pages and videos for this recipe. The household apps embed YouTube, Vimeo, Facebook, Instagram and TikTok players and open other links in the browser; the server never fetches them.",
+      "Reference pages and videos for this recipe. The household apps name YouTube, Vimeo, Facebook, Instagram and TikTok videos and open every link in the browser; the server does not fetch them.",
     ),
   ingredients: z.array(ingredient).max(500).default([]),
   steps: z

@@ -17,7 +17,7 @@ import { Recipes } from "./pages/recipes.jsx";
 import { Recipe } from "./pages/recipe.jsx";
 import { Meal, MealForm } from "./pages/meal.jsx";
 import { NoteForm } from "./pages/note.jsx";
-import { Add, Idea, Paste, Photo } from "./pages/add.jsx";
+import { Add, FromLink, Idea, Paste, Photo } from "./pages/add.jsx";
 import { Editor } from "./pages/editor.jsx";
 import {
   BookForm,
@@ -34,6 +34,7 @@ const named = (kind, id, fallback) => record(kind, id)?.data.title ?? fallback;
 
 const ADD = {
   "": ["Add to your cookbook", Add],
+  link: ["Add from a link", FromLink],
   paste: ["Paste a recipe", Paste],
   photo: ["Photograph a recipe", Photo],
   idea: ["Save an idea", Idea],

@@ -17,7 +17,7 @@ npm run dev
 
 `npm run test:e2e` runs the Playwright suite (run `npx playwright install chromium` once), `npm run format:check` enforces the shared Prettier style, and `npm run lint` runs ESLint's recommended rules; the GitHub Actions workflow runs all of these on Node 22 and 24 for every pull request and every push to `main`.
 
-Open `http://127.0.0.1:4317` for the browser app. It starts with an empty cookbook and shares SQLite storage with the MCP server. It plans the week, keeps recipes (pasted, photographed or written, with courses, cuisines, diet labels and tags), meals, ideas to try, techniques and a shelf of your own PDF and EPUB cookbooks, builds the grocery list by aisle and keeps track of what is at home, cooks one step at a time with timers, notes and leftovers, and knows the people at the table, the prices paid and the weekly budget. Recipe links play YouTube, Vimeo, Facebook, Instagram and TikTok videos only when you press play.
+Open `http://127.0.0.1:4317` for the browser app. It starts with an empty cookbook and shares SQLite storage with the MCP server. It plans the week, keeps recipes (read from a link, pasted, photographed or written, with courses, cuisines, diet labels and tags), meals, ideas to try, techniques and a shelf of your own PDF and EPUB cookbooks, builds the grocery list by aisle and keeps track of what is at home, cooks one step at a time with timers, notes and leftovers, and knows the people at the table, the prices paid and the weekly budget. Recipe links and videos open in a new tab.
 
 The browser app has three tabs, Week, Recipes and Groceries, with Household behind the household's initials, and cooking as a full-screen mode. It was redesigned from scratch in October 2026; [Information architecture and experience design](docs/ia-ux.md) is the design authority, and the previous app's bookmarks open the pages that replaced them. The phone app is the same app.
 
@@ -38,7 +38,7 @@ npm run cap:android
 
 ## Agent integration
 
-Connect an MCP client to `node /absolute/path/to/kooks/mcp/index.js`; adapt [the example configuration](mcp-config.example.json). The backend exposes 48 validated tools with persistent storage, request deduplication, optimistic versions, undo, and backup/restore. The host agent supplies intelligence; Kooks has no built-in model-provider connection. See [MCP setup and workflows](docs/mcp-server.md).
+Connect an MCP client to `node /absolute/path/to/kooks/mcp/index.js`; adapt [the example configuration](mcp-config.example.json). The backend exposes 49 validated tools with persistent storage, request deduplication, optimistic versions, undo, and backup/restore. The host agent supplies intelligence; Kooks has no built-in model-provider connection. See [MCP setup and workflows](docs/mcp-server.md).
 
 ## Data and privacy
 
