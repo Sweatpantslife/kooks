@@ -1,6 +1,7 @@
 import { Heart } from "lucide";
 import { art } from "../lib/kitchen.js";
 import { Icon } from "./icon.jsx";
+import { AssetImage } from "./asset.jsx";
 
 // The picture at the top of a tile or a recipe page: the household's photo
 // when there is one, otherwise the course's color and icon.
@@ -9,7 +10,7 @@ export function Art({ kind, data, class: className = "" }) {
   if (photo)
     return (
       <span class={`art ${className}`}>
-        <img src={`/api/assets/${encodeURIComponent(photo)}`} alt="" />
+        <AssetImage id={photo} alt="" />
       </span>
     );
   const { tone, icon } = art(kind, data);

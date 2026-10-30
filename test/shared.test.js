@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import {
   canonicalQuantity,
   convertUnits,
@@ -464,8 +464,11 @@ test("the stylesheets use start and end rather than left and right", async () =>
   // a second stylesheet. A declaration that must stay physical says why.
   const physical =
     /(?:^|[\s{;])(?:(?:margin|padding|border)-(?:left|right)|left|right)\s*:|(?:text-align|float)\s*:\s*(?:left|right)\b|translateX\(/;
-  for (const file of ["shared/ui.css", "shared/tokens.css", "app/styles.css"]) {
-    const css = await readFile(new URL(`../${file}`, import.meta.url), "utf8");
+  const folder = new URL("../client/src/styles/", import.meta.url);
+  const files = (await readdir(folder)).filter((name) => name.endsWith(".css"));
+  assert.ok(files.length > 0, "the app has stylesheets");
+  for (const file of files) {
+    const css = await readFile(new URL(file, folder), "utf8");
     const found = css
       .split("\n")
       .map((line, index) => [index + 1, line])

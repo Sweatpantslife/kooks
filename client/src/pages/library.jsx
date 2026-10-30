@@ -22,6 +22,7 @@ import { hrefOf } from "../lib/kitchen.js";
 import { Empty, PageHeader } from "../ui/page.jsx";
 import { Field, FormError, hint, useDirty, useWork } from "../ui/form.jsx";
 import { Icon } from "../ui/icon.jsx";
+import { AssetImage, FileLink, assetPath } from "../ui/asset.jsx";
 import { Art } from "../ui/tile.jsx";
 import { MoreList, linkItems } from "../ui/more.jsx";
 import { RecipePicker } from "../ui/recipe-picker.jsx";
@@ -89,8 +90,8 @@ function Photos({ ids, title }) {
     <ul class="photos" role="list">
       {ids.slice(1).map((id, index) => (
         <li key={id}>
-          <img
-            src={`/api/assets/${encodeURIComponent(id)}`}
+          <AssetImage
+            id={id}
             alt={`${title}, photo ${index + 2}`}
             loading="lazy"
           />
@@ -282,7 +283,8 @@ function Bookmarks({ book }) {
   const [label, setLabel] = useState("");
   const [page, setPage] = useState("");
   const work = useWork();
-  const pdf = record("asset", d.file_id)?.data.mime_type === "application/pdf";
+  const file = record("asset", d.file_id)?.data;
+  const pdf = file?.mime_type === "application/pdf";
   const save = (bookmarks, done) =>
     work.run(() =>
       change(
@@ -303,7 +305,7 @@ function Bookmarks({ book }) {
       setPage("");
     });
   };
-  const href = `/api/assets/${encodeURIComponent(d.file_id)}`;
+  const href = assetPath(d.file_id);
   return (
     <section class="card" aria-labelledby="bookmarks">
       <h2 id="bookmarks">Bookmarks</h2>
@@ -313,13 +315,13 @@ function Bookmarks({ book }) {
             <li key={`${index}-${mark.label}`}>
               <span class="price-text">
                 {pdf && mark.page ? (
-                  <a
-                    href={`${href}#page=${mark.page}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <FileLink
+                    class="link-button"
+                    path={`${href}#page=${mark.page}`}
+                    name={file.name || `${d.title}.pdf`}
                   >
                     <strong>{mark.label}</strong>
-                  </a>
+                  </FileLink>
                 ) : (
                   <strong>{mark.label}</strong>
                 )}
@@ -386,7 +388,8 @@ export function BookPage({ id }) {
   const d = book.data;
   const file = record("asset", d.file_id)?.data;
   const kind = file && FILE_LABELS[file.mime_type];
-  const href = `/api/assets/${encodeURIComponent(d.file_id)}`;
+  const href = assetPath(d.file_id);
+  const name = file?.name || `${d.title}.${kind?.toLowerCase()}`;
   return (
     <article class="recipe">
       {toRecipes}
@@ -401,25 +404,21 @@ export function BookPage({ id }) {
             {file ? (
               <>
                 {kind === "PDF" && (
-                  <a
-                    class="btn btn-primary"
-                    href={href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
+                  <FileLink class="btn btn-primary" path={href} name={name}>
                     <Icon icon={ExternalLink} />
                     Open the book
-                  </a>
+                  </FileLink>
                 )}
-                <a
+                <FileLink
                   class={kind === "PDF" ? "btn" : "btn btn-primary"}
-                  href={`${href}?download=1`}
-                  download={file.name || `${d.title}.${kind?.toLowerCase()}`}
+                  path={`${href}?download=1`}
+                  name={name}
+                  download
                 >
                   <Icon icon={Download} />
                   Download {kind}
                   {file.byte_length ? `, ${size(file.byte_length)}` : ""}
-                </a>
+                </FileLink>
               </>
             ) : (
               <p class="muted">The file for this book is missing.</p>

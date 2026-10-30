@@ -13,6 +13,7 @@ import {
   toggleFavorite,
 } from "../lib/kitchen.js";
 import { PageHeader, Empty } from "../ui/page.jsx";
+import { OldPhoneRecipes } from "../ui/old-phone.jsx";
 import { Tile } from "../ui/tile.jsx";
 import { Icon } from "../ui/icon.jsx";
 
@@ -132,6 +133,7 @@ export function Recipes() {
     return (
       <>
         <PageHeader title="Recipes" />
+        <OldPhoneRecipes />
         <Empty icon={BookOpen} title="Your cookbook is empty" action={add}>
           Start with something you already love to cook: paste it from a
           message, photograph the page, or write it down.
@@ -144,6 +146,7 @@ export function Recipes() {
       <PageHeader eyebrow={plural(counts.recipe, "recipe")} title="Recipes">
         {add}
       </PageHeader>
+      <OldPhoneRecipes />
       <div class="stack">
         <label class="search">
           <Icon icon={Search} />

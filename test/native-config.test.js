@@ -12,7 +12,9 @@ const elements = (xml, name) =>
     ),
   );
 
-test("Android shares only exported cookbooks and backs up only the cookbook", () => {
+// The device token lives in the app's web storage, which the rules leave out,
+// so a restored backup never signs another phone in.
+test("Android shares only exported files and backs up only the old cookbook", () => {
   // The FileProvider used to expose the whole external storage root.
   const paths = read(`${res}/file_paths.xml`).replace(/<!--[\s\S]*?-->/g, "");
   assert.deepEqual(
@@ -22,7 +24,10 @@ test("Android shares only exported cookbooks and backs up only the cookbook", ()
   assert.deepEqual(elements(paths, "cache-path"), [
     { name: "exports", path: "exports/" },
   ]);
-  assert.match(read("app/native.js"), /path: `exports\/\$\{filename\}`/);
+  assert.match(
+    read("client/src/lib/native.js"),
+    /path: `exports\/\$\{filename\}`/,
+  );
 
   const manifest = read("android/app/src/main/AndroidManifest.xml");
   const [application] = elements(manifest, "application");
@@ -32,10 +37,11 @@ test("Android shares only exported cookbooks and backs up only the cookbook", ()
     application["android:dataExtractionRules"],
     "@xml/data_extraction_rules",
   );
-  // The rules name the folder app/storage.js keeps the cookbook in.
+  // The rules name the folder the phone app before this one kept its
+  // cookbook in, which this app reads its recipes from once.
   assert.match(
-    read("app/storage.js"),
-    /const path = \(name\) => `kooks\/\$\{name\}`/,
+    read("client/src/lib/native.js"),
+    /path: "kooks\/cookbook\.json"/,
   );
   const cookbook = [{ domain: "file", path: "kooks" }];
   const legacy = read(`${res}/backup_rules.xml`);

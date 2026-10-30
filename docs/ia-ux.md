@@ -1,6 +1,6 @@
 # Kooks information architecture and experience design
 
-Adopted October 30, 2026, when the redesigned app replaced the previous browser app. This document is the design authority for the app in `client/` (Preact, built by Vite and served by `web/server.js` at `/`). The Capacitor mobile app in `app/` still has the previous structure (Today, Recipes, Plan, Shop, Cook and a Settings gear) until it moves onto this client; where the two differ, this document describes where the mobile app is going.
+Adopted October 30, 2026, when the redesigned app replaced the previous browser app. This document is the design authority for the app in `client/` (Preact, built by Vite and served by `web/server.js` at `/`). The phone app is this client packaged with Capacitor, so everything here holds on phones too; it signs in with an emailed code rather than a link or a passkey, and Household shows **This phone** with its sign-out ([native setup and limits](native-app.md)).
 
 ## Principles
 
@@ -125,4 +125,4 @@ Components live in `client/src/ui/`, styles in `client/src/styles/` (`tokens.css
 
 ## Out of scope
 
-The redesign changes the browser app's structure, pages and look. It does not change the MCP tools, storage or the data contracts; the mobile app's move onto this client and the unfinished items in the [handoff](handoff.md) (native verification, a shared cookbook on phones, live assistance) come next.
+The redesign changes the browser app's structure, pages and look. It does not change the MCP tools, storage or the data contracts. The unfinished items in the [handoff](handoff.md) (native verification, an offline copy on phones, live assistance) come next.

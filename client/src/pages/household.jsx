@@ -20,10 +20,12 @@ import { UNITS, units } from "../lib/units.js";
 import { budgetFor, currency, money } from "../lib/money.js";
 import { names } from "../lib/people.js";
 import { toast } from "../lib/toast.js";
+import { kitchen, phone, setKitchen } from "../lib/device.js";
 import { navigate } from "../lib/router.js";
 import { dateLabel, localDay, monday, plural } from "../lib/format.js";
 import { Empty, PageHeader } from "../ui/page.jsx";
 import { Icon } from "../ui/icon.jsx";
+import { FileLink } from "../ui/asset.jsx";
 
 export const toHousehold = (
   <a class="back" href="#/household">
@@ -194,13 +196,60 @@ function Passkeys({ email }) {
   );
 }
 
+// On a phone: who it is signed in as, and to which kitchen. Passkeys
+// belong to the kitchen's own address, so they are for browsers.
+function ThisPhone({ email }) {
+  const [busy, setBusy] = useState(false);
+  const leave = (forget) => async () => {
+    setBusy(true);
+    await signOut();
+    if (forget) setKitchen("");
+    navigate("week", { replace: true });
+    toast("Signed out. See you at the next meal.");
+  };
+  return (
+    <section class="card" aria-labelledby="this-phone">
+      <h2 id="this-phone">This phone</h2>
+      <p>
+        Signed in as <strong>{email}</strong> to{" "}
+        <strong>{kitchen.value}</strong>.
+      </p>
+      <p class="muted small">
+        On this phone you sign in with a code from your email. Passkeys are for
+        browsers, at the kitchen’s own address.
+      </p>
+      <div class="row">
+        <button
+          type="button"
+          class="btn"
+          disabled={busy}
+          onClick={leave(false)}
+        >
+          <Icon icon={LogOut} />
+          Sign out
+        </button>
+        <button
+          type="button"
+          class="btn btn-quiet"
+          disabled={busy}
+          onClick={leave(true)}
+        >
+          Sign out and use another kitchen
+        </button>
+      </div>
+    </section>
+  );
+}
+
 export function Account() {
   const email = account.value?.email;
   return (
     <div class="stack-lg page-narrow">
       {toHousehold}
       <PageHeader title="Sign-in" />
-      {email ? (
+      {email && phone ? (
+        <ThisPhone email={email} />
+      ) : email ? (
         <Passkeys email={email} />
       ) : (
         <Empty icon={KeyRound} title="Nobody signs in here">
@@ -224,14 +273,15 @@ export function Backup() {
           kitchen keeps. Put it somewhere other than the computer Kooks runs on.
         </p>
         <div class="row">
-          <a
+          <FileLink
             class="btn btn-primary"
-            href="/api/backup"
-            download={`kooks-${localDay()}.json`}
+            path="/api/backup"
+            name={`kooks-${localDay()}.json`}
+            download
           >
             <Icon icon={Download} />
             Download a backup
-          </a>
+          </FileLink>
         </div>
         <p class="muted small">
           A backup restores into a new, empty kitchen, just as this one is

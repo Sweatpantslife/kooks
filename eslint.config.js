@@ -15,8 +15,6 @@ export default [
       "test-results/",
       "playwright-report/",
       ".data/",
-      // Generated from Lucide by scripts/icons.mjs
-      "shared/icons.js",
     ],
   },
   js.configs.recommended,
@@ -31,12 +29,6 @@ export default [
     languageOptions: { globals: globals.node },
   },
   {
-    files: ["app/**"],
-    languageOptions: {
-      globals: { ...globals.browser, __KOOKS_VERSION__: "readonly" },
-    },
-  },
-  {
     // The browser app: Preact components written in JSX, bundled by Vite.
     files: ["client/**/*.{js,jsx}"],
     languageOptions: {
@@ -49,14 +41,9 @@ export default [
     languageOptions: { globals: globals.node },
   },
   {
-    // Imported by both apps and the server.
+    // Imported by the app and the server.
     files: ["shared/**"],
     languageOptions: { globals: globals["shared-node-browser"] },
-  },
-  {
-    // Served to both apps, never imported by the server.
-    files: ["shared/a11y.js"],
-    languageOptions: { globals: globals.browser },
   },
   {
     // Playwright callbacks passed to page.evaluate() run in the browser.

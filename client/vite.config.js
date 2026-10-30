@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
+import { pagePolicy } from "./page-policy.js";
 
 const { version } = JSON.parse(
   readFileSync(new URL("../package.json", import.meta.url), "utf8"),
@@ -13,6 +14,22 @@ export default defineConfig({
   base: "./",
   define: { __KOOKS_VERSION__: JSON.stringify(version) },
   oxc: { jsx: { runtime: "automatic", importSource: "preact" } },
+  plugins: [
+    {
+      // Only the built page: the dev server adds styles as it goes, which
+      // the policy would refuse.
+      name: "kooks-page-policy",
+      apply: "build",
+      transformIndexHtml(html) {
+        const charset = '<meta charset="utf-8" />';
+        if (!html.includes(charset)) throw new Error("index.html: no charset");
+        return html.replace(
+          charset,
+          `${charset}\n    <meta http-equiv="Content-Security-Policy" content="${pagePolicy}" />`,
+        );
+      },
+    },
+  ],
   build: {
     outDir: "dist",
     emptyOutDir: true,
