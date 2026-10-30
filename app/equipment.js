@@ -1,3 +1,5 @@
+import { celsiusValues } from "./units.js";
+
 // Required-tool overview for one or more dishes: shared tools, dishes with no
 // recorded equipment, and oven temperatures that cannot run at the same time.
 export function equipmentSummary(components, recipeById) {
@@ -19,13 +21,7 @@ export function equipmentSummary(components, recipeById) {
     .filter((r) => (r.equipment || []).some((t) => /oven/i.test(t)))
     .map((r) => ({
       title: r.title,
-      temps: [
-        ...new Set(
-          r.steps.flatMap((s) =>
-            [...s.text.matchAll(/(\d+)°C/g)].map((m) => m[1]),
-          ),
-        ),
-      ],
+      temps: [...new Set(r.steps.flatMap((s) => celsiusValues(s.text)))],
     }))
     .filter((r) => r.temps.length);
   const conflict = new Set(ovens.flatMap((r) => r.temps)).size > 1;

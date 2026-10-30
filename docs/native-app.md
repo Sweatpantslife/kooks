@@ -49,7 +49,7 @@ For a physical iPhone, select your Apple development team in Xcode's Signing & C
 - Course, cuisine, diet labels and tags on every recipe, with library filters built from the cookbook's own values and matching shared with the browser app (`shared/taxonomy.js`). The editor offers existing cuisines and tags; a filter never matches an unrecorded course or cuisine.
 - Settings with theme (system, light or dark), palette, layout and spacing choices, measurement display, and mobile backup export/restore. Restores validate the whole backup and ask explicitly before replacing the current device's cookbook.
 
-Six labeled example recipes and one example meal help with first launch. English and metric remain the initial defaults. The inherited kitchen-volume convention is stated in the editor: cup = 240 mL, tablespoon = 15 mL, teaspoon = 5 mL. Mass-to-volume conversions are not inferred.
+Six labeled example recipes and one example meal help with first launch. English and metric remain the initial defaults. The inherited kitchen-volume convention is stated in the editor: cup = 240 mL, tablespoon = 15 mL, teaspoon = 5 mL. It is defined once as `kitchenVolumes` in `shared/quantities.js`, and the US kitchen display uses the same sizes, so a pasted amount reads back as written. Every other mass and volume (pounds, milligrams, `us_cup`, `metric_cup` and the rest) converts with the shared unit table. Mass-to-volume conversions are not inferred. Temperatures in steps convert to Fahrenheit with or without a space before the degree sign, with decimals and across ranges such as 180–200 °C.
 
 ## Storage and scope
 

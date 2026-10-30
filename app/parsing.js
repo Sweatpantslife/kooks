@@ -1,10 +1,16 @@
 // Recipe text parsing for the mobile editor. The parser keeps the pasted
-// wording as `raw` and the pasted unit as `original`, converting volumes with
-// the household's stated convention (cup 240 mL, tbsp 15 mL, tsp 5 mL).
+// wording as `raw` and the pasted unit as `original`, converting masses and
+// volumes with the shared unit table and a bare cup or spoon with the
+// household's kitchen sizes there (cup 240 mL, tbsp 15 mL, tsp 5 mL).
 import { ingredient } from "./sample-data.js";
 import { formatNumber, originalText } from "./units.js";
 import { splitIngredientLine } from "../shared/ingredients.js";
-import { unitSpelling } from "../shared/quantities.js";
+import {
+  kitchenVolumes,
+  round,
+  unitInfo,
+  unitSpelling,
+} from "../shared/quantities.js";
 import { formatLinkLines } from "../shared/links.js";
 import { formatLabels } from "../shared/taxonomy.js";
 
@@ -12,7 +18,7 @@ const asWritten = (raw) =>
   ingredient("text-" + raw.toLowerCase(), raw, null, "", "Other", "As written");
 
 // Mobile policy: store metric amounts, converting cups and spoons with the
-// stated convention, and remember the pasted unit for the "original" display.
+// kitchen sizes, and remember the pasted unit for the "original" display.
 // `known` lists ingredients whose key and shopping group should be reused
 // when a pasted line names them, such as the bundled example recipes.
 export function parseIngredient(line, known = []) {
@@ -20,31 +26,16 @@ export function parseIngredient(line, known = []) {
   const raw = parts.original;
   if (parts.quantity === null || parts.quantity <= 0) return asWritten(raw);
   let q = parts.quantity,
-    u = "";
+    u;
   const token = unitSpelling(parts.unitToken);
-  if (token) {
-    if (/^(g|grams?)$/.test(token)) u = "g";
-    else if (/^(kg|kilograms?)$/.test(token)) {
-      u = "g";
-      q *= 1000;
-    } else if (/^(ml|millilit)/.test(token)) u = "ml";
-    else if (/^(l|lit(?:er|re)s?)$/.test(token)) {
-      u = "ml";
-      q *= 1000;
-    } else if (/^(tbsp|tablespoon)/.test(token)) {
-      u = "ml";
-      q *= 15;
-    } else if (/^(tsp|teaspoon)/.test(token)) {
-      u = "ml";
-      q *= 5;
-    } else if (/^cups?$/.test(token)) {
-      u = "ml";
-      q *= 240;
-    } else if (/^(oz|ounce)/.test(token)) {
-      u = "g";
-      q *= 28.349523125;
-    } else u = token.replace(/s$/, "");
-  }
+  const size = unitInfo(token);
+  if (size?.dimension === "mass" || size?.dimension === "volume") {
+    u = size.dimension === "mass" ? "g" : "ml";
+    q = round(q * size.factor);
+  } else if (kitchenVolumes[token]) {
+    u = "ml";
+    q = round(q * kitchenVolumes[token]);
+  } else u = token;
   const name = parts.name;
   const match = known.find((i) => i.n.toLowerCase() === name.toLowerCase());
   const result = ingredient(

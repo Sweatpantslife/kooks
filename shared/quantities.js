@@ -29,6 +29,11 @@ define(["metric_tbsp"], "volume", 15, "mL");
 define(["metric_tsp"], "volume", 5, "mL");
 define(["count", "each", "piece", "pieces"], "count", 1, "each");
 
+// The mobile app stores metric amounts, so it needs a size for a bare cup and
+// spoon. These are the household's kitchen sizes; the backend keeps a bare cup
+// or spoon as written until the household settles its convention.
+export const kitchenVolumes = { cup: 240, tbsp: 15, tsp: 5 };
+
 // Unit words without a fixed size, each with one spelling and its plural, so
 // that "2 cans" and "1 can" compare as the same unit. A bare cup or spoon is
 // one of them and stays unconverted, as above.
