@@ -7,13 +7,13 @@ import {
   shoppingDiff,
   preserveChecked,
 } from "./shopping.js";
-import { validateFeatureRelations, Features } from "./features.js";
+import { featureRules, Features } from "./features.js";
 import {
   facetText,
   hasFacetFilters,
   matchesFacets,
 } from "../shared/taxonomy.js";
-import { validateLibraryRelations } from "./library.js";
+import { libraryRules } from "./library.js";
 
 // Searchable text of a record: its string and number values, never its keys.
 function searchText(value) {
@@ -98,11 +98,36 @@ export class Kooks {
     };
   }
 
-  validateRelations() {
-    // This also protects against an undo archiving a recipe that a later meal uses.
-    for (const meal of this.store.list("meal")) this.validateMeal(meal.data);
-    validateFeatureRelations(this.store);
-    validateLibraryRelations(this.store);
+  // Rules relating active records to each other. A write passes the changes
+  // it made: their records are checked, and so are the active meals and
+  // variants of a changed recipe, which depend on its yield, its parent and
+  // whether it is archived (an undo can archive a recipe a later meal uses).
+  // Nothing else depends on another record's contents, and records are never
+  // deleted. Without changes, every record is checked.
+  validateRelations(changes) {
+    const rules = {
+      meal: (store, meal) => this.validateMeal(meal.data),
+      ...featureRules,
+      ...libraryRules,
+    };
+    const checks = new Map(Object.keys(rules).map((kind) => [kind, new Map()]));
+    const check = (kind, record) => {
+      if (!record.archived) checks.get(kind)?.set(record.id, record);
+    };
+    if (!changes)
+      for (const kind of checks.keys())
+        for (const record of this.store.list(kind)) check(kind, record);
+    for (const { kind, id } of changes ?? []) {
+      check(kind, this.store.get(kind, id, true));
+      if (kind !== "recipe") continue;
+      for (const meal of this.store.mentioning("meal", id))
+        if (meal.data.dishes.some((dish) => dish.recipe_id === id))
+          check("meal", meal);
+      for (const variant of this.store.recipeFamily(id))
+        check("recipe", variant);
+    }
+    for (const [kind, records] of checks)
+      for (const record of records.values()) rules[kind](this.store, record);
   }
 
   resolve(source) {
@@ -506,7 +531,7 @@ export class Kooks {
     if (args.archived) {
       const references = [];
       if (args.kind === "recipe")
-        for (const meal of this.store.list("meal"))
+        for (const meal of this.store.mentioning("meal", args.id))
           if (meal.data.dishes.some((d) => d.recipe_id === args.id))
             references.push({
               kind: "meal",

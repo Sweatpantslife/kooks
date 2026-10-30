@@ -29,9 +29,11 @@ export function batchView(record) {
   };
 }
 
-export function validateFeatureRelations(store) {
-  const preferred = new Set();
-  for (const record of store.list("recipe")) {
+// Rules relating an active record to others, by kind. A write checks them for
+// the records it touched and the records depending on those (see
+// Kooks.validateRelations); restore checks every record.
+export const featureRules = {
+  recipe(store, record) {
     const data = record.data;
     requireThat(
       data.active_minutes == null ||
@@ -40,27 +42,26 @@ export function validateFeatureRelations(store) {
       "INVALID_EFFORT",
       "Hands-on time cannot exceed total time.",
     );
+    let original = record;
     if (data.original_recipe_id) {
-      const original = store.get("recipe", data.original_recipe_id);
+      original = store.get("recipe", data.original_recipe_id);
       requireThat(
         original.id !== record.id && !original.data.original_recipe_id,
         "INVALID_VARIANT",
         "A variant must reference an original recipe, not another variant.",
       );
     }
-    if (data.preferred) {
-      const family = data.original_recipe_id ?? record.id;
+    if (data.preferred)
       requireThat(
-        !preferred.has(family),
+        store.recipeFamily(original.id).filter((r) => r.data.preferred)
+          .length === 1,
         "INVALID_VARIANT",
         "Only one version of a recipe can be preferred.",
       );
-      preferred.add(family);
-    }
     for (const imageId of data.source_image_ids ?? [])
       store.get("asset", imageId, true);
-  }
-  for (const batch of store.list("batch")) {
+  },
+  batch(store, batch) {
     store.get("recipe", batch.data.recipe_id, true);
     requireThat(
       batch.data.dish.recipe_id === batch.data.recipe_id &&
@@ -90,8 +91,8 @@ export function validateFeatureRelations(store) {
         "INVALID_DATE",
         "A portion cannot be planned before its cooking date.",
       );
-  }
-  for (const session of store.list("session")) {
+  },
+  session(store, session) {
     const tasks = session.data.tasks ?? [];
     requireThat(
       unique(tasks.map((t) => t.id)).length === tasks.length,
@@ -115,8 +116,8 @@ export function validateFeatureRelations(store) {
     }
     for (const timer of session.data.timers)
       if (timer.member_id) store.get("member", timer.member_id, true);
-  }
-  for (const draft of store.list("import")) {
+  },
+  import(store, draft) {
     if (draft.data.image_id) store.get("asset", draft.data.image_id, true);
     if (draft.data.recipe_id) store.get("recipe", draft.data.recipe_id, true);
     requireThat(
@@ -124,22 +125,31 @@ export function validateFeatureRelations(store) {
       "INVALID_IMPORT",
       "Saved imports must reference their recipe.",
     );
-  }
-  const budgetKeys = new Set();
-  for (const record of store.list("budget")) {
+  },
+  budget(store, record) {
     requireThat(
       new Date(`${record.data.week_start}T00:00:00Z`).getUTCDay() === 1,
       "INVALID_WEEK",
       "Choose a Monday as the beginning of the week.",
     );
-    const key = `${record.data.week_start}:${record.data.currency}`;
     requireThat(
-      !budgetKeys.has(key),
+      !store
+        .mentioning("budget", record.data.week_start)
+        .some(
+          (other) =>
+            other.id !== record.id &&
+            other.data.week_start === record.data.week_start &&
+            other.data.currency === record.data.currency,
+        ),
       "DUPLICATE_BUDGET",
       "Edit the existing budget for this week and currency.",
     );
-    budgetKeys.add(key);
-  }
+  },
+};
+
+export function validateFeatureRelations(store) {
+  for (const [kind, rule] of Object.entries(featureRules))
+    for (const record of store.list(kind)) rule(store, record);
 }
 
 // A pantry checklist is presence, not an assertion about exact stock. Known
@@ -416,13 +426,8 @@ export class Features {
         "This variant belongs to another recipe.",
       );
     if (args.preferred)
-      for (const sibling of this.store.list("recipe")) {
-        if (
-          sibling.id !== args.id &&
-          (sibling.id === original.id ||
-            sibling.data.original_recipe_id === original.id) &&
-          sibling.data.preferred
-        )
+      for (const sibling of this.store.recipeFamily(original.id)) {
+        if (sibling.id !== args.id && sibling.data.preferred)
           this.store.put(
             "recipe",
             { ...sibling.data, preferred: false },

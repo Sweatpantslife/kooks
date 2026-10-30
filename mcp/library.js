@@ -47,16 +47,16 @@ export function fileBytes(file) {
 // Every reference a technique, idea or book makes must point at a record of
 // the right kind. Archived recipes and assets stay valid targets, as they do
 // for recipe photos, so archiving never has to cascade.
-export function validateLibraryRelations(store) {
-  const unique = (ids, code, message) =>
-    requireThat(new Set(ids).size === ids.length, code, message);
-  const asset = (id, accept, code, message) =>
-    requireThat(
-      accept(store.get("asset", id, true).data.mime_type),
-      code,
-      message,
-    );
-  for (const record of store.list("technique")) {
+const unique = (ids, code, message) =>
+  requireThat(new Set(ids).size === ids.length, code, message);
+const asset = (store, id, accept, code, message) =>
+  requireThat(
+    accept(store.get("asset", id, true).data.mime_type),
+    code,
+    message,
+  );
+export const libraryRules = {
+  technique(store, record) {
     unique(
       record.data.recipe_ids,
       "INVALID_TECHNIQUE",
@@ -65,24 +65,27 @@ export function validateLibraryRelations(store) {
     for (const id of record.data.recipe_ids) store.get("recipe", id, true);
     for (const id of record.data.photo_ids)
       asset(
+        store,
         id,
         isImageType,
         "INVALID_TECHNIQUE",
         "Technique photos must be images.",
       );
-  }
-  for (const record of store.list("inspiration")) {
+  },
+  inspiration(store, record) {
     if (record.data.recipe_id) store.get("recipe", record.data.recipe_id, true);
     for (const id of record.data.photo_ids)
       asset(
+        store,
         id,
         isImageType,
         "INVALID_INSPIRATION",
         "Idea photos must be images.",
       );
-  }
-  for (const record of store.list("book")) {
+  },
+  book(store, record) {
     asset(
+      store,
       record.data.file_id,
       isBookType,
       "INVALID_BOOK",
@@ -90,6 +93,7 @@ export function validateLibraryRelations(store) {
     );
     if (record.data.cover_id)
       asset(
+        store,
         record.data.cover_id,
         isImageType,
         "INVALID_BOOK",
@@ -97,5 +101,10 @@ export function validateLibraryRelations(store) {
       );
     unique(record.data.recipe_ids, "INVALID_BOOK", "List each recipe once.");
     for (const id of record.data.recipe_ids) store.get("recipe", id, true);
-  }
+  },
+};
+
+export function validateLibraryRelations(store) {
+  for (const [kind, rule] of Object.entries(libraryRules))
+    for (const record of store.list(kind)) rule(store, record);
 }
