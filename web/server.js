@@ -1,4 +1,5 @@
 import http from "node:http";
+import { isIPv4, isIPv6 } from "node:net";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { resolve, extname } from "node:path";
@@ -41,6 +42,52 @@ const mime = {
 };
 const MINUTE = 60000;
 const isLoopback = (host) => ["127.0.0.1", "localhost", "::1"].includes(host);
+// Plain HTTP is only for the household's own network: loopback, private and
+// link-local addresses (100.64.0.0/10 is Tailscale's), and names that only
+// resolve there.
+function onPrivateNetwork(hostname) {
+  const name = hostname.replace(/^\[|\]$/g, "").toLowerCase();
+  if (isIPv4(name)) {
+    const [a, b] = name.split(".").map(Number);
+    return (
+      a === 10 ||
+      a === 127 ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      (a === 169 && b === 254) ||
+      (a === 100 && b >= 64 && b <= 127)
+    );
+  }
+  if (isIPv6(name)) return name === "::1" || /^(f[cd]|fe[89ab])/.test(name);
+  return (
+    !name.includes(".") ||
+    /\.(local|lan|internal|localhost|home\.arpa)$/.test(name)
+  );
+}
+// The address members open, when one is configured: HTTPS behind a proxy,
+// or plain HTTP on the household's own network.
+function parseOrigin(value) {
+  let url = null;
+  try {
+    url = new URL(value);
+  } catch {}
+  if (
+    !url ||
+    !(
+      url.protocol === "https:" ||
+      (url.protocol === "http:" && onPrivateNetwork(url.hostname))
+    ) ||
+    url.username ||
+    url.password ||
+    url.pathname !== "/" ||
+    url.search ||
+    url.hash
+  )
+    throw new Error(
+      "KOOKS_PUBLIC_ORIGIN must be an HTTPS origin without a path, such as https://kooks.example.com, or an http:// address on this private network, such as http://192.168.1.20:4317.",
+    );
+  return url;
+}
 // Uploads travel as base64 inside JSON: an ebook of 64 MB needs about 86 MB.
 const maxBody = 96 * 1024 * 1024;
 const extensions = {
@@ -83,6 +130,8 @@ function disposition(data, download) {
 // Sign-in is on whenever the kitchen is reachable beyond this computer, or
 // when household addresses are configured on purpose. Members prove an
 // address with an emailed link and then add passkeys for one-tap sign-in.
+// Beyond this computer the address members open must be configured: links,
+// passkeys and the accepted Host all follow it, never the request.
 export function createWebServer({
   store,
   host = "127.0.0.1",
@@ -91,19 +140,9 @@ export function createWebServer({
   mailer = null,
   authOptions = {},
 }) {
-  const external = publicOrigin ? new URL(publicOrigin) : null;
-  if (
-    external &&
-    (external.protocol !== "https:" ||
-      external.username ||
-      external.password ||
-      external.pathname !== "/" ||
-      external.search ||
-      external.hash)
-  )
-    throw new Error(
-      "KOOKS_PUBLIC_ORIGIN must be an HTTPS origin without a path.",
-    );
+  const external = publicOrigin ? parseOrigin(publicOrigin) : null;
+  // Kooks speaks plain HTTP, so an HTTPS origin means a proxy in front.
+  const proxied = external?.protocol === "https:";
   const household = members instanceof Set ? members : new Set(members);
   const signIn = household.size > 0 || !isLoopback(host) || Boolean(external);
   if (signIn && !household.size)
@@ -113,6 +152,10 @@ export function createWebServer({
   if (signIn && !mailer)
     throw new Error(
       "Sign-in links need KOOKS_SMTP_HOST (with KOOKS_SMTP_USER, KOOKS_SMTP_PASSWORD and KOOKS_MAIL_FROM), or KOOKS_MAIL_OUTBOX during development.",
+    );
+  if (!isLoopback(host) && !external)
+    throw new Error(
+      "Sharing Kooks beyond this computer needs KOOKS_PUBLIC_ORIGIN: the address members open, such as https://kooks.example.com, or http://192.168.1.20:4317 on a home network.",
     );
   const auth = signIn
     ? createAuth({
@@ -165,9 +208,10 @@ export function createWebServer({
     return ++entry.count > max;
   }
   // Behind the HTTPS proxy every connection comes from the proxy, which
-  // appends the real client's address last.
+  // appends the real client's address last. Without one, anyone could write
+  // the header, so only the connection counts.
   const clientAddress = (req) =>
-    (external &&
+    (proxied &&
       String(req.headers["x-forwarded-for"] ?? "")
         .split(",")
         .pop()
@@ -175,7 +219,7 @@ export function createWebServer({
     req.socket.remoteAddress ||
     "unknown";
   const cookieFor = (token, maxAge) =>
-    `kooks_session=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${maxAge}${external ? "; Secure" : ""}`;
+    `kooks_session=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${maxAge}${proxied ? "; Secure" : ""}`;
   const sessionToken = (req) =>
     (req.headers.cookie ?? "").match(
       /(?:^|;\s*)kooks_session=([a-f0-9]{64})(?:;|$)/,
@@ -272,12 +316,21 @@ export function createWebServer({
     res.setHeader("Cache-Control", "no-store");
     res.setHeader("Content-Security-Policy", policy);
     try {
-      const url = new URL(req.url, `http://${req.headers.host}`);
+      let url;
+      try {
+        url = new URL(req.url, `http://${req.headers.host}`);
+      } catch {
+        return send(res, 400, { message: "Bad request." });
+      }
       if (url.pathname === "/healthz" && req.method === "GET")
         return send(res, 200, { ok: true });
-      if (external && req.headers.host !== external.host)
-        return send(res, 403, { message: "Unrecognized host." });
-      if (isLoopback(host) && !isLoopback(url.hostname.replace(/^\[|\]$/g, "")))
+      // A configured origin is the only accepted Host; otherwise the server
+      // is on loopback, where only loopback names defeat DNS rebinding.
+      if (
+        external
+          ? req.headers.host !== external.host
+          : !isLoopback(url.hostname.replace(/^\[|\]$/g, ""))
+      )
         return send(res, 403, { message: "Unrecognized host." });
       if (
         req.method === "POST" &&

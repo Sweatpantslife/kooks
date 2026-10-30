@@ -8,7 +8,7 @@ Create an application from this repository using the Dockerfile build pack. Expo
 
 Set these runtime environment variables (never build arguments or committed secrets):
 
-- `KOOKS_PUBLIC_ORIGIN`: the exact HTTPS origin, for example `https://kooks.example.com`. Passkeys are bound to this host name, and sign-in links point here.
+- `KOOKS_PUBLIC_ORIGIN`: the exact HTTPS origin, for example `https://kooks.example.com`. Passkeys are bound to this host name, sign-in links point here, and requests that name any other host are refused. The server refuses to start beyond loopback without it.
 - `KOOKS_HOUSEHOLD_EMAILS`: the addresses allowed to sign in, separated by commas, for example `ada@example.com, sam@example.com`. Editing the list and redeploying adds or removes members; a removed member's sessions and passkeys stop working at their next request.
 - `KOOKS_SMTP_HOST`, `KOOKS_SMTP_PORT`, `KOOKS_SMTP_USER` and `KOOKS_SMTP_PASSWORD`: the plain SMTP account that sends sign-in links, the same settings any mail client takes. `KOOKS_SMTP_SECURITY` is `starttls` by default (port 587; the connection must upgrade before anything is sent), `tls` for a server that is encrypted from the first byte (port 465), or `none` for an unencrypted relay on a trusted private network (port 25). Leave the user and password empty for a relay that needs no login. AUTH PLAIN and AUTH LOGIN are supported, and Kooks sends one short text message per link.
 - `KOOKS_MAIL_FROM`: the sender, for example `Kooks <kooks@example.com>`. Optional when the SMTP user name is itself an email address. Keep the password in the deployment secret store.
@@ -19,7 +19,7 @@ The image sets `KOOKS_HOST=0.0.0.0`, `PORT=4317`, and `KOOKS_DB_PATH=/data/kooks
 
 Ebook uploads for the library reach the server as JSON bodies of up to 96 MB (a 64 MB file in base64) and may take a few minutes on a slow connection; the server allows five minutes per request. Make sure the HTTPS proxy's request body size and timeout limits allow that, or uploads fail before Kooks sees them. Books and photos live in the same SQLite file, so size the volume and its backups accordingly.
 
-The Docker health check requests `GET /healthz`. It exposes no cookbook records. API requests require a signed-in member. Sessions use Secure, HttpOnly, SameSite=Strict cookies, last through 30 days of use, and are stored in the database, so a redeploy does not sign everyone out. POST requests must originate from the configured HTTPS origin. Forwarded headers cannot change that origin. Sign-in attempts are throttled per address.
+The Docker health check requests `GET /healthz`. It exposes no cookbook records. API requests require a signed-in member. Sessions use Secure, HttpOnly, SameSite=Strict cookies, last through 30 days of use, and are stored in the database, so a redeploy does not sign everyone out. POST requests must originate from the configured HTTPS origin. Forwarded headers cannot change that origin. Sign-in attempts are throttled per client address, which behind the HTTPS proxy is the last `X-Forwarded-For` entry; a plain-HTTP origin has no proxy, so the header is ignored there. Running Kooks on `KOOKS_HOST=127.0.0.1` behind a proxy on the same machine works the same way, as long as the proxy passes the original `Host`.
 
 ## Signing in
 
