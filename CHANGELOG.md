@@ -4,6 +4,10 @@ What changed in Kooks and how each change was verified, newest first. Kooks has 
 
 ## Unreleased
 
+### Shopping rows hashed once and status counted in SQL ([#38](https://github.com/Sweatpantslife/kooks/pull/38))
+
+Building a shopping list hashes each row's key once instead of once per contribution, finds checked rows in a set and compares rows as text: preview and sync for 1,335 contributions take 56.8 ms instead of 92.7 ms. `kooks_status` counts active records per kind in SQLite instead of reading every record: 14 ms instead of 39 ms at 3,000 recipes. A workflow test checks that archived records are not counted (removing the filter fails it); the existing shopping tests cover the unchanged rows, diffs and checkmarks. `npm run lint`, `npm run format:check`, `npm test` (108 passed, the OCR case skipped) and `npm run test:e2e` (30 passed) pass.
+
 ### The app's files revalidate and large replies are compressed ([#36](https://github.com/Sweatpantslife/kooks/pull/36))
 
 The browser app's files now revalidate against an ETag (`Cache-Control: no-cache`) instead of downloading again on every load (`no-store`), and files over 1 KB travel as Brotli or gzip, whichever the browser accepts: a page load's 255 KB becomes 67 KB, and an unchanged file costs an empty 304. JSON replies over 32 KB, such as a cookbook's first load, are compressed off the main thread (Brotli quality 5 turns 7.8 MB at 3,000 recipes into about 160 KB in some 50 ms); API replies stay `no-store`. `test/static.test.js` covers both encodings, a refused encoding (`q=0`), 304s, a small file left uncompressed, a 404 and a compressed `/api/state`. `npm run lint`, `npm run format:check`, `npm test` (107 passed, the OCR case skipped) and `npm run test:e2e` (30 passed) pass. Behaviour behind a compressing or caching proxy was not tried.

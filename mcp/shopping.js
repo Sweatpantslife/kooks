@@ -13,14 +13,20 @@ export function shoppingItems(data) {
     })),
   ];
   const rows = new Map();
+  // Many contributions share a row; hash each row's key once.
+  const keys = new Map();
+  const checked = new Set(data.checked);
   for (const item of contributions) {
     const normalized = canonicalQuantity(item.quantity, item.unit);
-    const key = digest([
+    const parts = [
       normalize(item.name),
       normalize(item.preparation),
       normalized.unit,
       item.quantity === null ? item.contribution_id : "quantified",
-    ]);
+    ];
+    const text = JSON.stringify(parts);
+    let key = keys.get(text);
+    if (!key) keys.set(text, (key = digest(parts)));
     if (!rows.has(key))
       rows.set(key, {
         id: key,
@@ -29,7 +35,7 @@ export function shoppingItems(data) {
         category: item.category,
         quantity: item.quantity === null ? null : 0,
         unit: normalized.unit,
-        checked: data.checked.includes(key),
+        checked: checked.has(key),
         contributions: [],
       });
     const row = rows.get(key);
@@ -49,11 +55,11 @@ export function shoppingItems(data) {
   );
 }
 
+// What must be bought for a row, as text that two rows share exactly when
+// that is the same. A title or source revision can change without changing it.
 function comparable(row) {
-  if (!row) return null;
   const { checked, ...value } = row;
-  // A title or source revision can change without changing what must be bought.
-  return {
+  return JSON.stringify({
     name: normalize(value.name),
     preparation: normalize(value.preparation),
     unit: value.unit,
@@ -65,7 +71,7 @@ function comparable(row) {
         unit: item.canonical_unit,
       }))
       .sort((a, b) => a.id.localeCompare(b.id)),
-  };
+  });
 }
 export function shoppingDiff(before, after) {
   const oldRows = new Map(shoppingItems(before).map((item) => [item.id, item]));
@@ -77,7 +83,7 @@ export function shoppingDiff(before, after) {
       .filter(
         (item) =>
           oldRows.has(item.id) &&
-          digest(comparable(item)) !== digest(comparable(oldRows.get(item.id))),
+          comparable(item) !== comparable(oldRows.get(item.id)),
       )
       .map((after) => ({ before: oldRows.get(after.id), after })),
   };
@@ -88,9 +94,7 @@ export function preserveChecked(before, after) {
   after.checked = shoppingItems(after)
     .filter((item) => {
       const prior = oldRows.get(item.id);
-      return (
-        prior?.checked && digest(comparable(prior)) === digest(comparable(item))
-      );
+      return prior?.checked && comparable(prior) === comparable(item);
     })
     .map((item) => item.id);
   return after;
