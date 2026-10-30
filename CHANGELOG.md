@@ -4,6 +4,10 @@ What changed in Kooks and how each change was verified, newest first. Kooks has 
 
 ## Unreleased
 
+### The passkey sign-in browser test waits for sign-out
+
+The web-auth test that reopens a spent sign-in link right after signing out failed about one run in twelve, on CI and locally: it opened the link while sign-out was still finishing, and sign-out then moved the address back to `#/today`, so the link was never read. The test now waits for the signed-out message first. With sign-out delayed by 300 ms the old test failed every time and the new one passes; the web-auth suite passed 15 runs in a row on Node 24.
+
 ### Type checking
 
 `npm run typecheck` runs TypeScript 7's checker over the application JavaScript and its JSDoc, without emitting anything, and CI runs it after lint; the tests are left to run rather than be type checked. Strict mode is off. 12 of the 47 checked files have findings today, 173 in all, and start with `// @ts-nocheck` until they opt in; none reproduced as a bug. `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm test` and `npm run test:e2e` pass.

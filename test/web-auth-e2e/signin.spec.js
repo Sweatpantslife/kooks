@@ -114,6 +114,10 @@ test("a member signs in by email link, adds a passkey and returns with one tap",
   await page.getByRole("button", { name: /^Remove passkey/ }).click();
   await expect(page.getByText("No passkeys yet.")).toBeVisible();
   await page.getByRole("button", { name: "Sign out" }).click();
+  // Sign-out ends by moving the address to #/today, so the link waits for it.
+  await expect(
+    page.getByText("Signed out. See you at the next meal."),
+  ).toBeVisible();
   // Signed out, a spent link shows the sign-in screen with the reason.
   await page.goto(link);
   await expect(
