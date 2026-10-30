@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "strict": false,
+    "target": "es2023",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "lib": ["es2024", "dom", "dom.iterable"],
+    "types": ["node"],
+    "paths": { "/shared/*": ["./shared/*"] },
+    "skipLibCheck": true
+  },
+  "include": ["mcp", "web", "shared", "app", "scripts", "types", "*.js"],
+  "exclude": ["node_modules", "dist", "android", "ios"]
+}

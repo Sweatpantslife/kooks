@@ -14,7 +14,7 @@ npm test
 npm run dev
 ```
 
-`npm run test:e2e` runs the Playwright suites for both interfaces (run `npx playwright install chromium` once), `npm run format:check` enforces the shared Prettier style, and `npm run lint` runs ESLint's recommended rules; the GitHub Actions workflow runs all of these on Node 22 and 24 for every pull request and every push to `main`.
+`npm run test:e2e` runs the Playwright suites for both interfaces (run `npx playwright install chromium` once), `npm run format:check` enforces the shared Prettier style, `npm run lint` runs ESLint's recommended rules, and `npm run typecheck` runs TypeScript's checker over the application JavaScript and its JSDoc; the GitHub Actions workflow runs all of these on Node 22 and 24 for every pull request and every push to `main`.
 
 Open `http://127.0.0.1:4317` for the persistent browser app. It starts with an empty cookbook and shares SQLite storage with the MCP server. Features include recipe capture/editing, courses, cuisines, diet labels and tags for search and filtering, meal composition, shopping, cooking sessions, pantry suggestions, leftovers, cooking memories, taste profiles, shared tasks, costs, reviewed photo imports, recipe links with embedded YouTube, Vimeo, Facebook, Instagram and TikTok players that load only when you press play, a place for techniques and inspiration with the same click-to-play videos, and a library of your own PDF and EPUB cookbooks with bookmarks and an in-page PDF reader.
 

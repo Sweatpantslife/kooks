@@ -4,6 +4,10 @@ What changed in Kooks and how each change was verified, newest first. Kooks has 
 
 ## Unreleased
 
+### Type checking
+
+`npm run typecheck` runs TypeScript 7's checker over the application JavaScript and its JSDoc, without emitting anything, and CI runs it after lint; the tests are left to run rather than be type checked. Strict mode is off. 12 of the 47 checked files have findings today, 173 in all, and start with `// @ts-nocheck` until they opt in; none reproduced as a bug. `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm test` and `npm run test:e2e` pass.
+
 ### Capacitor packages installed only for development
 
 The eight Capacitor runtime packages moved to `devDependencies`, so `npm ci --omit=dev`, which the server's Docker image runs, leaves them out: a production install shrinks from 20.8 MB to 17 MB. From that install the browser server answers `/healthz` and the MCP server initialises. After a full `npm ci`, `npx cap sync` still finds the same five plugins for Android and iOS and changes no tracked files. The native apps were not compiled here.

@@ -1,3 +1,4 @@
+// @ts-nocheck -- not type checked yet; remove this line to opt the file in.
 import { recipes, days, initial } from "./sample-data.js";
 import {
   amount as amountOf,

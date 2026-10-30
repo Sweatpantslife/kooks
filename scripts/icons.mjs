@@ -1,3 +1,4 @@
+// @ts-nocheck -- not type checked yet; remove this line to opt the file in.
 // Generates shared/icons.js from the Lucide icon set installed in node_modules.
 // Both apps draw their icons from that one generated module, so the browser
 // app needs no bundler and the mobile app ships only the icons it uses.

@@ -1,3 +1,4 @@
+// @ts-nocheck -- not type checked yet; remove this line to opt the file in.
 // Accessibility helpers both apps use. Both apps draw a page by replacing its
 // markup, which throws away what the person was doing in it: the focused
 // control, the caret in a text box, the sections they opened and how far they

@@ -1,3 +1,4 @@
+// @ts-nocheck -- not type checked yet; remove this line to opt the file in.
 import { DatabaseSync } from "node:sqlite";
 import { randomUUID, createHash } from "node:crypto";
 import { mkdirSync, chmodSync } from "node:fs";

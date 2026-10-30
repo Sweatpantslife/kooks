@@ -35,6 +35,7 @@ jobs:
       - run: npm ci
       - run: npm run format:check
       - run: npm run lint
+      - run: npm run typecheck
       - run: npm run test:coverage
       - name: Coverage summary
         run: node scripts/coverage-summary.mjs coverage/lcov.info >> "$GITHUB_STEP_SUMMARY"

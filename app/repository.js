@@ -1,3 +1,4 @@
+// @ts-nocheck -- not type checked yet; remove this line to opt the file in.
 // All writes pass through one queue so an older save cannot replace a newer one.
 // Keep the last validated snapshot separately before replacing the primary file.
 export function createRepository(adapter, parse, onStatus = () => {}) {

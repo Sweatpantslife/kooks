@@ -1,3 +1,4 @@
+// @ts-nocheck -- not type checked yet; remove this line to opt the file in.
 import { Capacitor } from "@capacitor/core";
 import { Directory, Encoding, Filesystem } from "@capacitor/filesystem";
 import { createRepository } from "./repository.js";

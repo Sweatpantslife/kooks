@@ -1,3 +1,4 @@
+// @ts-nocheck -- not type checked yet; remove this line to opt the file in.
 import sharp from "sharp";
 import { readFile, readdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";

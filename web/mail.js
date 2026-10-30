@@ -1,3 +1,4 @@
+// @ts-nocheck -- not type checked yet; remove this line to opt the file in.
 import net from "node:net";
 import tls from "node:tls";
 import { hostname } from "node:os";

@@ -1,3 +1,4 @@
+// @ts-nocheck -- not type checked yet; remove this line to opt the file in.
 import http from "node:http";
 import { isIPv4, isIPv6 } from "node:net";
 import { randomUUID } from "node:crypto";

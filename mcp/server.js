@@ -1,3 +1,4 @@
+// @ts-nocheck -- not type checked yet; remove this line to opt the file in.
 import { McpServer } from "@modelcontextprotocol/server";
 import { ZodError } from "zod";
 import { createTools } from "./tools.js";
