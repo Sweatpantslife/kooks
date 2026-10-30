@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
+import net from "node:net";
 import { Store } from "../mcp/store.js";
 import { createWebServer } from "../web/server.js";
 import { embedOrigins } from "../shared/links.js";
@@ -320,10 +321,15 @@ test("hosted and shared modes refuse insecure origins and missing household conf
   const store = new Store(":memory:");
   const box = mailbox();
   try {
+    // Plain HTTP is for addresses on the household's own network only.
     for (const publicOrigin of [
       "http://kooks.example",
+      "http://8.8.8.8:4317",
+      "http://[2001:db8::1]:4317",
       "https://kooks.example/path",
       "https://user:pass@kooks.example",
+      "ftp://192.168.1.20",
+      "kooks.example",
     ])
       assert.throws(
         () =>
@@ -334,7 +340,36 @@ test("hosted and shared modes refuse insecure origins and missing household conf
             mailer: box,
           }),
         /HTTPS origin/,
+        publicOrigin,
       );
+    for (const publicOrigin of [
+      "https://kooks.example",
+      "http://192.168.1.20:4317",
+      "http://10.0.0.5",
+      "http://172.20.1.2:4317",
+      "http://100.101.102.103:4317",
+      "http://[fd12:3456::1]:4317",
+      "http://kitchen.local:4317",
+      "http://kitchen:4317",
+    ])
+      createWebServer({
+        store,
+        host: "0.0.0.0",
+        publicOrigin,
+        members: [member],
+        mailer: box,
+      }).auth.close();
+    // Beyond this computer the address members open must be configured.
+    assert.throws(
+      () =>
+        createWebServer({
+          store,
+          host: "0.0.0.0",
+          members: [member],
+          mailer: box,
+        }),
+      /KOOKS_PUBLIC_ORIGIN/,
+    );
     assert.throws(
       () =>
         createWebServer({
@@ -355,6 +390,136 @@ test("hosted and shared modes refuse insecure origins and missing household conf
   } finally {
     store.close();
   }
+});
+
+// Raw requests, for headers fetch and the HTTP client would refuse or fix.
+async function rawRequest(origin, text) {
+  const { hostname, port } = new URL(origin);
+  return new Promise((resolve, reject) => {
+    const socket = net.connect(Number(port), hostname, () => socket.end(text));
+    let reply = "";
+    socket.on("data", (chunk) => (reply += chunk));
+    socket.on("close", () => resolve(Number(reply.split(" ")[1])));
+    socket.on("error", reject);
+  });
+}
+
+test("home-network sharing takes sign-in links and the accepted host from its configured address, never the request", async (t) => {
+  const box = mailbox();
+  const lan = "http://192.168.1.20:4317";
+  const { origin, get, post } = await setup(t, {
+    host: "0.0.0.0",
+    publicOrigin: lan,
+    members: [member],
+    mailer: box,
+  });
+  const headers = { Host: "192.168.1.20:4317", Origin: lan };
+  // A request naming another host, even with a matching Origin, is refused
+  // before any email goes out.
+  const poisoned = await post(
+    "/api/auth/link",
+    { email: member },
+    { Host: "attacker.example", Origin: "http://attacker.example" },
+  );
+  assert.equal(poisoned.status, 403);
+  assert.equal(
+    (
+      await post(
+        "/api/auth/link",
+        { email: member },
+        { Host: "127.0.0.1", Origin: "http://127.0.0.1" },
+      )
+    ).status,
+    403,
+  );
+  assert.equal(box.sent.length, 0);
+  assert.equal(
+    (await post("/api/auth/link", { email: member }, headers)).status,
+    200,
+  );
+  assert.equal(box.sent.length, 1);
+  assert.match(
+    box.sent[0].text,
+    /\nhttp:\/\/192\.168\.1\.20:4317\/#\/signin\/[A-Za-z0-9_-]{43}\n/,
+  );
+  const login = await post(
+    "/api/auth/link/confirm",
+    { token: tokenIn(box.sent[0]) },
+    headers,
+  );
+  assert.equal(login.status, 200);
+  // Plain HTTP cannot carry a Secure cookie.
+  assert.match(login.cookie, /SameSite=Strict; Path=\/; Max-Age=2592000$/);
+  assert.equal(
+    (
+      await get("/api/state", {
+        Host: "192.168.1.20:4317",
+        Cookie: sessionCookie(login),
+      })
+    ).status,
+    200,
+  );
+  const { options } = await (
+    await post("/api/auth/passkey/options", {}, headers)
+  ).json();
+  assert.equal(options.rpId, "192.168.1.20");
+  // No proxy stands in front of a home-network server, so a forwarded
+  // address is the client's own claim and cannot dodge the throttle: with the
+  // confirmation above, 19 more fill this connection's 20 tries.
+  for (let i = 0; i < 19; i++)
+    assert.equal(
+      (
+        await post(
+          "/api/auth/link/confirm",
+          { token: "x" },
+          { ...headers, "X-Forwarded-For": `203.0.113.${i}` },
+        )
+      ).status,
+      400,
+    );
+  assert.equal(
+    (
+      await post(
+        "/api/auth/link/confirm",
+        { token: "x" },
+        { ...headers, "X-Forwarded-For": "203.0.113.99" },
+      )
+    ).status,
+    429,
+  );
+  // A Host that is not a URL authority is a bad request, not a crash.
+  assert.equal(
+    await rawRequest(origin, "GET / HTTP/1.1\r\nHost: a b\r\n\r\n"),
+    400,
+  );
+});
+
+test("a loopback server behind a local HTTPS proxy accepts its configured origin only", async (t) => {
+  const box = mailbox();
+  const publicOrigin = "https://kooks.example";
+  const { post } = await setup(t, {
+    host: "127.0.0.1",
+    publicOrigin,
+    members: [member],
+    mailer: box,
+  });
+  const headers = { Host: "kooks.example", Origin: publicOrigin };
+  assert.equal(
+    (await post("/api/auth/link", { email: member }, headers)).status,
+    200,
+  );
+  assert.match(box.sent[0].text, /https:\/\/kooks\.example\/#\/signin\//);
+  const login = await post(
+    "/api/auth/link/confirm",
+    { token: tokenIn(box.sent[0]) },
+    headers,
+  );
+  assert.match(login.cookie, /; Secure$/);
+  assert.equal(
+    (await post("/api/auth/link", { email: member })).status,
+    403,
+    "a loopback Host is not the configured origin",
+  );
 });
 
 test("household addresses turn sign-in on, links expire, sessions slide and leaving ends access", async (t) => {
