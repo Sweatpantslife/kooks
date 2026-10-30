@@ -36,9 +36,11 @@ const list = (value) =>
 
 // Every JSON-LD block on the page, as values; a block that is not JSON is
 // passed over. Found by scanning for script tags rather than by one pattern
-// over the whole page, so a large page costs one pass.
+// over the whole page, so a large page costs one pass. Only ASCII is
+// lowercased, so every index still points into the page: "İ" lowercases to
+// two characters.
 function blocks(html) {
-  const lower = html.toLowerCase();
+  const lower = html.replace(/[A-Z]+/g, (letters) => letters.toLowerCase());
   const found = [];
   for (let at = lower.indexOf("<script"); at >= 0;) {
     const open = lower.indexOf(">", at);

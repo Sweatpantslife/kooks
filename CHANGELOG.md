@@ -115,11 +115,12 @@ A phone now keeps a copy of the kitchen as it last saw it (in the app's IndexedD
 This is the first time the server fetches anything, so the fetch is guarded (`mcp/fetch-page.js`), with the security thread's notes:
 
 - Only http and https, on the standard ports, without credentials.
-- Literal addresses are checked on every hop. Every address a name resolves to must be public, and the connection goes to the address checked. Loopback, `0.0.0.0`, private, shared, link-local and metadata, multicast, reserved and documentation ranges are refused, with their IPv4-mapped, NAT64, 6to4 and Teredo forms.
+- Literal addresses are checked on every hop. Every address a name resolves to must be public, and the connection goes to the address checked. Loopback, `0.0.0.0`, private, shared, link-local and metadata, multicast, reserved and documentation ranges are refused, with their IPv4-mapped, IPv4-compatible, NAT64, 6to4 and Teredo forms.
+- Names are resolved by DNS queries that give up after a few seconds rather than the system lookup, which holds one of Node's four pool threads until the name answers.
 - At most five redirects, 3 MB after decompression and 10 seconds.
 - Its own agents, without keep-alive or proxy, and certificates checked.
 - One generic message whatever the site answered, so nothing it says is repeated.
-- No images or other resources are fetched, and the page is not kept. Only the recipe's fields are read, as text, from blocks found by scanning rather than one pattern over the page.
+- No images or other resources are fetched, and the page is not kept. Only the recipe's fields are read, as text, from blocks found by scanning rather than one pattern over the page. The scan lowercases ASCII only, so a title with "İ" (which lowercases to two characters) does not shift it.
 - At most two pages at once, and 30 an hour from one client address.
 
 SECURITY.md, the hosting guide (outbound access, and the site seeing the server's address), the MCP guide and decisions say so. Docs that still described click-to-play video players, which the redesign replaced with links that open in a new tab, are corrected.
@@ -128,12 +129,12 @@ Checks:
 
 - `npm run format:check` and `npm run lint` pass.
 - `npm test`: 115 passed, 1 skipped. 8 tests are new:
-  - refusals before any connection, for 24 addresses in every form, including `2130706433`, `0x7f.1`, `0`, `[::ffff:127.0.0.1]`, `[64:ff9b::7f00:1]` and `169.254.169.254`;
+  - refusals before any connection, for 25 addresses in every form, including `2130706433`, `0x7f.1`, `0`, `[::ffff:127.0.0.1]`, `[::7f00:1]`, `[64:ff9b::7f00:1]` and `169.254.169.254`;
   - schemes, credentials and ports;
   - names with any non-public address, among others;
   - redirects, including to metadata and to a name that resolves inward;
   - errors that never repeat the site, a gzip bomb, an unknown or `constructor` encoding, and a page that never answers;
-  - reading the JSON-LD, including `@graph`, sections, entities, durations, a `javascript:` URL that is not used and an own `__proto__` key that pollutes nothing;
+  - reading the JSON-LD, including `@graph`, sections, entities, durations, a Turkish title before the block, a `javascript:` URL that is not used and an own `__proto__` key that pollutes nothing;
   - the tool's draft and commit with the fetched address as source;
   - the web server's two-at-once and hourly limits.
 

@@ -38,6 +38,7 @@ test("pages on this machine or its network are refused before any connection", a
     "http://0.0.0.0/",
     "http://[::]/",
     "http://[::ffff:127.0.0.1]/",
+    "http://[::7f00:1]/",
     "http://[64:ff9b::7f00:1]/",
     "http://[2002:7f00:1::]/",
     "http://[2001:0:7f00:1::]/",
@@ -279,6 +280,13 @@ test("a recipe page's schema.org data becomes the draft's fields, read as text",
   ]);
   assert.equal(plainOne.servings, 12);
   assert.equal(plainOne.total_minutes, 65);
+  // A letter that lowercases to two characters moves nothing.
+  assert.equal(
+    readRecipePage(
+      `<title>İç pilav</title>${page({ "@type": "Recipe", name: "İç pilav" })}`,
+    ).title,
+    "İç pilav",
+  );
   assert.throws(() => readRecipePage(page({ "@type": "Article" })), {
     code: "NO_RECIPE",
   });

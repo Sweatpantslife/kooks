@@ -1,4 +1,4 @@
-import { lookup } from "node:dns";
+import { Resolver } from "node:dns/promises";
 import http from "node:http";
 import https from "node:https";
 import { BlockList, isIP } from "node:net";
@@ -19,7 +19,8 @@ const MB = 1024 * 1024;
 // shared networks, link-local (cloud metadata lives there), multicast,
 // documentation and reserved ranges, and the IPv6 forms that can carry any
 // of them. A block list checks an IPv4-mapped address (::ffff:a.b.c.d)
-// against the IPv4 ranges itself; NAT64, 6to4 and Teredo need their own.
+// against the IPv4 ranges itself; NAT64, 6to4, Teredo and the old
+// IPv4-compatible form (::a.b.c.d) need their own.
 const blocked = new BlockList();
 for (const [network, prefix] of [
   ["0.0.0.0", 8],
@@ -39,7 +40,7 @@ for (const [network, prefix] of [
 ])
   blocked.addSubnet(network, prefix, "ipv4");
 for (const [network, prefix] of [
-  ["::", 127],
+  ["::", 96],
   ["64:ff9b::", 96],
   ["64:ff9b:1::", 48],
   ["100::", 64],
@@ -105,6 +106,25 @@ const guardedLookup = (allowed, resolver) => (hostname, options, callback) =>
     if (options.all) return callback(null, addresses);
     callback(null, addresses[0].address, addresses[0].family);
   });
+
+// A name's addresses, asked of DNS directly. The system's lookup runs on
+// Node's small thread pool and cannot be cancelled, so a name whose server
+// never answers would hold a thread long after the page was given up; these
+// queries do not use the pool and give up after a few seconds. A public page
+// needs nothing from the hosts file.
+function resolveName(hostname, options, callback) {
+  const dns = new Resolver({ timeout: 3000, tries: 2 });
+  Promise.allSettled([dns.resolve4(hostname), dns.resolve6(hostname)]).then(
+    ([four, six]) => {
+      const addresses = [
+        ...(four.value ?? []).map((address) => ({ address, family: 4 })),
+        ...(six.value ?? []).map((address) => ({ address, family: 6 })),
+      ];
+      if (!addresses.length) return callback(four.reason ?? six.reason);
+      callback(null, addresses);
+    },
+  );
+}
 
 // Agents of its own, without keep-alive, so no proxy setting or pooled
 // connection stands between the check and the connection. Certificates are
@@ -183,7 +203,7 @@ export async function fetchPage(
   {
     allowed = isPublicAddress,
     anyPort = false,
-    resolver = lookup,
+    resolver = resolveName,
     timeout = 10000,
     limit = 3 * MB,
     redirects = 5,
