@@ -101,6 +101,14 @@ const MINUTE = 60000;
 // the changed records.
 const maxChangedActions = 200;
 const isLoopback = (host) => ["127.0.0.1", "localhost", "::1"].includes(host);
+// The phone app is this app inside Capacitor, whose pages come from these
+// origins: capacitor://localhost on iOS and https://localhost on Android.
+// It signs in with an emailed code and sends a device token with every
+// request, never a cookie, so its requests are allowed across origins only
+// to the API and only with that token.
+const appOrigins = new Set(["capacitor://localhost", "https://localhost"]);
+const bearer = (req) =>
+  String(req.headers.authorization ?? "").match(/^Bearer ([a-f0-9]{64})$/)?.[1];
 // Plain HTTP is only for the household's own network: loopback, private and
 // link-local addresses (100.64.0.0/10 is Tailscale's), and names that only
 // resolve there.
@@ -325,14 +333,20 @@ export function createWebServer({
     "unknown";
   const cookieFor = (token, maxAge) =>
     `kooks_session=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${maxAge}${proxied ? "; Secure" : ""}`;
+  // The phone app's device token, or else the browser's cookie. A request
+  // from the phone app never counts a cookie.
+  const fromApp = (req) => appOrigins.has(req.headers.origin);
   const sessionToken = (req) =>
-    (req.headers.cookie ?? "").match(
-      /(?:^|;\s*)kooks_session=([a-f0-9]{64})(?:;|$)/,
-    )?.[1];
+    bearer(req) ??
+    (fromApp(req)
+      ? undefined
+      : (req.headers.cookie ?? "").match(
+          /(?:^|;\s*)kooks_session=([a-f0-9]{64})(?:;|$)/,
+        )?.[1]);
   function authenticated(req, res) {
     const token = sessionToken(req);
     const session = auth.session(token);
-    if (session?.renewed)
+    if (session?.renewed && !bearer(req))
       res.setHeader(
         "Set-Cookie",
         cookieFor(token, auth.sessionLifetime / 1000),
@@ -363,6 +377,48 @@ export function createWebServer({
           429,
         );
     };
+    // The phone app signs in with a code; links and passkeys are the
+    // browser's, and are not offered across origins.
+    const forApp = ["POST code", "POST code/confirm", "POST signout"];
+    if (fromApp(req) && !forApp.includes(route) && !bearer(req))
+      return send(res, 403, {
+        message: "Open Kooks directly to make changes.",
+      });
+    if (route === "POST code") {
+      const email = normalizeEmail((await input()).email);
+      if (!isEmail(email))
+        throw new AuthError("INVALID_INPUT", "Enter a valid email address.");
+      throttle(`link:${address}`, 10, 10 * MINUTE);
+      throttle(`link:${email}`, 5, 15 * MINUTE);
+      // As for links: one answer for everyone, then the member's email.
+      send(res, 200, { ok: true });
+      if (!auth.isMember(email)) return;
+      if (limited("mail", 100, 60 * MINUTE))
+        return console.error(
+          "Kooks held back a sign-in email: 100 went out in the last hour.",
+        );
+      return void auth
+        .requestCode({ email })
+        .catch((error) =>
+          console.error(
+            `Kooks could not prepare a sign-in code: ${error.message}`,
+          ),
+        );
+    }
+    if (route === "POST code/confirm") {
+      throttle(`confirm:${address}`, 20, 10 * MINUTE);
+      const { email, code } = await input();
+      // Each code takes five guesses; this caps the guesses at an address
+      // across new codes too, whoever makes them.
+      throttle(`code:${normalizeEmail(email)}`, 10, 60 * MINUTE);
+      const confirmed = auth.confirmCode({ email, code });
+      // The device keeps the token and sends it; it is never a cookie.
+      return send(res, 200, {
+        ok: true,
+        token: auth.createSession(confirmed, "code"),
+        account: { email: confirmed, method: "code" },
+      });
+    }
     if (route === "POST link") {
       const email = normalizeEmail((await input()).email);
       if (!isEmail(email))
@@ -407,7 +463,7 @@ export function createWebServer({
     }
     if (route === "POST signout") {
       auth.endSession(sessionToken(req));
-      res.setHeader("Set-Cookie", cookieFor("", 0));
+      if (!bearer(req)) res.setHeader("Set-Cookie", cookieFor("", 0));
       return send(res, 200, { ok: true });
     }
     const session = authenticated(req, res);
@@ -447,6 +503,21 @@ export function createWebServer({
       }
       if (url.pathname === "/healthz" && req.method === "GET")
         return send(res, 200, { ok: true });
+      // With sign-in on, the phone app may call the API, and ask first;
+      // nothing else of the server is open to it. Without sign-in nothing is
+      // open across origins, since nothing would ask who is calling.
+      if (auth && fromApp(req) && url.pathname.startsWith("/api/")) {
+        res.setHeader("Access-Control-Allow-Origin", req.headers.origin);
+        res.setHeader("Vary", "Origin");
+        if (req.method === "OPTIONS") {
+          res.writeHead(204, {
+            "Access-Control-Allow-Methods": "GET, POST",
+            "Access-Control-Allow-Headers": "Authorization, Content-Type",
+            "Access-Control-Max-Age": "600",
+          });
+          return res.end();
+        }
+      }
       // A configured origin is the only accepted Host; otherwise the server
       // is on loopback, where only loopback names defeat DNS rebinding.
       if (
@@ -457,7 +528,8 @@ export function createWebServer({
         return send(res, 403, { message: "Unrecognized host." });
       if (
         req.method === "POST" &&
-        req.headers.origin !== (external?.origin ?? url.origin)
+        req.headers.origin !== (external?.origin ?? url.origin) &&
+        !(fromApp(req) && auth && url.pathname.startsWith("/api/"))
       )
         return send(res, 403, {
           message: "Open Kooks directly to make changes.",

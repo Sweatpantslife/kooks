@@ -84,6 +84,14 @@ Cooking now has a Jobs card beside the timers for the work around the dishes, li
 
 `npm run format:check`, `npm run lint`, `npm test` (122 passed, 1 skipped; 2 new, for the task order, which failed before the fix, and for the year on older days) and `npm run test:e2e` (60 passed: 14 for the mobile app and 46 for this one; 2 new, for jobs with focus, Undo and a reload, and for Cooked before and adding a note, with axe scans of cooking with jobs, a recipe's history and the note form; the recipe page test now reads its Last time note inside that note, as the same words also show under Cooked before).
 
+### The server signs the phone app in with an emailed code
+
+The phone app is about to run the redesigned app against the household server, where an emailed link cannot reach it and a passkey cannot serve each household's own address. The server now signs it in with a code instead: `POST /api/auth/code` emails a member a six-digit code (and answers every address the same way, at once, as links do), and `POST /api/auth/code/confirm` takes the address and the code and returns a device token, which the app sends as `Authorization: Bearer <token>`. A code works once, for 10 minutes; five wrong guesses spend it, a new request replaces it, and an address takes at most ten guesses an hour however many codes are asked for. Device tokens are sessions like a browser's: they slide over 30 days of use, end at Sign out, and stop when the member leaves the household.
+
+Only the Capacitor origins, `capacitor://localhost` on iOS and `https://localhost` on Android, may call `/api/` across origins, and only when sign-in is on. Their requests never count a cookie, and they cannot ask for an email link or a passkey. Nothing else of the server is open to them, and a loopback server without sign-in answers them like any other site. SECURITY.md and the hosting guide describe the code, the token and what the HTTPS proxy must pass.
+
+`npm run format:check`, `npm run lint` and `npm test` (124 passed, 1 skipped; 2 new: the phone's sign-in, token, origins, spent and expired codes and the guess limit, and that a server without sign-in opens nothing to the app's origins).
+
 ### A failed passkey suggestion stays silent on the sign-in screen
 
 When the browser turns down the quiet passkey suggestion in the email field (no authenticator, nothing saved, or the request abandoned), both apps now say nothing, instead of putting the browser's raw message ("Resident credentials or empty 'allowCredentials' lists are not supported at this time.") in the sign-in alert, where it replaced a real reason such as "This sign-in link has expired or was already used." Only the kitchen turning down a passkey the person picked is shown. The quiet request's own failure to load its options is silent too.
