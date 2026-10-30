@@ -18,6 +18,14 @@ import { Recipe } from "./pages/recipe.jsx";
 import { Meal } from "./pages/meal.jsx";
 import { Add, Idea, Paste, Photo } from "./pages/add.jsx";
 import { Editor } from "./pages/editor.jsx";
+import {
+  BookForm,
+  BookPage,
+  IdeaForm,
+  IdeaPage,
+  TechniqueForm,
+  TechniquePage,
+} from "./pages/library.jsx";
 import { Cook, Finish } from "./pages/cook.jsx";
 import { watchTimers } from "./lib/cooking.js";
 
@@ -32,6 +40,14 @@ const ADD = {
 const EDIT = {
   edit: "Edit recipe",
   variation: "Your own version",
+};
+
+// Ideas, techniques and books: the page, and the form that adds or edits.
+// An idea is added from the Add page.
+const LIBRARY = {
+  idea: ["inspiration", IdeaPage, IdeaForm],
+  technique: ["technique", TechniquePage, TechniqueForm],
+  book: ["book", BookPage, BookForm],
 };
 
 const HOUSEHOLD = {
@@ -87,6 +103,20 @@ function pageFor([first = "week", second, third, fourth]) {
     };
   if (first === "recipes" && second === "meal" && third && !fourth)
     return { title: named("meal", third, "Meal"), page: <Meal id={third} /> };
+  if (first === "recipes" && Object.hasOwn(LIBRARY, second) && third) {
+    const [kind, Page, Form] = LIBRARY[second];
+    const name = named(kind, third, "Not found");
+    if (third === "new" && second !== "idea" && !fourth)
+      return { title: `New ${second}`, page: <Form key="new" id="new" /> };
+    if (!fourth) return { title: name, page: <Page id={third} /> };
+    if (fourth === "edit")
+      return { title: `Edit · ${name}`, page: <Form key={third} id={third} /> };
+    if (second === "idea" && fourth === "write")
+      return {
+        title: `Write up · ${name}`,
+        page: <Editor mode="idea" id={third} />,
+      };
+  }
   if (first === "recipes" && second && EDIT[third] && !fourth)
     return {
       title: `${EDIT[third]} · ${named("recipe", second, "Recipe")}`,

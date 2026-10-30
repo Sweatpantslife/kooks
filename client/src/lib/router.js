@@ -96,11 +96,20 @@ const settings = {
   preferences: "look",
   account: "signin",
 };
+// Ideas, techniques and books had sections of their own.
+const library = {
+  inspiration: "idea",
+  techniques: "technique",
+  library: "book",
+};
+const path = (parts) => parts.map(encodeURIComponent).join("/");
 function moved([first, second, ...rest]) {
   if (first === "settings" && Object.hasOwn(settings, second))
-    return ["household", settings[second], ...rest]
-      .map(encodeURIComponent)
-      .join("/");
+    return path(["household", settings[second], ...rest]);
+  if (Object.hasOwn(library, first) && second)
+    return first === "inspiration" && second === "new"
+      ? "recipes/add/idea"
+      : path(["recipes", library[first], second, ...rest]);
   return Object.hasOwn(legacy, first) ? legacy[first] : null;
 }
 

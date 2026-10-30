@@ -112,15 +112,12 @@ export function searchText(kind, record) {
 export const title = (kind, id) =>
   records(kind).find((r) => r.id === id)?.data.title ?? "";
 
-// Where each kind opens. Recipes and meals open here; the others open in the
-// current app until their pages move.
+// Where each kind opens.
+const PATHS = { meal: "meal", inspiration: "idea", technique: "technique" };
 export function hrefOf(kind, id) {
   const encoded = encodeURIComponent(id);
   if (kind === "recipe") return `#/recipes/${encoded}`;
-  if (kind === "meal") return `#/recipes/meal/${encoded}`;
-  if (kind === "inspiration") return `../#/inspiration/${encoded}`;
-  if (kind === "technique") return `../#/techniques/${encoded}`;
-  return `../#/library/${encoded}`;
+  return `#/recipes/${PATHS[kind] ?? "book"}/${encoded}`;
 }
 
 // Amounts read as a cook writes them: ½ cup, 1¼ tsp, 3 cloves, 250 g.
