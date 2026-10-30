@@ -626,11 +626,17 @@ test("household addresses turn sign-in on, links expire, sessions slide and leav
   });
   assert.equal(unknown.status, 401);
   assert.equal((await unknown.json()).error, "PASSKEY_UNKNOWN");
-  // Mail trouble is reported to members rather than swallowed.
+  // Mail trouble goes to the log; the answer stays the one strangers get.
+  const logged = t.mock.method(console, "error", () => {});
   box.broken = true;
   const failed = await post("/api/auth/link", { email: member });
-  assert.equal(failed.status, 502);
-  assert.equal((await failed.json()).error, "MAIL_FAILED");
+  assert.equal(failed.status, 200);
+  assert.deepEqual(await failed.json(), { ok: true });
+  assert.match(
+    logged.mock.calls[0].arguments[0],
+    /could not email a sign-in link: SMTP is down/,
+  );
+  logged.mock.restore();
   box.broken = false;
   // Leaving the household ends the session on its next request.
   household.delete(member);
@@ -824,4 +830,56 @@ test("request bodies are limited per route, and large uploads take turns", async
   // A malformed escape in a path is simply not found.
   assert.equal((await fetch(`${origin}/api/assets/%E0%A4%A`)).status, 404);
   assert.equal((await post("/api/tools/%E0%A4%A", {})).status, 404);
+});
+
+test("sign-in link requests get the same immediate answer for members and strangers, who cannot spend the members' email budget", async (t) => {
+  const publicOrigin = "https://kooks.example";
+  // A mail server that has not answered yet: the reply must not wait for it.
+  const pending = [];
+  const slow = {
+    description: "to a slow mail server",
+    send: (message) =>
+      new Promise((resolve) => pending.push({ message, resolve })),
+  };
+  const { post } = await setup(t, {
+    host: "0.0.0.0",
+    publicOrigin,
+    members: [member],
+    mailer: slow,
+  });
+  const from = (client) => ({
+    Host: "kooks.example",
+    Origin: publicOrigin,
+    "X-Forwarded-For": client,
+  });
+  const ask = async (email, client) => {
+    const timeout = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("no answer")), 2000).unref(),
+    );
+    const response = await Promise.race([
+      post("/api/auth/link", { email }, from(client)),
+      timeout,
+    ]);
+    return { status: response.status, body: await response.json() };
+  };
+  const answer = await ask(member, "198.51.100.1");
+  assert.deepEqual(answer, { status: 200, body: { ok: true } });
+  assert.equal(pending.length, 1, "the member's email is on its way");
+  assert.deepEqual(await ask("stranger@example.test", "198.51.100.1"), answer);
+  pending[0].resolve();
+  // Strangers from many addresses used to spend the hourly budget of 100
+  // and lock members out of email links.
+  for (let client = 0; client < 12; client++)
+    for (let i = 0; i < 10; i++)
+      assert.equal(
+        (await ask(`guess${client}-${i}@example.test`, `203.0.113.${client}`))
+          .status,
+        200,
+      );
+  assert.equal((await ask(member, "198.51.100.2")).status, 200);
+  assert.equal(pending.length, 2);
+  assert.match(
+    pending[1].message.text,
+    /https:\/\/kooks\.example\/#\/signin\//,
+  );
 });
