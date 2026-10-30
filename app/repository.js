@@ -19,12 +19,16 @@ export function createRepository(adapter, parse, onStatus = () => {}) {
       }
       const previous = await adapter.read("cookbook.previous.json");
       if (previous !== null) {
-        const data = parse(previous);
-        lastGood = previous;
-        ready = true;
-        return { data, recovered: true };
+        try {
+          const data = parse(previous);
+          lastGood = previous;
+          ready = true;
+          return { data, recovered: true };
+        } catch {
+          /* Neither file is usable; both stay as they are. */
+        }
       }
-      if (primary !== null)
+      if (primary !== null || previous !== null)
         throw new Error(
           "The saved cookbook could not be read. The original file has been kept.",
         );

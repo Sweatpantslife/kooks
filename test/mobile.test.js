@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createRepository } from "../app/repository.js";
 import {
+  backupFilename,
   newCookbook,
   parseBackup,
   snapshot,
@@ -159,6 +160,62 @@ test("mobile storage read errors and unrecoverable corruption never reset the co
     parseBackup,
   );
   await assert.rejects(unreadable.load(), /Permission denied/);
+});
+
+test("mobile storage says the original was kept when no saved file can be read", async () => {
+  const adapter = memoryAdapter(
+    new Map([
+      ["cookbook.json", "{broken"],
+      ["cookbook.previous.json", JSON.stringify({ format: "kooks-mobile" })],
+    ]),
+  );
+  const repository = createRepository(adapter, parseBackup);
+  await assert.rejects(repository.load(), (error) =>
+    /could not be read.*has been kept/.test(error.message),
+  );
+  await assert.rejects(repository.save(newCookbook()), /Load the cookbook/);
+  assert.equal(adapter.files.get("cookbook.json"), "{broken");
+});
+
+test("an older label too long for a tag still restores into a cookbook that saves", () => {
+  const book = newCookbook();
+  const legacy = {
+    id: "legacy",
+    title: "Legacy rice",
+    description: "",
+    tag: `  ${"Grandmother's Friday ".repeat(10)}  `,
+    time: null,
+    servings: 2,
+    source: "Your recipe",
+    ingredients: [],
+    steps: [{ title: "Step 1", text: "Cook.", ids: [] }],
+    note: "",
+    equipment: [],
+  };
+  book.state.custom = [legacy, { ...legacy, id: "blank", tag: "   " }];
+  const restored = validateBackup(JSON.parse(JSON.stringify(book)));
+  const [long, blank] = restored.state.custom;
+  assert.equal(long.tags.length, 1);
+  assert.ok(long.tags[0].length <= 100);
+  assert.ok(long.tags[0].startsWith("Grandmother's Friday"));
+  assert.deepEqual(blank.tags, []);
+  // Saving re-validates the upgraded cookbook; it used to fail every time.
+  assert.doesNotThrow(() => snapshot(restored.state, restored.design));
+});
+
+test("mobile backups are named after the local day", () => {
+  const zone = process.env.TZ;
+  process.env.TZ = "America/New_York";
+  try {
+    // 23:30 in New York is already the next day in UTC.
+    assert.equal(
+      backupFilename(new Date(2026, 9, 30, 23, 30)),
+      "kooks-2026-10-30.json",
+    );
+  } finally {
+    if (zone === undefined) delete process.env.TZ;
+    else process.env.TZ = zone;
+  }
 });
 
 test("mobile timers schedule once, cancel on pause/finish, and reschedule on resume", () => {
