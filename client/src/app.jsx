@@ -8,7 +8,9 @@ import { Shell } from "./ui/shell.jsx";
 import { Toasts } from "./ui/toast.jsx";
 import { Empty, PageHeader } from "./ui/page.jsx";
 import { SignIn } from "./pages/signin.jsx";
-import { Household } from "./pages/household.jsx";
+import { Account, Backup, Household, Look } from "./pages/household.jsx";
+import { People, PersonForm } from "./pages/people.jsx";
+import { PriceForm, Prices } from "./pages/prices.jsx";
 import { AtHome, Groceries, PutAway, ShopFor } from "./pages/groceries.jsx";
 import { AddToDay, ChooseDay, Week } from "./pages/week.jsx";
 import { Recipes } from "./pages/recipes.jsx";
@@ -30,6 +32,14 @@ const ADD = {
 const EDIT = {
   edit: "Edit recipe",
   variation: "Your own version",
+};
+
+const HOUSEHOLD = {
+  people: ["People at the table", People],
+  prices: ["Prices and budget", Prices],
+  look: ["Look and units", Look],
+  signin: ["Sign-in", Account],
+  backup: ["Backup", Backup],
 };
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -112,7 +122,25 @@ function pageFor([first = "week", second, third, fourth]) {
       title: `Add to groceries · ${named(third, fourth, "Recipe")}`,
       page: <ShopFor kind={third} id={fourth} />,
     };
-  if (first === "household") return { title: "Household", page: <Household /> };
+  if (first === "household" && !second)
+    return { title: "Household", page: <Household /> };
+  if (first === "household" && !third && Object.hasOwn(HOUSEHOLD, second)) {
+    const [title, Page] = HOUSEHOLD[second];
+    return { title, page: <Page /> };
+  }
+  if (first === "household" && second === "people" && third && !fourth)
+    return {
+      title:
+        third === "new"
+          ? "Add a person"
+          : `Edit · ${record("member", third)?.data.name ?? "Person"}`,
+      page: <PersonForm key={third} id={third} />,
+    };
+  if (first === "household" && second === "prices" && third && !fourth)
+    return {
+      title: third === "new" ? "Add a price" : "Edit a price",
+      page: <PriceForm key={third} id={third} />,
+    };
   if (first === "cook" && second && third === "done" && !fourth)
     return {
       title: `Finish cooking · ${named("session", second, "Cooking")}`,

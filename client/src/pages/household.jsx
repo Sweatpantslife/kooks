@@ -1,14 +1,36 @@
 import { useEffect, useState } from "preact/hooks";
-import { KeyRound, LogOut, Monitor, Moon, Sun, Trash2 } from "lucide";
+import {
+  ArrowLeft,
+  Download,
+  KeyRound,
+  LogOut,
+  Monitor,
+  Moon,
+  Palette,
+  Sun,
+  Trash2,
+  Users,
+  Wallet,
+} from "lucide";
 import { auth } from "../lib/api.js";
 import * as passkeys from "../lib/passkeys.js";
-import { account, sharing, signOut } from "../lib/store.js";
+import { account, records, sharing, signOut } from "../lib/store.js";
 import { theme } from "../lib/theme.js";
+import { UNITS, units } from "../lib/units.js";
+import { budgetFor, currency, money } from "../lib/money.js";
+import { names } from "../lib/people.js";
 import { toast } from "../lib/toast.js";
 import { navigate } from "../lib/router.js";
-import { dateLabel, localDay } from "../lib/format.js";
-import { PageHeader } from "../ui/page.jsx";
+import { dateLabel, localDay, monday, plural } from "../lib/format.js";
+import { Empty, PageHeader } from "../ui/page.jsx";
 import { Icon } from "../ui/icon.jsx";
+
+export const toHousehold = (
+  <a class="back" href="#/household">
+    <Icon icon={ArrowLeft} />
+    Household
+  </a>
+);
 
 const THEMES = [
   { value: "system", label: "Device", icon: Monitor },
@@ -16,35 +38,57 @@ const THEMES = [
   { value: "dark", label: "Dark", icon: Moon },
 ];
 
-function Look() {
+function Choice({ name, legend, options, value }) {
   return (
-    <section class="card" aria-labelledby="look">
-      <h2 id="look">Look</h2>
-      <fieldset class="segmented">
-        <legend class="sr-only">Colors</legend>
-        {THEMES.map((t) => (
-          <label key={t.value}>
-            <input
-              type="radio"
-              name="theme"
-              value={t.value}
-              checked={theme.value === t.value}
-              onChange={() => (theme.value = t.value)}
-            />
-            <Icon icon={t.icon} class="icon-sm" />
-            {t.label}
-          </label>
-        ))}
-      </fieldset>
-      <p class="muted small">
-        Device follows this phone or computer’s light or dark setting. Cooking
-        mode is always dark.
-      </p>
-    </section>
+    <fieldset class="segmented">
+      <legend class="sr-only">{legend}</legend>
+      {options.map((o) => (
+        <label key={o.value}>
+          <input
+            type="radio"
+            name={name}
+            value={o.value}
+            checked={value.value === o.value}
+            onChange={() => (value.value = o.value)}
+          />
+          {o.icon && <Icon icon={o.icon} class="icon-sm" />}
+          {o.label}
+        </label>
+      ))}
+    </fieldset>
   );
 }
 
-function SignIn({ email }) {
+export function Look() {
+  return (
+    <div class="stack-lg page-narrow">
+      {toHousehold}
+      <PageHeader title="Look and units" />
+      <section class="card" aria-labelledby="colors">
+        <h2 id="colors">Colors</h2>
+        <Choice name="theme" legend="Colors" options={THEMES} value={theme} />
+        <p class="muted small">
+          Device follows this phone or computer’s light or dark setting.
+        </p>
+      </section>
+      <section class="card" aria-labelledby="amounts">
+        <h2 id="amounts">Amounts</h2>
+        <Choice name="units" legend="Amounts" options={UNITS} value={units} />
+        <p class="muted small">
+          Metric shows grams and millilitres; US shows ounces, pounds, cups and
+          spoons. Cans, cloves and cups a recipe didn’t size stay as written,
+          and the recipes themselves never change.
+        </p>
+      </section>
+      <p class="muted small">
+        Both choices belong to this device, so each cook can read the kitchen
+        their own way.
+      </p>
+    </div>
+  );
+}
+
+function Passkeys({ email }) {
   const [list, setList] = useState(null);
   const [busy, setBusy] = useState(false);
   const load = () =>
@@ -80,11 +124,11 @@ function SignIn({ email }) {
   }
 
   return (
-    <section class="card" aria-labelledby="signin">
-      <h2 id="signin">Sign-in</h2>
+    <section class="card" aria-labelledby="passkeys">
       <p>
         Signed in as <strong>{email}</strong>.
       </p>
+      <h2 id="passkeys">Passkeys</h2>
       <p class="muted small">
         Passkeys let you sign in with your fingerprint, face or screen lock
         instead of waiting for an email.
@@ -150,6 +194,55 @@ function SignIn({ email }) {
   );
 }
 
+export function Account() {
+  const email = account.value?.email;
+  return (
+    <div class="stack-lg page-narrow">
+      {toHousehold}
+      <PageHeader title="Sign-in" />
+      {email ? (
+        <Passkeys email={email} />
+      ) : (
+        <Empty icon={KeyRound} title="Nobody signs in here">
+          This kitchen runs for this computer only. Whoever runs Kooks can share
+          it with the household by turning on sign-in.
+        </Empty>
+      )}
+    </div>
+  );
+}
+
+export function Backup() {
+  return (
+    <div class="stack-lg page-narrow">
+      {toHousehold}
+      <PageHeader title="Backup" />
+      <section class="card" aria-labelledby="download">
+        <h2 id="download">Keep a copy</h2>
+        <p>
+          One file with every recipe, plan, note, photo, book and price this
+          kitchen keeps. Put it somewhere other than the computer Kooks runs on.
+        </p>
+        <div class="row">
+          <a
+            class="btn btn-primary"
+            href="/api/backup"
+            download={`kooks-${localDay()}.json`}
+          >
+            <Icon icon={Download} />
+            Download a backup
+          </a>
+        </div>
+        <p class="muted small">
+          A backup restores into a new, empty kitchen, just as this one is
+          today. Whoever runs Kooks does that on the server, with its backup
+          script.
+        </p>
+      </section>
+    </div>
+  );
+}
+
 function Kitchen() {
   return (
     <section class="card" aria-labelledby="kitchen">
@@ -171,14 +264,77 @@ function Kitchen() {
 
 export function Household() {
   const email = account.value?.email;
+  const people = records("member");
+  const prices = records("price").filter(
+    (p) => p.data.currency === currency.value,
+  ).length;
+  const budget = budgetFor(monday());
+  const look = THEMES.find((t) => t.value === theme.value).label;
+  const amounts = UNITS.find((u) => u.value === units.value).label;
+  const sections = [
+    {
+      href: "#/household/people",
+      icon: Users,
+      tone: "herb",
+      title: "People at the table",
+      text: people.length
+        ? names(people)
+        : "Who you cook for, and what they like.",
+    },
+    {
+      href: "#/household/prices",
+      icon: Wallet,
+      tone: "saffron",
+      title: "Prices and budget",
+      text:
+        [
+          budget && `${money(budget.data.amount)} a week`,
+          prices && plural(prices, "price"),
+        ]
+          .filter(Boolean)
+          .join(" · ") || "What things cost, and what a week may spend.",
+    },
+    {
+      href: "#/household/look",
+      icon: Palette,
+      tone: "plum",
+      title: "Look and units",
+      text: `${look} colors · ${amounts === "As written" ? "Amounts as written" : `${amounts} amounts`}`,
+    },
+    email && {
+      href: "#/household/signin",
+      icon: KeyRound,
+      tone: "sky",
+      title: "Sign-in",
+      text: email,
+    },
+    {
+      href: "#/household/backup",
+      icon: Download,
+      tone: "stone",
+      title: "Backup",
+      text: "Download everything this kitchen keeps.",
+    },
+  ].filter(Boolean);
   return (
-    <>
+    <div class="stack-lg">
       <PageHeader eyebrow="Settings for this kitchen" title="Household" />
-      <div class="stack">
-        <Look />
-        {email && <SignIn email={email} />}
-        <Kitchen />
-      </div>
-    </>
+      <ul class="ways" role="list">
+        {sections.map((s) => (
+          <li key={s.href}>
+            <a class="way" href={s.href}>
+              <span class={`way-icon tone-${s.tone}`}>
+                <Icon icon={s.icon} />
+              </span>
+              <span class="way-text">
+                <span class="way-title">{s.title}</span>
+                <span class="muted">{s.text}</span>
+              </span>
+            </a>
+          </li>
+        ))}
+      </ul>
+      <Kitchen />
+    </div>
   );
 }

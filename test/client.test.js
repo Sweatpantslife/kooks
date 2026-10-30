@@ -135,3 +135,64 @@ test("cooking timers read as a kitchen clock does", async () => {
   assert.equal(secondsLeft({ deadline }, at - 1500), 2);
   assert.equal(secondsLeft({ deadline }, at + 5000), 0);
 });
+
+test("amounts read in the units this device chose, where the recipe's unit has a size", async () => {
+  const { measure } = await import("../client/src/lib/kitchen.js");
+  const { units } = await import("../client/src/lib/units.js");
+  const i = (quantity, unit = "") => ({ quantity, unit });
+  units.value = "us";
+  assert.equal(measure(i(300, "g")), "10½ oz");
+  assert.equal(measure(i(1, "kg")), "2¼ lb");
+  assert.equal(measure(i(1, "l")), "4¼ cups");
+  assert.equal(measure(i(15, "ml")), "1 tbsp");
+  assert.equal(measure(i(5, "ml")), "1 tsp");
+  assert.equal(measure(i(250, "g"), 2), "1 lb");
+  // US amounts, counts and a cup of no stated size stay as written.
+  assert.equal(measure(i(1, "lb")), "1 lb");
+  assert.equal(measure(i(2, "cup")), "2 cups");
+  assert.equal(measure(i(3, "clove")), "3 cloves");
+  units.value = "metric";
+  assert.equal(measure(i(1, "lb")), "455 g");
+  assert.equal(measure(i(4, "oz")), "115 g");
+  assert.equal(measure(i(2, "us_cup")), "475 ml");
+  assert.equal(measure(i(3, "lb")), "1.35 kg");
+  assert.equal(measure(i(300, "g")), "300 g");
+  assert.equal(measure(i(1, "tbsp")), "1 tbsp");
+  units.value = "written";
+  assert.equal(measure(i(4, "oz")), "4 oz");
+  assert.equal(measure(i(null, "g")), "");
+});
+
+test("a recipe says who at the table likes what's in it, and who doesn't", async () => {
+  const { db } = await import("../client/src/lib/store.js");
+  const { tastes } = await import("../client/src/lib/people.js");
+  const person = (id, name, likes, dislikes, spice_tolerance = null) => ({
+    id,
+    data: { name, likes, dislikes, spice_tolerance },
+  });
+  db.value = {
+    member: [
+      person("b", "Ben", [], ["olives", "coriander"], 1),
+      person("a", "Ada", ["chickpeas", "weeknight"], []),
+    ],
+  };
+  const recipe = {
+    ingredients: [
+      { name: "Chickpea" },
+      { name: "kalamata olives" },
+      { name: "olive oil" },
+    ],
+    tags: ["Weeknight"],
+    spice_level: 2,
+  };
+  assert.deepEqual(
+    tastes(recipe).map((t) => [t.liked, t.text]),
+    [
+      [true, "Ada likes chickpeas"],
+      [true, "Ada likes weeknight"],
+      [false, "Ben doesn’t like olives"],
+      [false, "Hotter than Ben likes"],
+    ],
+  );
+  db.value = {};
+});

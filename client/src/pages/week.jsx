@@ -7,6 +7,7 @@ import {
   Plus,
   Search,
   ShoppingBasket,
+  Wallet,
   X,
 } from "lucide";
 import { normalize } from "../../../shared/quantities.js";
@@ -22,6 +23,13 @@ import {
   weekdayLabel,
 } from "../lib/format.js";
 import { metaOf, searchText } from "../lib/kitchen.js";
+import {
+  budgetFor,
+  currency,
+  money,
+  planned as costOf,
+  useWeekCost,
+} from "../lib/money.js";
 import { toast } from "../lib/toast.js";
 import { Empty, PageHeader } from "../ui/page.jsx";
 import { Art } from "../ui/tile.jsx";
@@ -208,6 +216,32 @@ function Day({ day, heading: H = "h2" }) {
   );
 }
 
+// One line on what the week's food comes to, once the household keeps
+// prices or a budget.
+function WeekMoney({ start }) {
+  const budget = budgetFor(start);
+  const priced = records("price").some(
+    (p) => p.data.currency === currency.value,
+  );
+  const cost = useWeekCost(start, Boolean(budget || priced));
+  if (!cost?.plans.length) return null;
+  const left =
+    budget && cost.complete ? budget.data.amount - cost.known_cost : null;
+  return (
+    <p class="week-money-line">
+      <Icon icon={Wallet} class="icon-sm" />
+      <span>
+        Food planned: {costOf(cost)}
+        {budget && ` of your ${money(budget.data.amount)} budget`}
+        {left !== null && left < 0 && `, ${money(-left)} over`}
+        {cost.unpriced.length > 0 &&
+          ` · ${plural(cost.unpriced.length, "thing")} without a price`}
+      </span>{" "}
+      <a href="#/household/prices">Prices and budget</a>
+    </p>
+  );
+}
+
 export function Week({ start = monday() }) {
   const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
   const now = monday();
@@ -254,6 +288,7 @@ export function Week({ start = monday() }) {
           <Icon icon={ChevronRight} />
         </a>
       </PageHeader>
+      <WeekMoney start={start} />
       {!any && (
         <p class="lede">
           Nothing planned yet. Add a dish to a day, or open a recipe and choose

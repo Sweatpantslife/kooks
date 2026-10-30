@@ -19,8 +19,9 @@ import { displayLinks, describeLink } from "../../../shared/links.js";
 import { record, records } from "../lib/store.js";
 import { dateLabel, plural } from "../lib/format.js";
 import { nameKey } from "../lib/aisles.js";
+import { tastes } from "../lib/people.js";
 import {
-  amount,
+  measure,
   atHome,
   family,
   memories,
@@ -114,6 +115,21 @@ function Facts({ d }) {
   );
 }
 
+// Who at the table will like it, or won't.
+function Tastes({ d }) {
+  const found = tastes(d);
+  if (!found.length) return null;
+  return (
+    <ul class="tastes" role="list" aria-label="At the table">
+      {found.map((t) => (
+        <li key={t.text} class={`badge badge-${t.liked ? "herb" : "saffron"}`}>
+          {t.text}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export function LastTime({ notes }) {
   const last = notes[0];
   if (!last) return null;
@@ -162,14 +178,16 @@ function Ingredients({ d }) {
             </button>
           </div>
         ) : (
-          <p class="muted small">Yield not set, so amounts are as written.</p>
+          <p class="muted small">
+            Yield not set, so amounts can’t change with servings.
+          </p>
         )}
       </div>
       {d.ingredients.length ? (
         <ul class="ingredients" role="list">
           {d.ingredients.map((i, index) => (
             <li key={index}>
-              <span class="ingredient-amount">{amount(i, factor)}</span>
+              <span class="ingredient-amount">{measure(i, factor)}</span>
               <span>
                 {i.name}
                 {i.preparation && <span class="muted">, {i.preparation}</span>}
@@ -344,6 +362,7 @@ export function Recipe({ id }) {
         <CookButton source={{ kind: "recipe", id }} primary />
       </PageHeader>
       <Facts d={d} />
+      <Tastes d={d} />
       <LastTime notes={memories(r)} />
       <div class="recipe-columns">
         <Ingredients key={`${r.id}-${d.servings}`} d={d} />

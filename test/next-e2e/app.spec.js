@@ -71,6 +71,8 @@ test("the look chosen in Household is kept by this browser", async ({
 }) => {
   await page.emulateMedia({ colorScheme: "light" });
   await page.goto("/next/#/household");
+  await page.getByRole("link", { name: /^Look and units/ }).click();
+  await expect(title(page)).toHaveText("Look and units");
   const html = page.locator("html");
   await expect(html).not.toHaveAttribute("data-theme");
   await page.getByRole("radio", { name: "Dark" }).check();
@@ -95,7 +97,14 @@ test("addresses from the previous app land on the page that replaced them, and u
   await page.goto("/next/#/shop/pantry");
   await expect(page).toHaveURL(/#\/groceries$/);
   await page.goto("/next/#/settings/household");
+  await expect(page).toHaveURL(/#\/household\/people$/);
+  await page.goto("/next/#/settings/preferences");
+  await expect(page).toHaveURL(/#\/household\/look$/);
+  await page.goto("/next/#/settings");
   await expect(page).toHaveURL(/#\/household$/);
+  await page.goto("/next/#/account");
+  await expect(page).toHaveURL(/#\/household\/signin$/);
+  await expect(page.getByText("Nobody signs in here")).toBeVisible();
   await page.goto("/next/#/nowhere");
   await expect(title(page)).toHaveText("Not found");
   await expectAccessible(page, "Not found");
@@ -145,8 +154,15 @@ async function signInByLink(page, email) {
   await expect(page).toHaveURL(/#\/week$/);
 }
 
-async function addPasskey(page, email) {
+// Household › Sign-in, the way a member finds it.
+async function openSignIn(page) {
   await page.getByRole("link", { name: "Household" }).click();
+  await page.getByRole("link", { name: /^Sign-in/ }).click();
+  await expect(title(page)).toHaveText("Sign-in");
+}
+
+async function addPasskey(page, email) {
+  await openSignIn(page);
   await expect(page.getByText(`Signed in as ${email}.`)).toBeVisible();
   await expect(page.getByText("No passkeys yet.")).toBeVisible();
   await page
@@ -187,7 +203,7 @@ test("a member signs in by email link, adds a passkey, signs out and returns wit
   await expect(page.getByRole("status")).toContainText("Welcome back.");
 
   // Leave the member as the test found them.
-  await page.getByRole("link", { name: "Household" }).click();
+  await openSignIn(page);
   await page.getByRole("button", { name: /^Remove passkey / }).click();
   await expect(page.getByText("No passkeys yet.")).toBeVisible();
 });
@@ -205,7 +221,7 @@ test("a browser that suggests the saved passkey signs the member in without a ta
   await expect(page.getByRole("status")).toContainText("Welcome back.");
   await expect(title(page)).toHaveText("This week");
 
-  await page.getByRole("link", { name: "Household" }).click();
+  await openSignIn(page);
   await page.getByRole("button", { name: /^Remove passkey / }).click();
   await expect(page.getByText("No passkeys yet.")).toBeVisible();
   await page.getByRole("button", { name: "Sign out" }).click();
