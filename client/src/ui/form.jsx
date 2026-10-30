@@ -1,5 +1,6 @@
 import { cloneElement } from "preact";
-import { useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
+import { guardLeaving } from "../lib/router.js";
 
 // A labelled control with an optional hint under it. The control itself is
 // the child, so it carries its own id and `aria-describedby={hint(id)}`.
@@ -58,3 +59,18 @@ export function FormError({ children }) {
 // "" for an empty number field, so the server hears "not known".
 export const numberOrNull = (value) =>
   String(value ?? "").trim() === "" ? null : Number(value);
+
+// A form holds the person on the page while it has unsaved changes.
+export function useDirty() {
+  const dirty = useRef(false);
+  useEffect(
+    () =>
+      guardLeaving(
+        () =>
+          !dirty.current ||
+          confirm("Leave without saving? Your changes will be lost."),
+      ),
+    [],
+  );
+  return dirty;
+}

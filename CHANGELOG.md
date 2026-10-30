@@ -58,6 +58,12 @@ Ideas to try, techniques and books now open in the new app instead of the curren
 
 `npm run format:check`, `npm run lint`, `npm test` (120 passed, 1 skipped) and `npm run test:e2e` (76 passed; 4 new for ideas, techniques and books, with axe scans of an idea, the idea form, a technique, the technique form, a book, the book form and a missing book).
 
+### Meals are put together in the redesigned app
+
+The Add page now puts a meal together: a name, the recipes cooked together (found with the recipe picker), what each one is in the meal and how many it serves when that differs from the recipe, and notes. A meal's page has Edit meal and Remove meal, with Undo; removing it shows the Recipes tab on Meals. The previous app was the only place meals could be made or changed, and it goes away next. In the recipe pickers of every form, a recipe unticked while the form is open stays in place with the focus instead of disappearing.
+
+`npm run format:check`, `npm run lint`, `npm test` (120 passed, 1 skipped) and `npm run test:e2e` (77 passed; 1 new for putting a meal together, changing it and removing it with Undo, with axe scans of the meal form).
+
 ### A failed passkey suggestion stays silent on the sign-in screen
 
 When the browser turns down the quiet passkey suggestion in the email field (no authenticator, nothing saved, or the request abandoned), both apps now say nothing, instead of putting the browser's raw message ("Resident credentials or empty 'allowCredentials' lists are not supported at this time.") in the sign-in alert, where it replaced a real reason such as "This sign-in link has expired or was already used." Only the kitchen turning down a passkey the person picked is shown. The quiet request's own failure to load its options is silent too.
