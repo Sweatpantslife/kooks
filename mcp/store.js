@@ -228,6 +228,15 @@ export class Store {
       .map((row) => JSON.parse(row.document))
       .filter(active);
   }
+  // Active records of each kind, counted without reading them into JavaScript.
+  counts(kinds) {
+    const counts = Object.fromEntries(kinds.map((kind) => [kind, 0]));
+    for (const row of this.#query(
+      "SELECT kind, count(*) AS n FROM records WHERE coalesce(json_extract(document, '$.archived'), 0) = 0 GROUP BY kind",
+    ).all())
+      if (row.kind in counts) counts[row.kind] = row.n;
+    return counts;
+  }
   all() {
     return this.db
       .prepare("SELECT kind, document FROM records ORDER BY kind, id")

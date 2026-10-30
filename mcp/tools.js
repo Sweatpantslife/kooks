@@ -65,9 +65,7 @@ export function createTools(store) {
     () => ({
       version,
       storage: "local SQLite",
-      counts: Object.fromEntries(
-        s.kind.options.map((kind) => [kind, store.list(kind).length]),
-      ),
+      counts: store.counts(s.kind.options),
       capabilities: [
         "recipes",
         "scaling",
