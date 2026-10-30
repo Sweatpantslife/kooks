@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { scan } from "../axe-scan.js";
 
-// The Groceries tab of the redesigned app, against the server without
+// The Groceries tab of the app, against the server without
 // sign-in. Other suites share this database and its shopping list, so every
 // name carries this run's tag and checks look only for those.
 const origin = "http://127.0.0.1:4318";
@@ -72,7 +72,7 @@ const box = (scope, name) =>
 test("the week's plans are picked through and land on the list by aisle", async ({
   page,
 }) => {
-  await page.goto("/next/#/week");
+  await page.goto("/#/week");
   await page.getByRole("link", { name: "Shop for the week" }).click();
   await expect(title(page)).toHaveText("Shop for this week");
   const card = region(page, named("Tagine"));
@@ -100,7 +100,7 @@ test("the week's plans are picked through and land on the list by aisle", async 
   await expect(page.getByText(named("cumin"))).toHaveCount(0);
 
   // Shopping again keeps what was chosen, and adds what is ticked now.
-  await page.goto("/next/#/groceries/week");
+  await page.goto("/#/groceries/week");
   await expect(card).toContainText("On the list");
   await expect(box(card, "chickpeas")).not.toBeChecked();
   await box(card, "chickpeas").check();
@@ -125,7 +125,7 @@ test("the week's plans are picked through and land on the list by aisle", async 
 test("groceries are added by hand, ticked into the basket and put away", async ({
   page,
 }) => {
-  await page.goto("/next/#/groceries");
+  await page.goto("/#/groceries");
   await expect(title(page)).toHaveText("To buy");
   const add = page.getByRole("textbox", { name: "Add to the list" });
   for (const line of [`2 ${named("lemons")}`, named("paper towels")]) {
@@ -189,7 +189,7 @@ test("at home, things are used soon, used up, bought again, and leftovers eaten"
     portions: 3,
     cooked_on: today(),
   });
-  await page.goto("/next/#/groceries/home");
+  await page.goto("/#/groceries/home");
   await expect(title(page)).toHaveText("At home");
   const saffron = named("saffron");
   const have = page.getByRole("textbox", { name: "Add something you have" });
@@ -235,7 +235,7 @@ test("at home, things are used soon, used up, bought again, and leftovers eaten"
 });
 
 test("a recipe's groceries go on the list from its page", async ({ page }) => {
-  await page.goto(`/next/#/recipes/${encodeURIComponent(tagine.id)}`);
+  await page.goto(`/#/recipes/${encodeURIComponent(tagine.id)}`);
   await page.getByRole("link", { name: "Add to groceries" }).click();
   await expect(title(page)).toHaveText("Add to groceries");
   await expect(box(page, "cumin")).not.toBeChecked();

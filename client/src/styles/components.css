@@ -475,22 +475,6 @@
   }
 }
 
-.preview-note {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 12px;
-  padding: 10px 14px;
-  border-radius: var(--radius-md);
-  background: var(--saffron-soft);
-  color: var(--saffron-ink);
-  font-size: var(--text-xs);
-  font-weight: 600;
-}
-.preview-note a {
-  color: inherit;
-}
-
 /* Windows high contrast replaces backgrounds, so selected items get a frame. */
 @media (forced-colors: active) {
   .segmented label:has(:checked),

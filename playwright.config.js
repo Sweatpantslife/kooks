@@ -19,12 +19,12 @@ const browser = {
     : {}),
 };
 
-// One empty database per run for the browser app. Workers inherit the value.
+// One empty database per run for the app. Workers inherit the value.
 process.env.KOOKS_E2E_DB ??= join(
   mkdtempSync(join(tmpdir(), "kooks-web-e2e-")),
   "kooks.sqlite",
 );
-// A second browser app with sign-in on: one household address, and sign-in
+// A second server with sign-in on: the household's addresses, and sign-in
 // emails written to an outbox directory the suite reads.
 process.env.KOOKS_E2E_AUTH_DB ??= join(
   mkdtempSync(join(tmpdir(), "kooks-web-auth-e2e-")),
@@ -50,26 +50,10 @@ export default defineConfig({
       },
     },
     {
+      // The app, served by both servers below: 4318 without sign-in and
+      // 4319 with it.
       name: "web",
       testDir: "./test/web-e2e",
-      use: {
-        baseURL: "http://127.0.0.1:4318",
-        viewport: { width: 1280, height: 900 },
-      },
-    },
-    {
-      // Passkeys need a named host; localhost counts as secure.
-      name: "web-auth",
-      testDir: "./test/web-auth-e2e",
-      use: {
-        baseURL: "http://localhost:4319",
-        viewport: { width: 1280, height: 900 },
-      },
-    },
-    {
-      // The redesigned app, served at /next/ by both servers above.
-      name: "next",
-      testDir: "./test/next-e2e",
       use: {
         baseURL: "http://127.0.0.1:4318",
         viewport: { width: 1280, height: 900 },

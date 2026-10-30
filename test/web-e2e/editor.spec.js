@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { scan } from "../axe-scan.js";
 
-// Adding and editing in the redesigned app, against the server without
+// Adding and editing in the app, against the server without
 // sign-in. Other suites share this database, so every name carries this run's
 // tag.
 const origin = "http://127.0.0.1:4318";
@@ -53,7 +53,7 @@ const ingredientsField = (page) =>
 test("a pasted recipe becomes a draft checked beside the original, then a recipe", async ({
   page,
 }) => {
-  await page.goto("/next/#/recipes");
+  await page.goto("/#/recipes");
   await page.getByRole("link", { name: "Add a recipe" }).click();
   await expect(title(page)).toHaveText("Add to your cookbook");
   await expect(title(page)).toBeFocused();
@@ -130,7 +130,7 @@ test("a draft waiting for its check can be discarded, with Undo", async ({
   await call(request, "recipe_import_text", {
     text: `Lentil salad ${tag}\nIngredients\n1 cup lentils\nMethod\nCook.`,
   });
-  await page.goto("/next/#/recipes/add");
+  await page.goto("/#/recipes/add");
   const drafts = page.getByRole("region", { name: "Waiting for your check" });
   await expect(
     drafts.getByRole("link", { name: new RegExp(`^Lentil salad ${tag}`) }),
@@ -150,7 +150,7 @@ test("a draft waiting for its check can be discarded, with Undo", async ({
 test("a recipe written from scratch shows how its lines are read and keeps its facets", async ({
   page,
 }) => {
-  await page.goto("/next/#/recipes/new");
+  await page.goto("/#/recipes/new");
   await expect(title(page)).toHaveText("New recipe");
   await page.getByLabel("Name").fill(`Orzo ${tag}`);
   await page.getByLabel("Serves").fill("2");
@@ -204,7 +204,7 @@ test("editing keeps lines left as they were, holds unsaved changes, and offers U
   request,
 }) => {
   const risotto = await seed(request, "Risotto");
-  await page.goto("/next/#/recipes");
+  await page.goto("/#/recipes");
   await page.evaluate(
     (id) => (location.hash = `#/recipes/${encodeURIComponent(id)}`),
     risotto.id,
@@ -257,7 +257,7 @@ test("a recipe someone else saved meanwhile can be replaced on purpose", async (
   request,
 }) => {
   const pilaf = await seed(request, "Pilaf");
-  await page.goto(`/next/#/recipes/${encodeURIComponent(pilaf.id)}/edit`);
+  await page.goto(`/#/recipes/${encodeURIComponent(pilaf.id)}/edit`);
   await expect(page.getByLabel("Name")).toHaveValue(`Pilaf ${tag}`);
   await call(request, "recipe_save", {
     id: pilaf.id,
@@ -278,7 +278,7 @@ test("a recipe leaves the cookbook from its editor and comes back with Undo", as
   request,
 }) => {
   const tart = await seed(request, "Plum tart");
-  await page.goto(`/next/#/recipes/${encodeURIComponent(tart.id)}/edit`);
+  await page.goto(`/#/recipes/${encodeURIComponent(tart.id)}/edit`);
   await page.getByRole("button", { name: "Remove from cookbook" }).click();
   await expect(title(page)).toHaveText("Recipes");
   await expect(status(page)).toContainText(
@@ -296,7 +296,7 @@ test("your own version starts from the recipe and links back to it", async ({
   request,
 }) => {
   const curry = await seed(request, "Curry", { favorite: true });
-  await page.goto(`/next/#/recipes/${encodeURIComponent(curry.id)}`);
+  await page.goto(`/#/recipes/${encodeURIComponent(curry.id)}`);
   await page.getByRole("link", { name: "Make your own version" }).click();
   await expect(title(page)).toHaveText("Your own version");
   await expect(page.getByLabel("Name")).toHaveValue(`Curry ${tag}, my way`);
@@ -319,7 +319,7 @@ test("your own version starts from the recipe and links back to it", async ({
 test("an idea to try is saved with its link and opens the To try list", async ({
   page,
 }) => {
-  await page.goto("/next/#/recipes/add");
+  await page.goto("/#/recipes/add");
   await page.getByRole("link", { name: /^Save an idea/ }).click();
   await expect(title(page)).toHaveText("Save an idea");
   await page.getByLabel("What is it?").fill(`Shakshuka ${tag}`);
@@ -348,7 +348,7 @@ test("an idea to try is saved with its link and opens the To try list", async ({
 test("a photo that is not an image is turned down before it is sent", async ({
   page,
 }) => {
-  await page.goto("/next/#/recipes/add/photo");
+  await page.goto("/#/recipes/add/photo");
   await expect(title(page)).toHaveText("Photograph a recipe");
   await expectAccessible(page, "Photo");
   await page.getByLabel("Photo of the recipe").setInputFiles({

@@ -1,14 +1,21 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
-import { readFileSync } from "node:fs";
 import { brotliDecompressSync, gunzipSync } from "node:zlib";
 import { Store } from "../mcp/store.js";
 import { createWebServer } from "../web/server.js";
+import { fakeBuild } from "./helpers/build.js";
+
+// The page is large enough to compress; the icon is too small to bother.
+const page = `<!doctype html><title>Kooks</title>${"<p>Kooks</p>".repeat(4000)}`;
+const icon = '<svg xmlns="http://www.w3.org/2000/svg"/>';
 
 async function setup(t) {
   const store = new Store(":memory:");
-  const server = createWebServer({ store });
+  const server = createWebServer({
+    store,
+    clientRoot: fakeBuild(t, { "index.html": page, "favicon.svg": icon }),
+  });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   t.after(async () => {
     await new Promise((resolve) => server.close(resolve));
@@ -41,10 +48,10 @@ const decode = ({ headers, body }) =>
       ? gunzipSync(body)
       : body;
 
-test("the app's files revalidate cheaply and travel compressed", async (t) => {
+test("the app's page revalidates cheaply and travels compressed", async (t) => {
   const { get } = await setup(t);
-  const source = readFileSync(new URL("../web/public/app.js", import.meta.url));
-  const plain = await get("/app.js");
+  const source = Buffer.from(page);
+  const plain = await get("/");
   assert.equal(plain.status, 200);
   assert.equal(plain.headers["content-encoding"], undefined);
   assert.equal(plain.headers["cache-control"], "no-cache");
@@ -58,13 +65,13 @@ test("the app's files revalidate cheaply and travel compressed", async (t) => {
     ["br;q=0, gzip;q=0.5", "gzip"],
     ["identity", undefined],
   ]) {
-    const response = await get("/app.js", { "Accept-Encoding": accept });
+    const response = await get("/", { "Accept-Encoding": accept });
     assert.equal(response.headers["content-encoding"], expected, accept);
     assert.ok(decode(response).equals(source), accept);
     if (expected) assert.ok(response.body.length < source.length / 3);
   }
   // A browser that has the file gets an empty 304.
-  const again = await get("/app.js", {
+  const again = await get("/", {
     "If-None-Match": plain.headers.etag,
     "Accept-Encoding": "br",
   });
@@ -72,9 +79,9 @@ test("the app's files revalidate cheaply and travel compressed", async (t) => {
   assert.equal(again.body.length, 0);
   assert.equal(again.headers.etag, plain.headers.etag);
   // Tiny files are not worth encoding.
-  const icon = await get("/favicon.svg", { "Accept-Encoding": "br" });
-  assert.equal(icon.headers["content-encoding"], undefined);
-  assert.equal((await get("/index.html")).headers["cache-control"], "no-cache");
+  const favicon = await get("/favicon.svg", { "Accept-Encoding": "br" });
+  assert.equal(favicon.headers["content-encoding"], undefined);
+  assert.equal(favicon.body.toString(), icon);
   assert.equal((await get("/missing.js")).status, 404);
 });
 

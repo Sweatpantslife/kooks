@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { scan } from "../axe-scan.js";
 
-// Cooking in the redesigned app, against the server without sign-in. Other
+// Cooking in the app, against the server without sign-in. Other
 // suites share this database, so every name carries this run's tag.
 const origin = "http://127.0.0.1:4318";
 const tag = `C${Date.now().toString(36)}`;
@@ -58,7 +58,7 @@ const toast = (page) => page.locator(".toast-region");
 test("a recipe is cooked a step at a time, left and picked up, and finished with a note and leftovers", async ({
   page,
 }) => {
-  await page.goto(`/next/#/recipes/${encodeURIComponent(risotto.id)}`);
+  await page.goto(`/#/recipes/${encodeURIComponent(risotto.id)}`);
   await page.getByRole("button", { name: "Cook" }).click();
   await expect(page).toHaveURL(/#\/cook\/[^/]+$/);
   await expect(title(page)).toHaveText("Step 1 of 3");
@@ -111,7 +111,7 @@ test("a recipe is cooked a step at a time, left and picked up, and finished with
   await expect(last).toContainText("4 of 5");
   await expect(last).toContainText("More parmesan.");
   await expect(bar).toHaveCount(0);
-  await page.goto("/next/#/groceries/home");
+  await page.goto("/#/groceries/home");
   await expect(
     page
       .getByRole("region", { name: "Leftovers" })
@@ -124,7 +124,7 @@ test("a timer that runs out says so wherever the cook is", async ({
   page,
   request,
 }) => {
-  await page.goto(`/next/#/recipes/${encodeURIComponent(stew.id)}`);
+  await page.goto(`/#/recipes/${encodeURIComponent(stew.id)}`);
   await page.getByRole("button", { name: "Cook" }).click();
   await expect(title(page)).toHaveText("Step 1 of 3");
   const id = decodeURIComponent(page.url().split("/").at(-1));
@@ -142,7 +142,7 @@ test("a timer that runs out says so wherever the cook is", async ({
     timeout: 10000,
   });
   // Clear the stove for the next test.
-  await page.goto(`/next/#/cook/${encodeURIComponent(id)}/done`);
+  await page.goto(`/#/cook/${encodeURIComponent(id)}/done`);
   await page.getByRole("button", { name: "Done cooking" }).click();
   await expect(toast(page)).toContainText(`${named("Stew")} is done.`);
 });
@@ -156,7 +156,7 @@ test("a day's plan is cooked from the week, and pressing Cook again picks it up"
     date: fmt(new Date()),
     slot: "Dinner",
   });
-  await page.goto("/next/#/week");
+  await page.goto("/#/week");
   const cook = page
     .getByRole("button", { name: `Cook ${named("Stew")}` })
     .first();

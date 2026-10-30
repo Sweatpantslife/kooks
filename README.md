@@ -11,25 +11,19 @@ Use Node.js 22.13 or newer and npm.
 ```sh
 npm ci
 npm test
+npm run build:client
 npm run dev
 ```
 
 `npm run test:e2e` runs the Playwright suites for both interfaces (run `npx playwright install chromium` once), `npm run format:check` enforces the shared Prettier style, and `npm run lint` runs ESLint's recommended rules; the GitHub Actions workflow runs all of these on Node 22 and 24 for every pull request and every push to `main`.
 
-Open `http://127.0.0.1:4317` for the persistent browser app. It starts with an empty cookbook and shares SQLite storage with the MCP server. Features include recipe capture/editing, courses, cuisines, diet labels and tags for search and filtering, meal composition, shopping, cooking sessions, pantry suggestions, leftovers, cooking memories, taste profiles, shared tasks, costs, reviewed photo imports, recipe links with embedded YouTube, Vimeo, Facebook, Instagram and TikTok players that load only when you press play, a place for techniques and inspiration with the same click-to-play videos, and a library of your own PDF and EPUB cookbooks with bookmarks and an in-page PDF reader.
+Open `http://127.0.0.1:4317` for the browser app. It starts with an empty cookbook and shares SQLite storage with the MCP server. It plans the week, keeps recipes (pasted, photographed or written, with courses, cuisines, diet labels and tags), meals, ideas to try, techniques and a shelf of your own PDF and EPUB cookbooks, builds the grocery list by aisle and keeps track of what is at home, cooks one step at a time with timers, notes and leftovers, and knows the people at the table, the prices paid and the weekly budget. Recipe links play YouTube, Vimeo, Facebook, Instagram and TikTok videos only when you press play.
 
-Both interfaces share one navigation model (Today, Recipes, Plan, Shop and Cook, with Settings behind the gear), one set of design tokens with a system-following dark theme, and one component vocabulary. [Information architecture and experience design](docs/ia-ux.md) is the design authority for both.
+The browser app has three tabs, Week, Recipes and Groceries, with Household behind the household's initials, and cooking as a full-screen mode. It was redesigned from scratch in October 2026; [Information architecture and experience design](docs/ia-ux.md) is the design authority, and the previous app's bookmarks open the pages that replaced them. The mobile app below still has the previous structure until it moves onto the same client.
 
-### The redesigned app
+### Working on the browser app
 
-A new app for browser and phone is being built in `client/` (Preact and Vite), one screen at a time; it replaces both interfaces when it is complete. Build it and the server shows it at `http://127.0.0.1:4317/next/`:
-
-```sh
-npm run build:client
-npm run dev
-```
-
-`npm run dev:client` serves it with live reload at `http://127.0.0.1:5174`, sending `/api` to the server on port 4317 (`KOOKS_API` points elsewhere). Sign-in emails link to the current app; once signed in there, `/next/` opens as the same member.
+The app lives in `client/` (Preact and Vite). `npm run build:client` builds it into `client/dist`, which the server shows at `/`; `npm run dev:client` serves it with live reload at `http://127.0.0.1:5174`, sending `/api` to the server on port 4317 (`KOOKS_API` points elsewhere). Addresses under `/next/`, where it was tried out before it replaced the previous app, lead to `/`.
 
 For the separate mobile interface:
 
@@ -37,7 +31,7 @@ For the separate mobile interface:
 npm run dev:mobile
 ```
 
-Open `http://127.0.0.1:5173`. This interface uses IndexedDB in a browser and device-local files when packaged natively. Its six example recipes are synthetic demonstration data, and its library filters by course, cuisine, diet label and tag like the browser app. It does **not** share the browser/MCP cookbook or automatically include all household additions.
+Open `http://127.0.0.1:5173`. This interface uses IndexedDB in a browser and device-local files when packaged natively. Its six example recipes are synthetic demonstration data, and its library filters by course, cuisine, diet label and tag. It does **not** share the browser/MCP cookbook or automatically include all household additions.
 
 ## Native projects
 
@@ -62,7 +56,7 @@ The browser server binds to loopback by default and asks nobody to sign in. Shar
 
 ## Code layout
 
-`mcp/` holds the SQLite store, domain rules and MCP tools (`mcp/library*.js` for techniques, inspiration and the book shelf); `web/` the browser server and client, with sign-in in `web/auth.js`, passkey verification in `web/webauthn.js` and mail in `web/mail.js`; `app/` the Capacitor mobile app; `shared/` what both apps use: the unit table, the ingredient tokenizer that both parsers build on, the link module that recognises video players, the recipe facet taxonomy (courses, diet labels, cuisine and tag matching) both apps filter with, the design tokens (`tokens.css`), the component stylesheet (`ui.css`) and the icon module (`icons.js`, generated from Lucide by `npm run icons`). `client/` is the redesigned app that will replace both (see [The redesigned app](#the-redesigned-app)). `test/` holds the Node unit and integration tests plus the Playwright projects in `test/mobile-e2e`, `test/web-e2e`, `test/web-auth-e2e` and `test/next-e2e`.
+`mcp/` holds the SQLite store, domain rules and MCP tools (`mcp/library*.js` for techniques, inspiration and the book shelf); `web/` the server, with sign-in in `web/auth.js`, passkey verification in `web/webauthn.js` and mail in `web/mail.js`; `client/` the browser app (see [Working on the browser app](#working-on-the-browser-app)); `app/` the Capacitor mobile app; `shared/` what the apps and the server share: the unit table, the ingredient tokenizer that both parsers build on, the link module that recognises video players, the recipe facet taxonomy (courses, diet labels, cuisine and tag matching), and for the mobile app the design tokens (`tokens.css`), the component stylesheet (`ui.css`) and the icon module (`icons.js`, generated from Lucide by `npm run icons`). `test/` holds the Node unit and integration tests plus the Playwright projects in `test/mobile-e2e` and `test/web-e2e`.
 
 ## Documentation
 
@@ -72,7 +66,7 @@ The browser server binds to loopback by default and asks nobody to sign in. Shar
 | [Changelog](CHANGELOG.md)                                      | What changed and how each change was verified                                      |
 | [Contributing](CONTRIBUTING.md)                                | Setup, checks, conventions and dependencies for changes                            |
 | [Security policy](SECURITY.md)                                 | How to report a vulnerability privately, and what is in scope                      |
-| [Information architecture and UX](docs/ia-ux.md)               | Navigation model, pages, flows, components, copy and accessibility for both apps   |
+| [Information architecture and UX](docs/ia-ux.md)               | Navigation, routes, pages, flows, components, copy and accessibility               |
 | [Current decisions](docs/decisions.md)                         | Selected architecture and unresolved product decisions                             |
 | [Household features](docs/household-features.md)               | All eight additions, local sharing, OCR, and backups                               |
 | [Native app](docs/native-app.md)                               | Capacitor setup, storage, testing, and device limitations                          |

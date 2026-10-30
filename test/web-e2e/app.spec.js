@@ -3,16 +3,16 @@ import { scan } from "../axe-scan.js";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
-// The redesigned app, built into client/dist and served by web/server.js at
-// /next/: once on the server without sign-in (port 4318) and once with it
-// (port 4319, where sign-in emails land in an outbox directory).
-const signedIn = "http://localhost:4319/next/";
+// The app, built into client/dist and served by web/server.js: once on the
+// server without sign-in (port 4318) and once with it (port 4319, where
+// sign-in emails land in an outbox directory).
+const signedIn = "http://localhost:4319/";
 const outbox = process.env.KOOKS_E2E_OUTBOX;
 const mails = () => (existsSync(outbox) ? readdirSync(outbox).sort() : []);
-const latestToken = () =>
+const latestLink = () =>
   readFileSync(join(outbox, mails().at(-1)), "utf8").match(
-    /#\/signin\/([A-Za-z0-9_-]+)/,
-  )[1];
+    /http:\/\/localhost:4319\/#\/signin\/[A-Za-z0-9_-]+/,
+  )[0];
 
 test.beforeEach(async ({ page }) => {
   page.on("pageerror", (error) => {
@@ -36,7 +36,7 @@ for (const [name, viewport] of [
     page,
   }) => {
     await page.setViewportSize(viewport);
-    await page.goto("/next/");
+    await page.goto("/");
     await expect(title(page)).toHaveText("This week");
     await expect(page).toHaveTitle("This week · Kooks");
     const nav = page.getByRole("navigation", { name: "Main" });
@@ -70,7 +70,7 @@ test("the look chosen in Household is kept by this browser", async ({
   page,
 }) => {
   await page.emulateMedia({ colorScheme: "light" });
-  await page.goto("/next/#/household");
+  await page.goto("/#/household");
   await page.getByRole("link", { name: /^Look and units/ }).click();
   await expect(title(page)).toHaveText("Look and units");
   const html = page.locator("html");
@@ -91,21 +91,35 @@ test("the look chosen in Household is kept by this browser", async ({
 test("addresses from the previous app land on the page that replaced them, and unknown ones say so", async ({
   page,
 }) => {
-  await page.goto("/next/#/today");
+  await page.goto("/#/today");
   await expect(page).toHaveURL(/#\/week$/);
   await expect(title(page)).toHaveText("This week");
-  await page.goto("/next/#/shop/pantry");
+  await page.goto("/#/shop/pantry");
   await expect(page).toHaveURL(/#\/groceries$/);
-  await page.goto("/next/#/settings/household");
+  await page.goto("/#/settings/household");
   await expect(page).toHaveURL(/#\/household\/people$/);
-  await page.goto("/next/#/settings/preferences");
+  await page.goto("/#/settings/preferences");
   await expect(page).toHaveURL(/#\/household\/look$/);
-  await page.goto("/next/#/settings");
+  await page.goto("/#/settings");
   await expect(page).toHaveURL(/#\/household$/);
-  await page.goto("/next/#/account");
+  await page.goto("/#/account");
   await expect(page).toHaveURL(/#\/household\/signin$/);
   await expect(page.getByText("Nobody signs in here")).toBeVisible();
-  await page.goto("/next/#/nowhere");
+  // Its pages about one record open that record's page here.
+  for (const [from, to] of [
+    ["imports/d1", "recipes/draft/d1"],
+    ["recipes/r1/variant", "recipes/r1/variation"],
+    ["recipes/r1/memory", "recipes/r1"],
+    ["recipes/new/inspiration/i1", "recipes/idea/i1/write"],
+    ["plan/meals/m1", "recipes/meal/m1"],
+    ["plan/meals/new", "recipes/meal/new"],
+    ["shop/review/meal/m1", "groceries/add/meal/m1"],
+  ]) {
+    await page.goto(`/#/${from}`);
+    await expect(page).toHaveURL(new RegExp(`#/${to}$`));
+    await expect(title(page)).toBeVisible();
+  }
+  await page.goto("/#/nowhere");
   await expect(title(page)).toHaveText("Not found");
   await expectAccessible(page, "Not found");
   await page.getByRole("link", { name: "Go to this week" }).click();
@@ -115,7 +129,7 @@ test("addresses from the previous app land on the page that replaced them, and u
 test("the skip link moves focus past the navigation without changing the page", async ({
   page,
 }) => {
-  await page.goto("/next/#/recipes");
+  await page.goto("/#/recipes");
   await page.keyboard.press("Tab");
   const skip = page.getByRole("link", { name: "Skip to content" });
   await expect(skip).toBeFocused();
@@ -141,7 +155,7 @@ async function virtualAuthenticator(context, page) {
   });
 }
 
-// The emailed link opens the current app; the same token works here.
+// The member opens the link exactly as the email gives it.
 async function signInByLink(page, email) {
   const before = mails().length;
   await page.getByLabel("Email address").fill(email);
@@ -149,7 +163,7 @@ async function signInByLink(page, email) {
   await expect(title(page)).toHaveText("Check your inbox.");
   await expect(title(page)).toBeFocused();
   await expect.poll(() => mails().length).toBe(before + 1);
-  await page.goto(`${signedIn}#/signin/${latestToken()}`);
+  await page.goto(latestLink());
   await expect(title(page)).toHaveText("This week");
   await expect(page).toHaveURL(/#\/week$/);
 }
