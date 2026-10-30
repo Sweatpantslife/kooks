@@ -23,6 +23,7 @@ import {
 } from "../../../shared/quantities.js";
 import { records, change } from "./store.js";
 import { nameKey } from "./aisles.js";
+import { convert, units } from "./units.js";
 import { toast } from "./toast.js";
 
 // What the household keeps, as the Recipes tab names it.
@@ -151,6 +152,16 @@ export function amount(ingredient, factor = 1) {
   const q = ingredient.quantity * factor;
   const unit = ingredient.unit ?? "";
   return `${number(q, unit)} ${unitLabel(unit, q)}`.trim();
+}
+
+// An amount in the units this device reads, where it converts; the editor
+// keeps `amount`, so a recipe is never rewritten in someone else's units.
+export function measure(ingredient, factor = 1) {
+  if (ingredient.quantity == null) return "";
+  const q = ingredient.quantity * factor;
+  const shown = convert(q, ingredient.unit, units.value);
+  if (!shown) return amount(ingredient, factor);
+  return `${number(shown.quantity, shown.unit)} ${unitLabel(shown.unit, shown.quantity)}`;
 }
 
 // Ingredients the household has said are at home, by name: test with

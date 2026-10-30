@@ -85,8 +85,24 @@ const legacy = {
   pantry: "groceries",
   leftovers: "groceries",
   settings: "household",
-  account: "household",
+  account: "household/signin",
 };
+// Its settings tabs each have a page of their own in Household, and so do
+// the people and prices they opened.
+const settings = {
+  household: "people",
+  prices: "prices",
+  backup: "backup",
+  preferences: "look",
+  account: "signin",
+};
+function moved([first, second, ...rest]) {
+  if (first === "settings" && Object.hasOwn(settings, second))
+    return ["household", settings[second], ...rest]
+      .map(encodeURIComponent)
+      .join("/");
+  return Object.hasOwn(legacy, first) ? legacy[first] : null;
+}
 
 export function startRouter() {
   const sync = () => {
@@ -101,7 +117,8 @@ export function startRouter() {
     }
     mark();
     const parts = read();
-    if (legacy[parts[0]]) navigate(legacy[parts[0]], { replace: true });
+    const to = moved(parts);
+    if (to) navigate(to, { replace: true });
     else if ((parts[0] === "signin" || parts[0] === "cook") && !parts[1])
       navigate("week", { replace: true });
     else route.value = parts;

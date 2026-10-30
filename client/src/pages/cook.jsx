@@ -12,7 +12,7 @@ import { change, record } from "../lib/store.js";
 import { leave, navigate } from "../lib/router.js";
 import { toast } from "../lib/toast.js";
 import { localDay } from "../lib/format.js";
-import { amount, memories } from "../lib/kitchen.js";
+import { measure, memories } from "../lib/kitchen.js";
 import {
   clock,
   edit,
@@ -340,7 +340,7 @@ function Ingredients({ dish }) {
       <ul class="ingredients" role="list">
         {dish.ingredients.map((i, index) => (
           <li key={index}>
-            <span class="ingredient-amount">{amount(i)}</span>
+            <span class="ingredient-amount">{measure(i)}</span>
             <span>
               {i.name}
               {i.preparation && <span class="muted">, {i.preparation}</span>}

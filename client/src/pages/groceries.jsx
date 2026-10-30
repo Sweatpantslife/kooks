@@ -21,8 +21,9 @@ import {
   plural,
   weekdayLabel,
 } from "../lib/format.js";
-import { amount, atHome, metaOf } from "../lib/kitchen.js";
+import { atHome, measure, metaOf } from "../lib/kitchen.js";
 import { AISLES, aisleOf, nameKey } from "../lib/aisles.js";
+import { passFocus } from "../ui/focus.js";
 import {
   addItem,
   check,
@@ -54,23 +55,6 @@ function Said() {
       {said.value}
     </p>
   );
-}
-
-// A row about to move away hands keyboard focus to the same control on the
-// row after it, or before it, so a list can be worked through without
-// starting again from the top.
-function passFocus(from, fallback) {
-  if (from !== document.activeElement) return;
-  const group = from.closest("[data-rows]");
-  const controls = group
-    ? [...group.querySelectorAll(`[data-row="${from.dataset.row}"]`)]
-    : [];
-  const at = controls.indexOf(from);
-  (
-    controls[at + 1] ??
-    controls[at - 1] ??
-    document.querySelector(fallback)
-  )?.focus();
 }
 
 // Rows ticked or taken off show so at once; the list catches up when the
@@ -850,7 +834,7 @@ export function ShopFor({ week, kind, id }) {
                                 <span class="muted">, {i.preparation}</span>
                               )}
                             </span>{" "}
-                            <span class="muted">{amount(i, dish.factor)}</span>
+                            <span class="muted">{measure(i, dish.factor)}</span>
                           </label>
                           {home.has(nameKey(i.name)) && (
                             <span class="badge badge-herb">At home</span>

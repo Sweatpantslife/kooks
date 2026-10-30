@@ -1276,14 +1276,17 @@ fieldset.field legend {
   padding: 0;
   list-style: none;
 }
+/* On a narrow phone, a plan's buttons move under it rather than off the
+   screen. */
 .plan-item {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: 4px 12px;
 }
 .plan-text {
   display: flex;
-  flex: 1;
+  flex: 1 1 8em;
   flex-direction: column;
   min-width: 0;
 }
@@ -1298,6 +1301,7 @@ a.plan-title:hover {
 .plan-actions {
   display: flex;
   align-items: center;
+  margin-inline-start: auto;
 }
 .picks,
 .day-picks {
@@ -1748,4 +1752,123 @@ a.plan-title:hover {
 }
 .input-short {
   width: 8em;
+}
+
+/* ---------- Household ---------- */
+.people,
+.price-list,
+.tastes {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.people {
+  display: grid;
+  gap: 12px;
+}
+@media (min-width: 840px) {
+  .people {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+.person {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 16px;
+}
+.avatar-lg {
+  flex: none;
+  width: 48px;
+  height: 48px;
+  font-family: var(--font-title);
+  font-size: var(--text-lg);
+}
+.person-text {
+  display: flex;
+  flex: 1 1 12em;
+  flex-direction: column;
+  gap: 8px;
+}
+.tastes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+}
+.tastes-list div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 8px;
+}
+.tastes-list dt {
+  color: var(--muted);
+}
+.tastes-list dd {
+  margin: 0;
+}
+.person-actions {
+  flex-basis: 100%;
+  justify-content: flex-end;
+}
+.tastes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.price-list {
+  display: flex;
+  flex-direction: column;
+}
+.price-card {
+  gap: 0;
+  padding: 8px 20px;
+}
+.price-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-block: 8px;
+}
+.price-list li + li {
+  border-top: 1px solid var(--line);
+}
+.price-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.week-money {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+}
+.week-money-total {
+  font-family: var(--font-title);
+  font-size: var(--text-2xl);
+  font-weight: 700;
+}
+.week-money-line {
+  color: var(--muted);
+}
+.week-money-line .icon {
+  display: inline-block;
+  margin-inline-end: 6px;
+  vertical-align: -2px;
+}
+/* A field with its button beside it, as long as the screen allows. */
+.inline-form {
+  display: flex;
+  flex-flow: row wrap;
+  align-items: flex-end;
+  gap: 8px 12px;
+}
+.inline-form .field {
+  flex: 0 1 auto;
+}
+.inline-form .form-error,
+.inline-form .hint {
+  flex-basis: 100%;
 }

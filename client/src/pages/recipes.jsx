@@ -38,6 +38,8 @@ async function suggest() {
   try {
     const { results, skipped } = await tool("recipe_suggest", {
       use_pantry: true,
+      // The people at the table: what they like breaks a tie.
+      member_ids: records("member").map((m) => m.id),
       avoid_dislikes: false,
       limit: 100,
     });
