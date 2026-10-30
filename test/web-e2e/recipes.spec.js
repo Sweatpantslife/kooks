@@ -215,8 +215,13 @@ test("a recipe page scales its ingredients, shows what is at home and links its 
     `Lemon orzo ${tag}`,
   );
   await expect(page.getByText("25 min, 15 min hands-on")).toBeVisible();
-  await expect(page.getByText("Last time, Oct 27 · 4 of 5")).toBeVisible();
-  await expect(page.getByText("More lemon next time.")).toBeVisible();
+  const last = page.getByRole("complementary", { name: "Last time" });
+  // A note from an earlier year says which year.
+  await expect(last).toContainText(/Last time, Oct 27(, 2026)? · 4 of 5/);
+  await expect(last).toContainText("More lemon next time.");
+  await expect(
+    page.getByRole("region", { name: "Cooked before" }),
+  ).toContainText("Next time: More lemon next time.");
 
   const items = page.locator(".ingredients li");
   await expect(items.first().locator(".ingredient-amount")).toHaveText("250 g");

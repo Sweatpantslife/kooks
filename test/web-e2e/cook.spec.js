@@ -174,3 +174,138 @@ test("a day's plan is cooked from the week, and pressing Cook again picks it up"
   await page.getByRole("button", { name: "Done cooking" }).click();
   await expect(toast(page)).toContainText(`${named("Stew")} is done.`);
 });
+
+const sessionIn = async (request, id) =>
+  (
+    await (await request.get(`${origin}/api/state`)).json()
+  ).records.session.find((s) => s.id === id);
+
+test("jobs around the cooking are shared out, ticked off in place, and removed with Undo", async ({
+  page,
+  request,
+}) => {
+  const jo = (
+    await call(request, "member_save", { member: { name: named("Jo") } })
+  ).record;
+  await page.goto(`/#/recipes/${encodeURIComponent(stew.id)}`);
+  await page.getByRole("button", { name: "Cook" }).click();
+  await expect(title(page)).toHaveText("Step 1 of 3");
+  const id = decodeURIComponent(page.url().split("/").at(-1));
+  const jobs = page.getByRole("region", { name: "Jobs" });
+  const rows = jobs.getByRole("listitem");
+  const box = jobs.getByRole("textbox", { name: "A job" });
+  for (const job of ["Set the table", "Rinse the rice", "Chop the herbs"]) {
+    await box.fill(job);
+    await box.press("Enter");
+    await expect(rows.filter({ hasText: job })).toHaveCount(1);
+  }
+  await expect(box).toBeFocused();
+  await expect(box).toHaveValue("");
+
+  await jobs.getByRole("checkbox", { name: "Set the table" }).check();
+  await jobs
+    .getByRole("combobox", { name: "Who: Rinse the rice" })
+    .selectOption({ label: named("Jo") });
+  await expect
+    .poll(async () =>
+      (await sessionIn(request, id)).data.tasks.map((t) => [
+        t.text,
+        t.completed,
+        t.member_id,
+      ]),
+    )
+    .toEqual([
+      ["Set the table", true, null],
+      ["Rinse the rice", false, jo.id],
+      ["Chop the herbs", false, null],
+    ]);
+  await expect(rows.first()).toHaveClass(/job-done/);
+  await expectAccessible(page, "Cooking with jobs");
+
+  // Another cook sees the same jobs.
+  await page.reload();
+  await expect(
+    jobs.getByRole("checkbox", { name: "Set the table" }),
+  ).toBeChecked();
+  await expect(
+    jobs.getByRole("combobox", { name: "Who: Rinse the rice" }),
+  ).toHaveValue(jo.id);
+
+  await jobs.getByRole("button", { name: "Remove Rinse the rice" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(rows).toHaveCount(2);
+  await expect(
+    jobs.getByRole("button", { name: "Remove Chop the herbs" }),
+  ).toBeFocused();
+  await expect(toast(page)).toContainText(
+    "Rinse the rice is off the jobs list.",
+  );
+  await toast(page).getByRole("button", { name: "Undo" }).click();
+  await expect(rows).toHaveText([
+    /Set the table/,
+    /Rinse the rice/,
+    /Chop the herbs/,
+  ]);
+
+  await page.getByRole("link", { name: "Finish" }).click();
+  await page.getByRole("button", { name: "Done cooking" }).click();
+  await expect(toast(page)).toContainText(`${named("Stew")} is done.`);
+});
+
+test("every time a recipe was cooked shows on it, and a note can be added without cooking", async ({
+  page,
+  request,
+}) => {
+  const dal = (await call(request, "recipe_save", recipe("Dal"))).record;
+  const smoky = (
+    await call(request, "recipe_variant_save", {
+      original_recipe_id: dal.id,
+      recipe: recipe("Smoky dal").recipe,
+    })
+  ).record;
+  for (const [recipe_id, cooked_on, text, more] of [
+    [dal.id, "2026-01-05", "Cooked.", {}],
+    [dal.id, "2026-02-10", "Too thin.", { rating: 3, changes: "Less water." }],
+    [
+      smoky.id,
+      "2026-03-15",
+      "Smoky and good.",
+      { rating: 5, cook_again: true },
+    ],
+  ])
+    await call(request, "note_save", { recipe_id, cooked_on, text, ...more });
+
+  await page.goto(`/#/recipes/${encodeURIComponent(dal.id)}`);
+  const cooked = page.getByRole("region", { name: "Cooked before" });
+  const notes = cooked.getByRole("listitem");
+  await expect(notes).toHaveCount(3);
+  await expect(notes.nth(0)).toContainText(
+    `As ${named("Smoky dal")} · 5 of 5 · Cook again`,
+  );
+  await expect(notes.nth(1)).toContainText("Changed: Less water.");
+  // A finish with nothing noted says only when it was cooked.
+  await expect(notes.nth(2)).not.toContainText("Cooked.");
+  await expectAccessible(page, "Cooked before");
+
+  await cooked.getByRole("link", { name: "Add a note" }).click();
+  await expect(title(page)).toHaveText("Add a note");
+  await expect(page.getByLabel("Cooked on")).toHaveValue(fmt(new Date()));
+  await page.getByRole("radio", { name: /^4/ }).check();
+  await page.getByLabel("Notes", { exact: true }).fill("Better with lime.");
+  await page.getByLabel("Next time").fill("Double the ginger.");
+  await expectAccessible(page, "Add a note");
+  await page.getByRole("button", { name: "Save note" }).click();
+
+  await expect(title(page)).toHaveText(named("Dal"));
+  await expect(toast(page)).toContainText("Your note is with the recipe.");
+  await expect(
+    page.getByRole("complementary", { name: "Last time" }),
+  ).toContainText("Double the ginger.");
+  await expect(notes).toHaveCount(3);
+  await expect(notes.first()).toContainText("4 of 5");
+  await expect(notes.first()).toContainText("Next time: Double the ginger.");
+  const earlier = cooked.getByText("1 earlier time");
+  await earlier.click();
+  await expect(notes).toHaveCount(4);
+  await expect(notes.last()).toContainText(/Jan 5/);
+});

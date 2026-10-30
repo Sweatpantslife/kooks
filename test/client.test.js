@@ -1,7 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { applyChanges } from "../client/src/lib/store.js";
-import { monday, addDays, localDay } from "../client/src/lib/format.js";
+import {
+  monday,
+  addDays,
+  localDay,
+  pastDayLabel,
+} from "../client/src/lib/format.js";
 
 const r = (id, title) => ({ id, data: { title } });
 
@@ -35,6 +40,11 @@ test("the redesigned app's weeks start on Monday", () => {
   assert.equal(addDays("2026-10-26", 6), "2026-11-01");
   assert.equal(addDays("2026-12-31", 1), "2027-01-01");
   assert.equal(localDay(new Date(2026, 2, 29, 23, 30)), "2026-03-29");
+});
+
+test("a day from an earlier year says which year", () => {
+  assert.match(pastDayLabel("2001-03-04"), /2001/);
+  assert.doesNotMatch(pastDayLabel(localDay()), /\d{4}/);
 });
 
 test("the redesigned app writes amounts the way a cook does", async () => {

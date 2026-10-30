@@ -7,6 +7,7 @@ import {
   Flame,
   Heart,
   Minus,
+  NotebookPen,
   Pencil,
   Plus,
   ShoppingBasket,
@@ -15,7 +16,7 @@ import {
 } from "lucide";
 import { courseLabel, dietLabel } from "../../../shared/taxonomy.js";
 import { record, records } from "../lib/store.js";
-import { dateLabel, plural } from "../lib/format.js";
+import { pastDayLabel, plural } from "../lib/format.js";
 import { nameKey } from "../lib/aisles.js";
 import { tastes } from "../lib/people.js";
 import {
@@ -138,12 +139,79 @@ export function LastTime({ notes }) {
   return (
     <aside class="last-time" aria-label="Last time">
       <p class="eyebrow">
-        Last time{day && `, ${dateLabel(day)}`}
+        Last time{day && `, ${pastDayLabel(day)}`}
         {n.rating ? ` · ${n.rating} of 5` : ""}
         {notes.length > 1 && ` · cooked ${notes.length} times`}
       </p>
       <p>{n.next_time || n.changes || n.text}</p>
     </aside>
+  );
+}
+
+// Every time this recipe, or another version of it, was cooked, newest
+// first, with what was noted then. The note a quiet finish leaves says only
+// that it was cooked.
+function CookedBefore({ r, notes }) {
+  const item = (note) => {
+    const n = note.data;
+    const day = n.cooked_on ?? note.created_at?.slice(0, 10);
+    const version = n.recipe_id !== r.id && record("recipe", n.recipe_id);
+    const about = [
+      day && pastDayLabel(day),
+      version && `As ${version.data.title}`,
+      n.rating && `${n.rating} of 5`,
+      n.cook_again === true && "Cook again",
+      n.cook_again === false && "Try something else",
+    ].filter(Boolean);
+    return (
+      <li key={note.id} class="cooked">
+        <p class="eyebrow">{about.join(" · ")}</p>
+        {n.text !== "Cooked." && <p class="preline">{n.text}</p>}
+        {n.changes && (
+          <p class="preline">
+            <strong>Changed:</strong> {n.changes}
+          </p>
+        )}
+        {n.next_time && (
+          <p class="preline">
+            <strong>Next time:</strong> {n.next_time}
+          </p>
+        )}
+      </li>
+    );
+  };
+  const recent = notes.slice(0, 3);
+  const earlier = notes.slice(3);
+  return (
+    <section class="stack" aria-labelledby="cooked-before">
+      <div class="section-head">
+        <h2 id="cooked-before">Cooked before</h2>
+        <a
+          class="btn btn-small"
+          href={`#/recipes/${encodeURIComponent(r.id)}/note`}
+        >
+          <Icon icon={NotebookPen} />
+          Add a note
+        </a>
+      </div>
+      {notes.length ? (
+        <ol class="cooked-list" role="list">
+          {recent.map(item)}
+        </ol>
+      ) : (
+        <p class="muted">
+          No notes yet. What you note when you finish cooking shows up here.
+        </p>
+      )}
+      {earlier.length > 0 && (
+        <details class="disclosure">
+          <summary>{plural(earlier.length, "earlier time")}</summary>
+          <ol class="cooked-list" role="list">
+            {earlier.map(item)}
+          </ol>
+        </details>
+      )}
+    </section>
   );
 }
 
@@ -293,6 +361,7 @@ export function Recipe({ id }) {
   const r = record("recipe", id);
   if (!r) return <Missing what="recipe" />;
   const d = r.data;
+  const notes = memories(r);
   return (
     <article class="recipe">
       {back}
@@ -326,11 +395,12 @@ export function Recipe({ id }) {
       </PageHeader>
       <Facts d={d} />
       <Tastes d={d} />
-      <LastTime notes={memories(r)} />
+      <LastTime notes={notes} />
       <div class="recipe-columns">
         <Ingredients key={`${r.id}-${d.servings}`} d={d} />
         <Method d={d} />
       </div>
+      <CookedBefore r={r} notes={notes} />
       <More r={r} />
       <div class="row">
         <a

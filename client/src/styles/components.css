@@ -775,6 +775,26 @@
 .last-time p:last-child {
   color: var(--ink);
 }
+.cooked-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cooked {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-block: 12px;
+  border-block-end: 1px solid var(--line);
+}
+.cooked:first-child {
+  padding-block-start: 0;
+}
+.cooked:last-child {
+  border-block-end: 0;
+}
 .recipe-columns {
   display: grid;
   gap: 16px;
@@ -1684,6 +1704,43 @@ a.plan-title:hover {
 .timer-done {
   background: var(--accent-soft);
   color: var(--accent-ink);
+}
+.jobs {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.job {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.job-text {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--target);
+  min-width: 0;
+  cursor: pointer;
+}
+.job-text input {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  accent-color: var(--herb);
+}
+.job-done .job-text {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+.job-who {
+  width: auto;
+  min-width: 7em;
 }
 .cook-steps {
   display: flex;
