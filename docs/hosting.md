@@ -31,6 +31,6 @@ Sign-in state lives in `auth_` tables inside the same SQLite file and is not par
 
 After deployment, verify HTTPS and the HTTP redirect, unauthenticated API rejection, an email link sign-in, adding a passkey and signing in with it, recipe save/reload/edit, and persistence after a container restart. Test only synthetic records and archive them afterward. Verify the running commit in Coolify's deployment log.
 
-Export the cookbook through the authenticated application and store backups privately outside the server. A volume is persistence, not a backup. For filesystem-level backups, stop the application and snapshot the complete data volume, including SQLite WAL files. Restore into an isolated volume and test before replacing live data.
+Export the cookbook through the authenticated application (Settings › Backup streams the download, so the proxy needs no extra body or buffering limits for it) and store backups privately outside the server. `node scripts/backup.mjs export` and `restore` do the same on the server itself; see [household features](household-features.md). A volume is persistence, not a backup. For filesystem-level backups, stop the application and snapshot the complete data volume, including SQLite WAL files. Restore into an isolated volume and test before replacing live data.
 
 If health checks, sign-in, or saves fail, stop the new deployment and redeploy the last verified commit with the same volume and runtime configuration. Back up before schema upgrades; restoring older code is not safe when it cannot read the current database schema.
