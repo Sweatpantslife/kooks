@@ -45,7 +45,7 @@ export function createTools(store) {
   const syncInput = {
     id: s.id,
     source: s.source,
-    source_key: s.id.describe(
+    source_key: s.key.describe(
       "Stable key for this shopping occurrence. Reuse to replace its contributions. Use a different key only for an additional occurrence.",
     ),
     exclude_ingredients: z
@@ -278,7 +278,7 @@ export function createTools(store) {
     {
       ...s.write,
       ...s.edit,
-      source_key: s.id,
+      source_key: s.key,
     },
     false,
     (args) => kooks.shoppingRemove(args),

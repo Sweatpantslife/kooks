@@ -91,7 +91,7 @@ async function boot() {
   const area = (label, name, value = "", extra = "", hint = "") =>
     `<label class="field"><span>${esc(label)}</span><textarea name="${name}" ${extra}>${esc(value)}</textarea>${hint ? `<span class="help">${esc(hint)}</span>` : ""}</label>`;
   const errorSlot = (id = "") =>
-    `<div class="error" role="alert" data-error ${id ? `id="${id}"` : ""}></div>`;
+    `<div class="error" role="alert" data-error ${id ? `id="${esc(id)}"` : ""}></div>`;
 
   // ---------- State ----------
   let state = structuredClone(initial);
@@ -401,7 +401,7 @@ async function boot() {
     return `<section class="stack-sm"><h3>${esc(heading)}</h3><div>${rows.map((t) => `<div class="tool-row"><span>${esc(t.name)}${components.length > 1 ? `<div class="tool-uses">${esc(t.uses.join(" · "))}</div>` : ""}</span>${icon("utensils", { className: "icon-sm" })}</div>`).join("") || '<p class="small muted">No tools recorded.</p>'}</div>${unknown.length ? `<p class="small muted">Tools not specified: ${esc(unknown.join(", "))}.</p>` : ""}${components.length > 1 && rows.length ? '<p class="small muted">Shared tools may need to be reused between dishes. Check sizes and availability before starting.</p>' : ""}${conflict ? callout(`<strong>Check the oven plan.</strong><br>${ovens.map((r) => esc(r.title) + ": " + r.temps.map((t) => esc(scaledText(t + "°C"))).join(", ")).join("<br>")}<br>With one oven, these dishes need a reviewed cooking order.`, { kind: "callout-warning", ico: "triangle-alert" }) : ""}</section>`;
   }
   function unitSelect(id = "units") {
-    return `<label class="field"><span class="sr-only">Measurement display</span><select class="select" id="${id}" aria-label="Measurement display">${[
+    return `<label class="field"><span class="sr-only">Measurement display</span><select class="select" id="${esc(id)}" aria-label="Measurement display">${[
       ["metric", "Metric"],
       ["us", "US kitchen"],
       ["original", "Original units"],

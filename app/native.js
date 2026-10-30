@@ -88,16 +88,26 @@ function download(blob, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+// A native export is written to its own cache folder, the only one Android's
+// FileProvider shares (res/xml/file_paths.xml), and replaces the last one: the
+// app that receives it may read the file after the share sheet closes, so it
+// cannot be removed right away.
 export async function exportCookbook(backup) {
   const filename = `kooks-${new Date().toISOString().slice(0, 10)}.json`;
   const data = JSON.stringify(backup, null, 2);
   if (!isNative)
     return download(new Blob([data], { type: "application/json" }), filename);
+  await Filesystem.rmdir({
+    path: "exports",
+    directory: Directory.Cache,
+    recursive: true,
+  }).catch(() => {});
   const result = await Filesystem.writeFile({
-    path: filename,
+    path: `exports/${filename}`,
     data,
     directory: Directory.Cache,
     encoding: Encoding.UTF8,
+    recursive: true,
   });
   await Share.share({
     title: "Kooks cookbook backup",

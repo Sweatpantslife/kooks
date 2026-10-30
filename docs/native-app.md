@@ -1,6 +1,6 @@
 # Kooks for iOS and Android
 
-Kooks now has a Capacitor 8 application in `app/`, with Xcode and Android Studio projects in `ios/` and `android/`. The bundled app works without a running desktop server or internet connection. The existing MCP server and desktop web app keep their own data and commands.
+Kooks now has a Capacitor 8 application in `app/`, with Xcode and Android Studio projects in `ios/` and `android/`. The bundled app works without a running desktop server or internet connection. The existing MCP server and desktop web app keep their own data and commands. Its page carries the browser app's content security policy as a meta tag: no inline or evaluated script (zod runs without its compiled parsers for that reason), and video players only from the embed origins in `shared/links.js`; the mobile Playwright suite fails on any violation.
 
 ## Run and build
 
@@ -55,7 +55,7 @@ Six labeled example recipes and one example meal help with first launch. English
 
 The native app keeps `kooks/cookbook.json` and the last validated snapshot `kooks/cookbook.previous.json` in `Directory.Data`. Writes are serialized; a temporary file is written before replacing the primary file. If a saved file is corrupt, the previous valid snapshot is recovered. Unrecoverable/read-permission errors stop loading without resetting data. Storage failures remain visible and allow an export of the in-memory cookbook.
 
-Use **Settings › Backup › Export backup** to save or share a `kooks-mobile` JSON file. Restore is supported across the iOS, Android, and browser versions of this interface. Backups written before recipe facets still restore: their single recipe label becomes a tag, and course, cuisine and diet labels start unset. Device OS backup services may also include app data according to the user's system settings. Uninstalling removes local app data; keep exported copies.
+Use **Settings › Backup › Export backup** to save or share a `kooks-mobile` JSON file. Restore is supported across the iOS, Android, and browser versions of this interface. Backups written before recipe facets still restore: their single recipe label becomes a tag, and course, cuisine and diet labels start unset. On a device the export is written to an `exports` folder in the app's cache, the only folder Android's file provider shares (`android/app/src/main/res/xml/file_paths.xml`), and each export replaces the previous one. Device OS backup services may also include app data according to the user's system settings; on Android the backup and new-phone transfer rules (`backup_rules.xml`, `data_extraction_rules.xml`) carry the `kooks` folder and nothing else, so exports and caches never enter Google's backup. Uninstalling removes local app data; keep exported copies.
 
 The mobile cookbook is separate from `.data/kooks.sqlite`, the MCP tools, and the desktop server. It does not yet synchronize household members or import the MCP backup format. Settings › Assistant shows explicitly labeled sample actions; AI account login and live AI inference have not been connected. Incoming share-menu imports, website/photo extraction, multi-day batch planning, and production household authentication are outside this native implementation.
 

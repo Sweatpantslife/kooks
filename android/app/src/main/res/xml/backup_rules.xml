@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 11 and older: Google device backup keeps the cookbook (the
+     kooks folder app/storage.js writes) and nothing else. -->
+<full-backup-content>
+    <include domain="file" path="kooks" />
+</full-backup-content>

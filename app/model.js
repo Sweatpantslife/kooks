@@ -9,6 +9,10 @@ import {
   dietKeys,
 } from "../shared/taxonomy.js";
 
+// The app's content security policy forbids eval, so zod skips its compiled
+// parsers rather than probing for them and logging a violation.
+z.config({ jitless: true });
+
 const id = z.string().regex(/^[a-zA-Z0-9_-]{1,150}$/);
 const text = z.string().max(200000);
 const positive = z.number().positive().max(10000);

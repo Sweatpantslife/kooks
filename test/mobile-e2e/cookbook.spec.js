@@ -25,8 +25,21 @@ test.beforeEach(async ({ page }) => {
   page.on("pageerror", (error) => {
     throw error;
   });
+  // The app runs under its content security policy without tripping it;
+  // some violations, such as a blocked eval, reach no console.
+  await page.addInitScript(() => {
+    window.policyViolations = [];
+    document.addEventListener("securitypolicyviolation", (event) =>
+      window.policyViolations.push(
+        `${event.violatedDirective} ${event.blockedURI}`,
+      ),
+    );
+  });
   await page.goto("/");
   await expect(h1(page, "Today")).toBeVisible();
+});
+test.afterEach(async ({ page }) => {
+  expect(await page.evaluate(() => window.policyViolations)).toEqual([]);
 });
 
 test("works without the newer clone and UUID APIs used by early iOS 15", async ({
