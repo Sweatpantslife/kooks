@@ -465,6 +465,11 @@ export class Features {
         "Choose the cooked dish from this session.",
       );
       requireThat(
+        dish.servings !== null,
+        "MISSING_YIELD",
+        "This session cooked the recipe without a known yield, so its portions are unknown. Set the recipe's yield, then record the batch from the recipe instead of the session.",
+      );
+      requireThat(
         dish.servings === args.portions,
         "INVALID_BATCH",
         "Batch portions must match the cooked session.",

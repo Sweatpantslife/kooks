@@ -381,6 +381,11 @@ export function createTools(store) {
     false,
     (args) => {
       const record = store.get("session", args.id);
+      requireThat(
+        record.data.status === "active",
+        "SESSION_FINISHED",
+        "This cooking session is already finished. Use note_save for anything to remember.",
+      );
       return {
         record: store.put(
           "session",
