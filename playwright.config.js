@@ -66,6 +66,15 @@ export default defineConfig({
         viewport: { width: 1280, height: 900 },
       },
     },
+    {
+      // The redesigned app, served at /next/ by both servers above.
+      name: "next",
+      testDir: "./test/next-e2e",
+      use: {
+        baseURL: "http://127.0.0.1:4318",
+        viewport: { width: 1280, height: 900 },
+      },
+    },
   ],
   webServer: [
     {
@@ -74,7 +83,7 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI,
     },
     {
-      command: "node web/server.js",
+      command: "npm run build:client && node web/server.js",
       url: "http://127.0.0.1:4318/",
       env: {
         PORT: "4318",
@@ -90,7 +99,8 @@ export default defineConfig({
         PORT: "4319",
         KOOKS_HOST: "127.0.0.1",
         KOOKS_DB_PATH: process.env.KOOKS_E2E_AUTH_DB,
-        KOOKS_HOUSEHOLD_EMAILS: "cook@example.test, baker@example.test",
+        KOOKS_HOUSEHOLD_EMAILS:
+          "cook@example.test, baker@example.test, taster@example.test",
         KOOKS_MAIL_OUTBOX: process.env.KOOKS_E2E_OUTBOX,
       },
       reuseExistingServer: !process.env.CI,

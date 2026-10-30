@@ -3,7 +3,7 @@ import { isIPv4, isIPv6 } from "node:net";
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { resolve, extname } from "node:path";
+import { resolve, extname, sep } from "node:path";
 import { ZodError } from "zod";
 import { Store, KooksError } from "../mcp/store.js";
 import { createTools } from "../mcp/tools.js";
@@ -39,11 +39,17 @@ const staticFiles = new Map([
     fileURLToPath(new URL(`../shared/${name}`, import.meta.url)),
   ]),
 ]);
+// The redesigned app, built by `npm run build:client`, is served at /next/
+// beside this one until it replaces it.
+const builtClient = fileURLToPath(new URL("../client/dist/", import.meta.url));
 const mime = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
   ".css": "text/css; charset=utf-8",
   ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".woff2": "font/woff2",
+  ".webmanifest": "application/manifest+json",
 };
 const MINUTE = 60000;
 // A tab that is this many actions behind gets everything again instead of
@@ -171,6 +177,7 @@ export function createWebServer({
   members = [],
   mailer = null,
   authOptions = {},
+  clientRoot = builtClient,
 }) {
   const external = publicOrigin ? parseOrigin(publicOrigin) : null;
   // Kooks speaks plain HTTP, so an HTTPS origin means a proxy in front.
@@ -198,6 +205,7 @@ export function createWebServer({
       })
     : null;
   const tools = new Map(createTools(store).map((t) => [t.name, t]));
+  const clientDir = resolve(clientRoot) + sep;
   const limits = new Map();
   // Revisions are this server start plus the action sequence, so a tab that
   // was open before a restart, or against another database, reloads fully.
@@ -518,6 +526,33 @@ export function createWebServer({
         } finally {
           largeUploads--;
         }
+      }
+      if (req.method === "GET" && url.pathname === "/next") {
+        res.writeHead(308, { Location: "/next/" });
+        return res.end();
+      }
+      if (req.method === "GET" && url.pathname.startsWith("/next/")) {
+        const name = url.pathname.slice("/next/".length) || "index.html";
+        const file = resolve(clientDir, name);
+        if (!file.startsWith(clientDir) || !mime[extname(file)])
+          return send(res, 404, { message: "Not found." });
+        let data;
+        try {
+          data = await readFile(file);
+        } catch (error) {
+          if (error.code !== "ENOENT") throw error;
+          return send(res, 404, {
+            message:
+              name === "index.html"
+                ? "The new Kooks app is not built yet. Run npm run build:client."
+                : "Not found.",
+          });
+        }
+        // Built files carry a content hash in their name, so they never change.
+        if (name.startsWith("assets/"))
+          res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+        res.writeHead(200, { "Content-Type": mime[extname(file)] });
+        return res.end(data);
       }
       if (req.method === "GET") {
         const path = url.pathname === "/" ? "/index.html" : url.pathname;

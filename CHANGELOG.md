@@ -4,6 +4,12 @@ What changed in Kooks and how each change was verified, newest first. Kooks has 
 
 ## Unreleased
 
+### The redesigned app's foundation, at /next/
+
+A new app for browser and phone starts in `client/` (Preact with signals, built by Vite) and the server shows it at `/next/` beside the current one, which stays at `/` until the new app covers everything. This first part is the frame the rest is built in: the Market look (warm white, tomato and herb, Bricolage Grotesque titles, light and dark, field borders and focus ring at 3:1 or more), three tabs (Week, Recipes, Groceries) at the bottom on phones and in a rail from 840 px, Household behind the initials, the kitchen kept up to date every 3 seconds with only the changed records, changes that retry with the same request id and offer Undo, sign-in by passkey (including the quiet suggestion in the email field) or emailed link, and Household with the look, passkeys and sign-out. Week, Recipes and Groceries say what is coming and link to the current app. Addresses from the current app (`#/today`, `#/shop/pantry`, `#/settings/…`) open the page that replaces them. The Docker image builds the app in a separate stage; CI runs `npm run build:client`.
+
+`npm run format:check`, `npm run lint`, `npm test` (105 tests: 104 passed, the OCR case skipped; 3 new) and `npm run test:e2e` (38 passed; 8 new in the `next` project, which scan every page with axe-core for WCAG 2.2 AA and best practices at 390 and 1280 px in light and dark, with 0 violations) pass. Not exercised: the Docker build (no Docker here), Safari and Firefox, and a real device's passkey prompt.
+
 ### Security policy, contributing guide, .env.example and changelog
 
 Added this changelog, [SECURITY.md](SECURITY.md), [CONTRIBUTING.md](CONTRIBUTING.md) and a commented [.env.example](.env.example) with every setting the servers read. The dated verification log moved here from the [developer handoff](docs/handoff.md). Documentation only: `npm run format:check` and `npm run lint` pass, and the server starts with the loopback and private-network settings the example describes.

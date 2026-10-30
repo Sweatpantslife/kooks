@@ -26,19 +26,21 @@ Reconciled October 9, 2026. This is the current continuation guide for the local
 
 Use Node.js 22.13 or newer. Install from the committed lockfile with `npm ci`.
 
-| Command                 | Purpose                                                                                      |
-| ----------------------- | -------------------------------------------------------------------------------------------- |
-| `npm run dev`           | Browser/SQLite server at `http://127.0.0.1:4317`                                             |
-| `node mcp/index.js`     | MCP stdio entry point; use an absolute executable/script path in a client                    |
-| `npm run dev:mobile`    | Separate mobile browser preview at `http://127.0.0.1:5173`                                   |
-| `npm run build:mobile`  | Vite production web bundle                                                                   |
-| `npm run test:e2e`      | Playwright suites for the mobile interface and the browser app (`--project mobile` or `web`) |
-| `npm run format:check`  | Prettier check enforced by CI; `npm run format` rewrites files                               |
-| `npm run lint`          | ESLint's recommended rules, enforced by CI (`eslint.config.js`)                              |
-| `npm run cap:sync`      | Build and regenerate copied assets/plugin configuration for both native projects             |
-| `npm run native:doctor` | Diagnose required native tooling                                                             |
-| `npm run build:ios`     | Unsigned simulator app; not a physical-device IPA                                            |
-| `npm run build:android` | Debug APK; not a signed store release                                                        |
+| Command                 | Purpose                                                                                            |
+| ----------------------- | -------------------------------------------------------------------------------------------------- |
+| `npm run dev`           | Browser/SQLite server at `http://127.0.0.1:4317`                                                   |
+| `node mcp/index.js`     | MCP stdio entry point; use an absolute executable/script path in a client                          |
+| `npm run dev:mobile`    | Separate mobile browser preview at `http://127.0.0.1:5173`                                         |
+| `npm run build:mobile`  | Vite production web bundle                                                                         |
+| `npm run build:client`  | Builds the redesigned app into `client/dist`, which the server shows at `/next/`                   |
+| `npm run dev:client`    | The redesigned app with live reload at `http://127.0.0.1:5174`, using the server on 4317           |
+| `npm run test:e2e`      | Playwright suites for both interfaces and the redesigned app (`--project mobile`, `web` or `next`) |
+| `npm run format:check`  | Prettier check enforced by CI; `npm run format` rewrites files                                     |
+| `npm run lint`          | ESLint's recommended rules, enforced by CI (`eslint.config.js`)                                    |
+| `npm run cap:sync`      | Build and regenerate copied assets/plugin configuration for both native projects                   |
+| `npm run native:doctor` | Diagnose required native tooling                                                                   |
+| `npm run build:ios`     | Unsigned simulator app; not a physical-device IPA                                                  |
+| `npm run build:android` | Debug APK; not a signed store release                                                              |
 
 Private cookbook data defaults to `.data/kooks.sqlite`. Tests use temporary or in-memory databases; use `KOOKS_DB_PATH` to isolate manual testing too. Do not seed tests from a personal cookbook. Generated assets and dependencies are excluded from Git and recreated by installation/build/sync.
 

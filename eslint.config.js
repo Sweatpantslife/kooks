@@ -9,7 +9,7 @@ export default [
     ignores: [
       "android/",
       "ios/",
-      "dist/",
+      "**/dist/",
       "build/",
       "coverage/",
       "test-results/",
@@ -35,6 +35,18 @@ export default [
     languageOptions: {
       globals: { ...globals.browser, __KOOKS_VERSION__: "readonly" },
     },
+  },
+  {
+    // The redesigned app: Preact components written in JSX, bundled by Vite.
+    files: ["client/**/*.{js,jsx}"],
+    languageOptions: {
+      globals: { ...globals.browser, __KOOKS_VERSION__: "readonly" },
+      parserOptions: { ecmaFeatures: { jsx: true } },
+    },
+  },
+  {
+    files: ["client/vite.config.js"],
+    languageOptions: { globals: globals.node },
   },
   {
     // Imported by both apps and the server.

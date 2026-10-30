@@ -9,5 +9,8 @@
 !web/**
 !ocr/
 !ocr/**
+!client/
+!client/**
+client/dist/
 !LICENSE
 !Dockerfile

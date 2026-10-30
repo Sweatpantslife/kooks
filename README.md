@@ -20,6 +20,17 @@ Open `http://127.0.0.1:4317` for the persistent browser app. It starts with an e
 
 Both interfaces share one navigation model (Today, Recipes, Plan, Shop and Cook, with Settings behind the gear), one set of design tokens with a system-following dark theme, and one component vocabulary. [Information architecture and experience design](docs/ia-ux.md) is the design authority for both.
 
+### The redesigned app
+
+A new app for browser and phone is being built in `client/` (Preact and Vite), one screen at a time; it replaces both interfaces when it is complete. Build it and the server shows it at `http://127.0.0.1:4317/next/`:
+
+```sh
+npm run build:client
+npm run dev
+```
+
+`npm run dev:client` serves it with live reload at `http://127.0.0.1:5174`, sending `/api` to the server on port 4317 (`KOOKS_API` points elsewhere). Sign-in emails link to the current app; once signed in there, `/next/` opens as the same member.
+
 For the separate mobile interface:
 
 ```sh
@@ -51,7 +62,7 @@ The browser server binds to loopback by default and asks nobody to sign in. Shar
 
 ## Code layout
 
-`mcp/` holds the SQLite store, domain rules and MCP tools (`mcp/library*.js` for techniques, inspiration and the book shelf); `web/` the browser server and client, with sign-in in `web/auth.js`, passkey verification in `web/webauthn.js` and mail in `web/mail.js`; `app/` the Capacitor mobile app; `shared/` what both apps use: the unit table, the ingredient tokenizer that both parsers build on, the link module that recognises video players, the recipe facet taxonomy (courses, diet labels, cuisine and tag matching) both apps filter with, the design tokens (`tokens.css`), the component stylesheet (`ui.css`) and the icon module (`icons.js`, generated from Lucide by `npm run icons`). `test/` holds the Node unit and integration tests plus the Playwright projects in `test/mobile-e2e`, `test/web-e2e` and `test/web-auth-e2e`.
+`mcp/` holds the SQLite store, domain rules and MCP tools (`mcp/library*.js` for techniques, inspiration and the book shelf); `web/` the browser server and client, with sign-in in `web/auth.js`, passkey verification in `web/webauthn.js` and mail in `web/mail.js`; `app/` the Capacitor mobile app; `shared/` what both apps use: the unit table, the ingredient tokenizer that both parsers build on, the link module that recognises video players, the recipe facet taxonomy (courses, diet labels, cuisine and tag matching) both apps filter with, the design tokens (`tokens.css`), the component stylesheet (`ui.css`) and the icon module (`icons.js`, generated from Lucide by `npm run icons`). `client/` is the redesigned app that will replace both (see [The redesigned app](#the-redesigned-app)). `test/` holds the Node unit and integration tests plus the Playwright projects in `test/mobile-e2e`, `test/web-e2e`, `test/web-auth-e2e` and `test/next-e2e`.
 
 ## Documentation
 
