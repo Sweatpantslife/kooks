@@ -4,6 +4,10 @@ What changed in Kooks and how each change was verified, newest first. Kooks has 
 
 ## Unreleased
 
+### CI on Node 22 and 24, cached browsers, coverage and Dependabot
+
+Pull requests run CI once and pushes run it for `main` only; a newer push cancels the older run of the same pull request. The token is read-only and checkout does not keep it. Every check runs on Node 22 and 24, Playwright's Chromium is cached by Playwright version, `npm run test:coverage` puts a per-directory table in the job summary, and Dependabot proposes weekly npm and Actions updates, with Capacitor's packages grouped. `npm run test:coverage` (91 tests: 90 passed, the OCR case skipped; 95.5% of lines) passes on Node 22.22 and 24.22, and `npm run lint`, `npm run format:check`, `npm run build:mobile` and `npm run test:e2e` (28 passed) pass on Node 22.
+
 ### Security policy, contributing guide, .env.example and changelog
 
 Added this changelog, [SECURITY.md](SECURITY.md), [CONTRIBUTING.md](CONTRIBUTING.md) and a commented [.env.example](.env.example) with every setting the servers read. The dated verification log moved here from the [developer handoff](docs/handoff.md). Documentation only: `npm run format:check` and `npm run lint` pass, and the server starts with the loopback and private-network settings the example describes.
@@ -11,6 +15,10 @@ Added this changelog, [SECURITY.md](SECURITY.md), [CONTRIBUTING.md](CONTRIBUTING
 ### ESLint ([#21](https://github.com/Sweatpantslife/kooks/pull/21))
 
 `npm run lint` runs ESLint 10's recommended rules and CI runs it after the Prettier check. Of the 18 problems the rules first reported, four were in the code: a lost passkey error cause, a dead assignment and two intentional patterns that now say so. `npm run lint`, `npm run format:check`, `npm test` (89 tests: 88 passed, the OCR case skipped), `npm run build:mobile` and `npm run test:e2e` (27 passed) pass on Linux.
+
+### Cooking steps read aloud and messages kept off the cooking footer ([#22](https://github.com/Sweatpantslife/kooks/pull/22))
+
+Both apps announce the new step after Next, Previous or a jump, the device app moves focus to Finish on the last step, and on phones the status message sits above the sticky cooking footer instead of covering Previous and Next. `npm run format:check`, `npm test` (88 passed, 1 skipped) and `npx playwright test` (28 passed) pass; the new footer check fails without the CSS change.
 
 ### HSTS, sandboxed video players and a stricter SMTP client ([#20](https://github.com/Sweatpantslife/kooks/pull/20))
 

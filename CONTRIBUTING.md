@@ -13,7 +13,7 @@ npx playwright install chromium   # once, for the browser tests
 
 ## Checks
 
-Run these before opening a pull request. CI runs the same ones on every pull request.
+Run these before opening a pull request. CI runs the same ones on Node 22 and 24 for every pull request, with the unit tests under `npm run test:coverage`, which also writes `coverage/lcov.info` and puts a per-directory coverage table in the job summary.
 
 ```sh
 npm run format:check   # Prettier; `npm run format` rewrites files

@@ -13,6 +13,7 @@
     "dev": "node web/server.js",
     "web": "node web/server.js",
     "test": "node --test test/*.test.js",
+    "test:coverage": "node -e \"fs.mkdirSync('coverage',{recursive:true})\" && node --test --experimental-test-coverage --test-coverage-exclude=\"test/**\" --test-reporter=spec --test-reporter-destination=stdout --test-reporter=lcov --test-reporter-destination=coverage/lcov.info test/*.test.js",
     "dev:mobile": "vite",
     "build:mobile": "vite build",
     "preview:mobile": "vite preview",
