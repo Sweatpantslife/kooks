@@ -1887,7 +1887,7 @@ function renderLogin() {
   $("#app").innerHTML =
     `<main class="login panel"><a class="brand" href="#/today">${icon("cooking-pot")}kooks</a>${
       sent
-        ? `<div><h1>Check your inbox.</h1><p class="small muted">We sent a sign-in link to <strong>${esc(signin.email)}</strong>. Open it on this device within 15 minutes; it works once.</p><p class="small muted">Nothing there? Look in spam, or ask whoever runs this kitchen to add your address.</p></div><div>${button("Use a different address", "signin-restart", "", "btn-quiet")}</div>`
+        ? `<div><h1>Check your inbox.</h1><p class="small muted">We sent a sign-in link to <strong>${esc(signin.email)}</strong>. Open it on this device within 15 minutes; it works once.</p><p class="small muted">Nothing there after a few minutes? Look in spam, or ask whoever runs this kitchen to check that your address is on the list and that its mail is going out.</p></div><div>${button("Use a different address", "signin-restart", "", "btn-quiet")}</div>`
         : `<div><h1>Welcome to your kitchen.</h1><p class="small muted">${passkeysSupported() ? "Sign in with the passkey on this device, or get a link by email." : "Get a sign-in link by email."}</p></div><div class="error" role="alert" data-login-error>${esc(signin.error)}</div>${passkeysSupported() ? `${button("Sign in with a passkey", "passkey-signin", "", "btn-primary btn-block", "key-round")}<div class="or">or</div>` : ""}<form data-form="email-link" class="stack">${field("Email address", "email", signin.email, "email", 'required autocomplete="username webauthn" placeholder="you@example.com"')}${errorSlot()}<div>${submit("Email me a sign-in link", "log-in")}</div></form>`
     }</main>`;
   document.title = "Sign in · Kooks";

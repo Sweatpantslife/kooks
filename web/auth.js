@@ -140,11 +140,11 @@ export function createAuth({
     sessionLifetime,
     isMember: (email) => allowed.has(normalizeEmail(email)),
     // Resolves to whether a link was sent; strangers get nothing, silently.
+    // The caller has already answered, the same way for every address, so a
+    // mail failure goes to the log rather than to whoever asked.
     async requestLink({ email, origin }) {
       prune();
       const address = normalizeEmail(email);
-      if (!isEmail(address))
-        throw new AuthError("INVALID_INPUT", "Enter a valid email address.");
       if (!allowed.has(address)) return false;
       const token = toBase64Url(randomBytes(32));
       q(
@@ -160,11 +160,7 @@ export function createAuth({
       } catch (error) {
         q("DELETE FROM auth_links WHERE token_hash = ?").run(hash(token));
         console.error(`Kooks could not email a sign-in link: ${error.message}`);
-        throw new AuthError(
-          "MAIL_FAILED",
-          "The sign-in email could not be sent. Try again in a moment, or ask whoever runs this kitchen to check its mail settings.",
-          502,
-        );
+        return false;
       }
       return true;
     },

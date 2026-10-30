@@ -291,9 +291,23 @@ export function createWebServer({
         throw new AuthError("INVALID_INPUT", "Enter a valid email address.");
       throttle(`link:${address}`, 10, 10 * MINUTE);
       throttle(`link:${email}`, 5, 15 * MINUTE);
-      throttle("link", 100, 60 * MINUTE);
-      await auth.requestLink({ email, origin });
-      return send(res, 200, { ok: true });
+      // Every address gets the same answer at once; only then does a
+      // member's link go out, so neither the reply nor its timing tells who
+      // belongs. Strangers cannot spend the hourly email budget either:
+      // spending it on them would lock members out of links.
+      send(res, 200, { ok: true });
+      if (!auth.isMember(email)) return;
+      if (limited("mail", 100, 60 * MINUTE))
+        return console.error(
+          "Kooks held back a sign-in email: 100 went out in the last hour.",
+        );
+      return void auth
+        .requestLink({ email, origin })
+        .catch((error) =>
+          console.error(
+            `Kooks could not prepare a sign-in link: ${error.message}`,
+          ),
+        );
     }
     if (route === "POST link/confirm") {
       throttle(`confirm:${address}`, 20, 10 * MINUTE);
