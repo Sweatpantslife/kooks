@@ -50,7 +50,7 @@ Hash routes, noun first. The address after `#` is the whole state of the page, s
 | `#/household/people/new` · `/<id>` · `#/household/prices/new` · `/<id>` | Person and price forms                                                    |
 | `#/household/members` · `#/household/history`                           | Members and invites; recent changes, who made them, with Undo             |
 | `#/ask`                                                                 | Ask Kooks, or how to turn it on                                           |
-| `#/waiting`                                                             | Changes made on this phone that wait for the kitchen                      |
+| `#/waiting` · `#/waiting/<id>`                                          | What waits for the kitchen; what to keep of an edit that met a change     |
 | `#/signin/<token>`                                                      | An emailed sign-in link                                                   |
 
 An unknown address shows a Not found page with a way to this week.
@@ -86,7 +86,7 @@ The previous browser app's addresses open the page that replaced them, so bookma
 - **Who you are at the table:** Household › People at the table → This is me on your person, or Add me. Recent changes then names you to the others, What can I make? lists you first under Who's eating with Just me, and a cooking job offers I'll do it. Who's eating starts with everyone and this device remembers the pick.
 - **Take back a change:** Household › Recent changes → Undo on the line. Someone else's change asks first ("Undo Sam's change?"); your own goes at once, as Undo on a message does. Names are people at the table, never email addresses: "A member" for someone who has not said which person they are, "An agent" for an MCP agent.
 - **Write up an idea:** the idea → Write it up as a recipe → the editor starts from it → Save → the idea points at the recipe.
-- **Out of reach:** the bar on every page says the kitchen can’t be reached and since when → tick, add groceries, eat leftovers and add notes as usual, each marked Waiting to send → the bar's count opens Waiting to send, where any change can be discarded → the kitchen answers and each goes, in order. One it will not take stays there with the reason.
+- **Out of reach:** the bar on every page says the kitchen can’t be reached and since when → tick, add groceries, eat leftovers and add notes as usual, each marked Waiting to send → the bar's count opens Waiting to send, where any change can be discarded → the kitchen answers and each goes, in order. One it will not take stays there with the reason. A recipe edit takes the parts nobody else changed; where someone changed the same part, the bar and the recipe say so → Choose what to keep shows both versions of each such part → the member picks and saves.
 - **Ask:** Ask Kooks → a starter or a question → while it reads, what it is doing → the answer, with a card per suggested change (plan a day, add groceries, shop for the week or a dish, save a draft) → Plan it, Add them, Choose what to buy or Save the draft, or No thanks. Nothing changes until a card is tapped, and the next question tells the assistant what became of its suggestions.
 
 ## Components

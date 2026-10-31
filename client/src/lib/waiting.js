@@ -1,11 +1,14 @@
 import { canonicalQuantity, round } from "../../../shared/quantities.js";
 import { plural } from "./format.js";
+import { mergeParts, partsPhrase } from "./merge.js";
 
 // The kinds of change a device keeps while the kitchen is out of reach, and
 // what each does when the kitchen answers. Each is kept only where meeting
 // changes made meanwhile cannot overwrite anyone: a tick sets one grocery's
 // state, a grocery or a note is added beside what is there, and eating a
-// leftover takes portions that are still free or is refused.
+// leftover takes portions that are still free or is refused, and a recipe
+// edit sends only the parts nobody else changed meanwhile, leaving the member
+// to choose for each part both changed.
 //
 // For each kind:
 // - next(entry, read) is the call to make now, against the kitchen as this
@@ -18,6 +21,10 @@ import { plural } from "./format.js";
 //   row or record it adds or changes marked `waiting` with the entry's id.
 // - describe(entry, read) names it for the list of what waits, with the page
 //   it shows on.
+// - key(entry), for a change to a record that later changes to the same
+//   record must wait behind, and fold(entry, input), how a later change made
+//   before the first left is folded into it.
+// A problem is a sentence, or { message, ...what the member decides from }.
 
 const waitingId = (entry) => `waiting-${entry.id}`;
 
@@ -269,9 +276,77 @@ export const kinds = {
   },
 };
 
+// An edit of a recipe: { id, base: { version, data }, recipe }, where base
+// is the recipe as the edit started from it. When the recipe is still at
+// that version, the edit goes as it is. When someone changed it meanwhile,
+// the parts only one side changed are merged; a part both changed waits for
+// the member to choose (`pages/compare.jsx`), and nothing is overwritten.
+kinds.edit = {
+  key: (entry) => `recipe:${entry.input.id}`,
+  // A second edit made while the first waits replaces it, against the
+  // version the first started from; an edit the kitchen did not take is
+  // replaced by one made from the kitchen's own version.
+  fold(entry, input) {
+    if (entry.problem) {
+      const { problem: _, ...rest } = entry;
+      return { ...rest, input };
+    }
+    return { ...entry, input: { ...entry.input, recipe: input.recipe } };
+  },
+  next(entry, read) {
+    const { id, base, recipe } = entry.input;
+    const now = read("recipe", id);
+    if (!now)
+      return {
+        problem: {
+          message: `${recipe.title} is no longer in the cookbook.`,
+          gone: true,
+        },
+      };
+    if (now.version === base.version)
+      return {
+        tool: "recipe_save",
+        input: { id, expected_version: base.version, recipe },
+      };
+    const { merged, clashes } = mergeParts(base.data, recipe, now.data);
+    if (clashes.length)
+      return {
+        problem: {
+          message: `Someone changed ${partsPhrase(clashes)} while your edit waited.`,
+          parts: clashes,
+        },
+      };
+    return {
+      tool: "recipe_save",
+      input: { id, expected_version: now.version, recipe: merged },
+    };
+  },
+  after: () => null,
+  preview(view, entry) {
+    const { id, recipe } = entry.input;
+    return withRecord(view, "recipe", id, (r) => ({
+      ...r,
+      data: recipe,
+      waiting: entry.id,
+    }));
+  },
+  describe(entry) {
+    const { id, recipe } = entry.input;
+    return {
+      text: `Your edit of ${recipe.title}`,
+      href: `#/recipes/${encodeURIComponent(id)}`,
+    };
+  },
+};
+
 // How many changes an entry holds: a list's ticks count one by one.
 export const sizeOf = (entry) =>
   entry.kind === "ticks" ? Object.keys(entry.input.ticks).length : 1;
+
+// An edit that met a change made meanwhile, or whose recipe is gone: the
+// member chooses what becomes of it, side by side.
+export const needsChoice = (entry) =>
+  Boolean(entry.problem?.parts || entry.problem?.gone);
 
 // The records as they will be once what waits has gone in. Changes the
 // kitchen would not take are left out until the member decides.

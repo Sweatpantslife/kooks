@@ -92,11 +92,24 @@ const find = (id) => waiting.value.find((entry) => entry.id === id) ?? null;
 export const belongs = (entry, household) =>
   (entry.household ?? household) === household;
 
+// A change kept to be sent. One to a record that already has a change
+// waiting, which has not left yet, is folded into that change instead.
 export function keepChange(kind, input, { household = null, id = uid() } = {}) {
+  const { key, fold } = kinds[kind];
+  if (key) {
+    const mine = key({ input });
+    const earlier = waiting.value.findLast(
+      (e) => e.kind === kind && key(e) === mine && belongs(e, household),
+    );
+    if (earlier && !earlier.sent) return put(earlier.id, (e) => fold(e, input));
+  }
   const entry = { id, kind, input, made_at: Date.now(), household };
   save([...waiting.value, entry]);
   return entry;
 }
+
+// Change a waiting change by what `change` makes of it.
+export const reviseEntry = (id, change) => put(id, change);
 
 export function updateInput(id, change) {
   return put(id, (entry) => ({ ...entry, input: change(entry.input) }));
@@ -160,6 +173,25 @@ const unanswered = (error) =>
   error.status === 408 ||
   error.status === 429;
 
+// Set a change aside until the member decides: `problem` is the kitchen's
+// error, a sentence, or { message, ... } with what the member decides from.
+function refuse(id, problem, error) {
+  const kept =
+    problem instanceof Error
+      ? { message: problem.message }
+      : typeof problem === "string"
+        ? { message: problem }
+        : problem;
+  put(id, (e) => ({ ...e, problem: kept }));
+  outcomes.set(id, {
+    problem:
+      problem === error
+        ? error
+        : Object.assign(new Error(kept.message), { kept }),
+  });
+  return "kept";
+}
+
 // One change, sent until it is done, the kitchen says no, or the kitchen
 // stops answering. `deps` is how this reaches the kitchen:
 // - call(tool, input) makes a call, throwing an error with the kitchen's
@@ -212,12 +244,7 @@ async function sendOne(id, deps) {
             sent.input.expected_version !== undefined &&
             next.input.expected_version !== sent.input.expected_version;
           if (moved) continue;
-          const message = next.problem ?? error.message;
-          put(id, (e) => ({ ...e, problem: { message } }));
-          outcomes.set(id, {
-            problem: next.problem ? new Error(message) : error,
-          });
-          return "kept";
+          return refuse(id, next.problem ?? error, error);
         }
       }
       // In, perhaps long ago with only its answer lost. The kitchen is heard
@@ -240,11 +267,7 @@ async function sendOne(id, deps) {
       outcomes.set(id, { done: null });
       return "done";
     }
-    if (next.problem) {
-      put(id, (e) => ({ ...e, problem: { message: next.problem } }));
-      outcomes.set(id, { problem: new Error(next.problem) });
-      return "kept";
-    }
+    if (next.problem) return refuse(id, next.problem);
     const calls = entry.calls ?? 0;
     // Written down before it leaves, so a call that never hears back is
     // made again exactly as it was.
@@ -260,13 +283,24 @@ async function sendOne(id, deps) {
   return "later";
 }
 
+// The first change that can go now: one that waits for the member, and any
+// later change to the same record, stay where they are.
+function nextUp(household, tried) {
+  const held = new Set();
+  for (const entry of waiting.value) {
+    if (!belongs(entry, household)) continue;
+    const key = kinds[entry.kind].key?.(entry);
+    if (key && held.has(key)) continue;
+    if (key) held.add(key);
+    if (!entry.problem && !tried.has(entry.id)) return entry;
+  }
+  return null;
+}
+
 async function sendAll(deps) {
   const tried = new Set();
   for (;;) {
-    const household = deps.household();
-    const entry = waiting.value.find(
-      (e) => !e.problem && !tried.has(e.id) && belongs(e, household),
-    );
+    const entry = nextUp(deps.household(), tried);
     if (!entry) return;
     tried.add(entry.id);
     if ((await sendOne(entry.id, deps)) === "away") return;

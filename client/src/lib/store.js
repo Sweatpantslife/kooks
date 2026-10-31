@@ -55,6 +55,9 @@ export const waitingHere = computed(() =>
 export const view = computed(() => withWaiting(db.value, waitingHere.value));
 
 export const records = (kind) => view.value[kind] ?? [];
+// A record as the kitchen last said it is, without what waits here.
+export const kitchenRecord = (kind, id) =>
+  db.value[kind]?.find((r) => r.id === id);
 export const record = (kind, id) => records(kind).find((r) => r.id === id);
 export const counts = computed(() =>
   Object.fromEntries(
@@ -222,7 +225,7 @@ export async function change(name, input, { done, undo = true } = {}) {
 // made, whenever it answers: each answer to a poll sends what waits.
 const kitchenLink = {
   call: (name, input) => api.tool(name, input, { timeout: 20000 }),
-  read: (kind, id) => db.value[kind]?.find((r) => r.id === id),
+  read: kitchenRecord,
   refresh: () => refresh({ fresh: true }),
   household,
   ended: () => signedOut(),
@@ -237,8 +240,10 @@ effect(() => {
 // (`waiting.js`; grocery ticks, kept in a browser too, go by `hold`). It goes
 // at once when the kitchen answers and nothing else waits; otherwise it
 // waits on the device, after what was kept before it, and shows as made.
-// Returns the kitchen's answer, or { kept: true } while the change waits.
-// A change the kitchen refuses at once is not kept: the refusal is thrown.
+// Returns the kitchen's answer, { kept: true } while the change waits, or
+// { choose: id } when an edit met a change made meanwhile to the same part.
+// Any other change the kitchen refuses at once is not kept: the refusal is
+// thrown.
 // A browser keeps nothing else: without the kitchen, the change fails as
 // any other does.
 export async function keep(kind, input) {
@@ -248,6 +253,10 @@ export async function keep(kind, input) {
   await sendNow();
   const outcome = outcomes.get(entry.id);
   outcomes.delete(entry.id);
+  // An edit that met someone else's change to the same part waits for the
+  // member to choose between them, rather than failing.
+  const kept = outcome?.problem?.kept;
+  if (kept?.parts || kept?.gone) return { choose: entry.id };
   if (outcome?.problem) {
     discard(entry.id);
     throw outcome.problem;

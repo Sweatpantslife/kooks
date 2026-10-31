@@ -152,6 +152,27 @@ async function signIn(page, request, email) {
   await expect(title(page)).toHaveText("This week");
 }
 
+// The tests that need no sign-in of their own share one, so the suite stays
+// within the kitchen's limit on emailed links: the phone is signed in again
+// with the kitchen and device it was given.
+let device = null;
+async function signedIn(page, request) {
+  if (!device) {
+    await signIn(page, request, "taster@example.test");
+    device = await page.evaluate(() => ({
+      kitchen: localStorage.getItem("kooks.kitchen"),
+      token: localStorage.getItem("kooks.device"),
+    }));
+    return;
+  }
+  await page.addInitScript(({ kitchen: there, token }) => {
+    localStorage.setItem("kooks.kitchen", there);
+    localStorage.setItem("kooks.device", token);
+  }, device);
+  await page.goto(`${kitchen}/`);
+  await expect(title(page)).toHaveText("This week");
+}
+
 const copies = (page) =>
   page.evaluate(
     () =>
@@ -244,7 +265,7 @@ test("out of the kitchen's reach, a phone keeps groceries added, leftovers eaten
   page,
   request,
 }) => {
-  await signIn(page, request, "taster@example.test");
+  await signedIn(page, request);
   const token = await stored(page, "kooks.device");
   const stamp = Date.now();
   const soup = `Lentil soup ${stamp}`;
@@ -364,7 +385,7 @@ test("a change whose answer is lost on the way is made once, and one the kitchen
   page,
   request,
 }) => {
-  await signIn(page, request, "baker@example.test");
+  await signedIn(page, request);
   const token = await stored(page, "kooks.device");
   const stamp = Date.now();
   const stew = `Bean stew ${stamp}`;
@@ -472,4 +493,129 @@ test("a change whose answer is lost on the way is made once, and one the kitchen
   );
   expect(list.remaining_portions).toBe(0);
   expect(await stored(page, "kooks.outbox")).toBeNull();
+});
+
+test("a recipe edited out of the kitchen's reach keeps changes made meanwhile to other parts, and asks which to keep where both changed one", async ({
+  page,
+  request,
+}) => {
+  await signedIn(page, request);
+  const token = await stored(page, "kooks.device");
+  const stamp = Date.now();
+  const soup = `Pea soup ${stamp}`;
+  let { record: recipe } = await call(request, token, "recipe_save", {
+    recipe: {
+      title: soup,
+      servings: 4,
+      ingredients: [{ name: "peas", quantity: 500, unit: "g" }],
+      steps: [{ text: "Simmer the peas." }],
+    },
+  });
+  await page.evaluate(
+    (id) => (location.hash = `#/recipes/${encodeURIComponent(id)}`),
+    recipe.id,
+  );
+  await expect(title(page)).toHaveText(soup);
+  await expect.poll(() => copies(page)).toBe(1);
+
+  // Out of reach, the phone renames the recipe; meanwhile another cook adds
+  // a step.
+  const away = (route) => route.abort("internetdisconnected");
+  await page.route(`${kitchen}/api/**`, away);
+  const bar = page.getByRole("status").filter({ hasText: "Can’t reach" });
+  await page.getByRole("link", { name: "Edit" }).click();
+  await expect(title(page)).toHaveText("Edit recipe");
+  await expect(bar).toBeVisible();
+  const lemon = `Lemon pea soup ${stamp}`;
+  await page.getByLabel("Name").fill(lemon);
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(title(page)).toHaveText(lemon);
+  await expect(page.locator(".notice")).toContainText(
+    "Your changes are on this phone. They go to the kitchen when it answers.",
+  );
+  await expect(bar).toContainText(
+    "1 change made here will go when it answers.",
+  );
+  ({ record: recipe } = await call(request, token, "recipe_save", {
+    id: recipe.id,
+    expected_version: recipe.version,
+    recipe: {
+      ...recipe.data,
+      steps: [{ text: "Simmer the peas." }, { text: "Blend with mint." }],
+    },
+  }));
+  await page.unroute(`${kitchen}/api/**`, away);
+  // Both changes are kept: the title from the phone, the step from the
+  // kitchen, and nothing else counts as changed.
+  await expect.poll(() => stored(page, "kooks.outbox")).toBeNull();
+  await expect(page.getByText("Blend with mint.")).toBeVisible();
+  let now = (await kitchenNow(request, token)).recipe.find(
+    (r) => r.id === recipe.id,
+  );
+  expect(now.data.title).toBe(lemon);
+  expect(now.data.steps.map((step) => step.text)).toEqual([
+    "Simmer the peas.",
+    "Blend with mint.",
+  ]);
+  expect(now.data.ingredients).toHaveLength(1);
+
+  // Out of reach again, the phone changes the servings and adds a note;
+  // another cook changes the servings too.
+  await page.route(`${kitchen}/api/**`, away);
+  await page.getByRole("link", { name: "Edit" }).click();
+  await expect(bar).toBeVisible();
+  await page.getByLabel("Serves").fill("6");
+  await page.getByText("Notes and links").click();
+  await page.getByLabel("Notes").fill("Mint at the end.");
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(title(page)).toHaveText(lemon);
+  await call(request, token, "recipe_save", {
+    id: now.id,
+    expected_version: now.version,
+    recipe: { ...now.data, servings: 8 },
+  });
+  await page.unroute(`${kitchen}/api/**`, away);
+  // Nothing is sent, and the kitchen's servings stand until the member
+  // chooses.
+  const choose = page
+    .getByRole("status")
+    .filter({ hasText: "An edit made here met a change in the kitchen." });
+  await expect(choose).toBeVisible();
+  await expect(page.locator(".notice")).toContainText(
+    "Your edit met a change made in the kitchen.",
+  );
+  now = (await kitchenNow(request, token)).recipe.find(
+    (r) => r.id === recipe.id,
+  );
+  expect(now.data.servings).toBe(8);
+  expect(now.data.notes ?? "").toBe("");
+
+  await choose.getByRole("link", { name: "Choose what to keep" }).click();
+  await expect(title(page)).toHaveText("Choose what to keep");
+  await expect(page.locator(".compare-kept")).toContainText(
+    "Your changes to notes are kept.",
+  );
+  const servings = page.getByRole("group", { name: "Servings" });
+  await expect(
+    servings.getByRole("radio", { name: "Yours" }),
+  ).toHaveAccessibleDescription("6");
+  await expect(
+    servings.getByRole("radio", { name: "In the kitchen now" }),
+  ).toHaveAccessibleDescription("8");
+  expect(await scan(page, "Choose what to keep")).toEqual([]);
+  await page.getByRole("button", { name: "Save with these choices" }).click();
+  await expect(page.getByRole("alert")).toHaveText(
+    "Choose yours or the kitchen’s for each part.",
+  );
+  await servings.getByRole("radio", { name: "Yours" }).check();
+  await page.getByRole("button", { name: "Save with these choices" }).click();
+  await expect(title(page)).toHaveText(lemon);
+  await expect.poll(() => stored(page, "kooks.outbox")).toBeNull();
+  await expect(choose).toHaveCount(0);
+  now = (await kitchenNow(request, token)).recipe.find(
+    (r) => r.id === recipe.id,
+  );
+  expect(now.data.servings).toBe(6);
+  expect(now.data.notes).toBe("Mint at the end.");
+  expect(now.data.steps).toHaveLength(2);
 });
