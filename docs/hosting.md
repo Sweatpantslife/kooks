@@ -39,6 +39,20 @@ What leaves the house: the member's question and the conversation so far, and wh
 
 Each member asks one question at a time, 30 an hour, and the kitchen 300 a day. A question carries at most 60,000 characters of the conversation before it (the app leaves the oldest turns out), takes at most eight model calls, reads at most 120,000 characters of the kitchen, and gives up after three minutes.
 
+### Trying the assistant before the household does
+
+`scripts/assistant-trial.mjs` puts 22 questions a household asks to the real API, over a made-up kitchen in a throwaway database: what's for dinner, planning a dish on a given day, groceries for a recipe, an allergy, leftovers, the budget, a follow-up, a question in French, a dish the cookbook doesn't have, and a note that tries to give the assistant orders. Each question has checks on what came back: that a proposal points at the right recipe, date and slot, that nothing was proposed when nothing should be, that an answer names what it should. The report gives each question's answer, proposals, model, tokens and cost, and what a question like these costs against the kitchen's daily allowance. Nothing is read from or written to a real kitchen.
+
+Give it a key of its own, with a spending limit set in the Claude Console, and run it from a checkout or from the container's terminal:
+
+```sh
+KOOKS_EVAL_ANTHROPIC_API_KEY=… node scripts/assistant-trial.mjs --out /data/assistant-trial
+```
+
+It also takes `KOOKS_ANTHROPIC_API_KEY`, so in Coolify's terminal it runs on the kitchen's own key without setting anything; the trial's tokens don't count against the kitchen's allowance, only against the key. `--max-usd` (5 by default) stops it before the next model call once that much is spent, so it ends at most one call (about $0.40 at the most) past the cap; the Console's limit is the hard one. From the size of its requests, all 22 should cost $2 to $4 at the list prices in the script, mostly the assistant's output and thinking; the report has the real figure, and a run that reaches the cap lists the questions it skipped. `--only tonight,allergy` asks some questions only, `--model` tries another model, and `--dry-run` plays the expected answers from a script, with no key and no cost, to check the trial itself. It exits with 1 when any question fails a check.
+
+The checks look for the right records and dates, not for good taste: read the answers too. A failed check names what was missing, and the answer beside it usually says why.
+
 ## Signing in
 
 Someone with an account opens the site and either presses **Sign in with a passkey** or types their email address and opens the link that arrives. A link works once, for 15 minutes, on the device where it is opened; nothing happens for addresses without an account (unless `KOOKS_OPEN_SIGNUP` is on), and the page says the same thing either way. After a link sign-in, Kooks offers to add a passkey to that device; from then on the device signs in with a fingerprint, face or screen lock, and browsers that support it suggest the passkey right in the email field. Members review, add and remove their passkeys, see their signed-in devices and sign out on the **Sign-in** page. Passkeys need HTTPS (or localhost), so plain-HTTP LAN sharing offers email links only.
