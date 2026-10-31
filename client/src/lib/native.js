@@ -2,6 +2,7 @@ import { effect } from "@preact/signals";
 import { SystemBars, SystemBarsStyle } from "@capacitor/core";
 import { native } from "./device.js";
 import { records } from "./store.js";
+import { theme } from "./theme.js";
 
 // What only the phone app does: the back button, waking up, timers that
 // ring with the phone locked, a light tap, and handing files and text to
@@ -74,11 +75,23 @@ export async function allowTimerAlerts() {
     await LocalNotifications.requestPermissions();
 }
 
+// The status and navigation bars' style for the app's look: the phone's own
+// unless a look is chosen in Household › Look and units. A dark style means
+// light text, for a dark page.
+export function barStyleFor(look) {
+  if (look === "dark") return SystemBarsStyle.Dark;
+  if (look === "light") return SystemBarsStyle.Light;
+  return SystemBarsStyle.Default;
+}
+
 export async function startNative({ back, resume }) {
   if (!plugins) return;
   const [{ App }, { LocalNotifications }] = await plugins;
-  // The bars follow the phone's light or dark look, as the app does.
-  void SystemBars.setStyle({ style: SystemBarsStyle.Default }).catch(() => {});
+  // The bars follow the app's look, so their text stays readable.
+  effect(() => {
+    const style = barStyleFor(theme.value);
+    void SystemBars.setStyle({ style }).catch(() => {});
+  });
   await App.addListener("backButton", () => {
     if (!back()) void App.minimizeApp();
   });
