@@ -17,6 +17,13 @@
 //                                           put a copy back at the next start
 //   node scripts/backup.mjs unstage         forget a staged copy
 //
+// With off-site copies set up (KOOKS_BACKUP_S3_URL and its key), a copy
+// taken here goes to the bucket too, and for a recovery:
+//
+//   node scripts/backup.mjs send [copy]     send a copy (the newest without one)
+//   node scripts/backup.mjs remote          the copies in the bucket, newest first
+//   node scripts/backup.mjs fetch <copy>    bring one here, checked, to stage it
+//
 // KOOKS_DB_PATH selects the database, and KOOKS_BACKUP_DIR the copies'
 // folder, as for the server.
 import { createWriteStream } from "node:fs";
@@ -36,17 +43,26 @@ import {
   listCopies,
   pruneCopies,
   recordFailure,
+  sendCopy,
   sizeLabel,
   stageCopy,
   staged,
   takeCopy,
   unstage,
 } from "../web/backups.js";
+import {
+  OffsiteError,
+  fetchCopy,
+  offsiteLabel,
+  remoteCopies,
+  remoteManifest,
+} from "../web/offsite.js";
 
 // Backups hold the household's recipes and files: owner-only, like the database.
 process.umask(0o077);
 const usage = `Usage: node scripts/backup.mjs export [file] | restore <file>
-       node scripts/backup.mjs snapshot | list | check [copy] | stage <copy> [--household <id>] | unstage`;
+       node scripts/backup.mjs snapshot | list | check [copy] | stage <copy> [--household <id>] | unstage
+       node scripts/backup.mjs send [copy] | remote | fetch <copy>`;
 const [mode, ...rest] = process.argv.slice(2);
 const household = rest.includes("--household")
   ? (rest[rest.indexOf("--household") + 1] ?? "")
@@ -62,10 +78,13 @@ const modes = [
   "check",
   "stage",
   "unstage",
+  "send",
+  "remote",
+  "fetch",
 ];
 if (
   !modes.includes(mode) ||
-  (["restore", "stage"].includes(mode) && !file) ||
+  (["restore", "stage", "fetch"].includes(mode) && !file) ||
   (rest.includes("--household") && !/^[a-f0-9]{16}$/.test(household))
 ) {
   console.error(usage);
@@ -114,6 +133,20 @@ async function copies() {
     dbPath,
   );
   const { dir } = settings;
+  const remote = () => {
+    if (!settings.offsite)
+      throw new OffsiteError(
+        "Off-site copies are not set up: KOOKS_BACKUP_S3_URL, KOOKS_BACKUP_S3_ACCESS_KEY_ID and KOOKS_BACKUP_S3_SECRET_ACCESS_KEY name the bucket and its key.",
+      );
+    return settings.offsite;
+  };
+  const send = async (copy) => {
+    const at = Date.now();
+    const bytes = await sendCopy({ ...settings, offsite: remote() }, copy);
+    console.log(
+      `Sent copy ${copy.name}, ${sizeLabel(bytes)}, to ${offsiteLabel(settings.offsite)} in ${((Date.now() - at) / 1000).toFixed(1)} s.`,
+    );
+  };
   if (mode === "snapshot") {
     try {
       const copy = await takeCopy({ dbPath, dir });
@@ -122,10 +155,39 @@ async function copies() {
       console.log(
         `Took copy ${copy.name}: ${copy.files.length} database${copy.files.length === 1 ? "" : "s"}, ${sizeLabel(bytes)}, in ${dir}.${gone.length ? ` Let ${gone.join(", ")} go.` : ""}`,
       );
+      if (settings.offsite) await send(findCopy(dir, copy.name));
     } catch (error) {
-      recordFailure(dir, error);
+      if (!(error instanceof OffsiteError)) recordFailure(dir, error);
       throw error;
     }
+  } else if (mode === "send") {
+    await send(findCopy(dir, file));
+  } else if (mode === "remote") {
+    const names = await remoteCopies(remote());
+    if (!names.length)
+      console.log(`There are no copies in ${offsiteLabel(remote())} yet.`);
+    // What each holds, so a copy of an empty kitchen started after a loss
+    // is not mistaken for the one to bring back.
+    for (const name of names) {
+      const { manifest } = await remoteManifest(remote(), name).catch(
+        (error) => ({ error }),
+      );
+      if (!manifest) {
+        console.log(`${name}  not whole: it has no manifest`);
+        continue;
+      }
+      const main = manifest.files.find((f) => f.restores_to === "kooks.sqlite");
+      const records = manifest.files.reduce((sum, f) => sum + f.records, 0);
+      console.log(
+        `${name}  ${local(manifest.taken_at)}  ${sizeLabel(manifest.files.reduce((sum, f) => sum + f.bytes, 0))}  ${manifest.files.length} database${manifest.files.length === 1 ? "" : "s"}, ${records} record${records === 1 ? "" : "s"}${main ? `, ${main.accounts} account${main.accounts === 1 ? "" : "s"}` : ""}`,
+      );
+    }
+  } else if (mode === "fetch") {
+    await fetchCopy(remote(), file, dir);
+    const report = await checkCopy(findCopy(dir, file));
+    console.log(
+      `Fetched copy ${file} into ${dir} and checked it: ${report.files.map((f) => `${f.restores_to} ok`).join(", ")}. To put it back: node scripts/backup.mjs stage ${file}`,
+    );
   } else if (mode === "list") {
     const list = listCopies(dir);
     if (!list.length) console.log(`There are no copies in ${dir} yet.`);
@@ -168,7 +230,8 @@ try {
   const known =
     error instanceof KooksError ||
     error instanceof ZodError ||
-    error instanceof BackupError;
+    error instanceof BackupError ||
+    error instanceof OffsiteError;
   const doing = {
     export: "export the backup",
     restore: "restore the backup",
@@ -177,6 +240,9 @@ try {
     check: "check the copy",
     stage: "stage the copy",
     unstage: "unstage the copy",
+    send: "send the copy off-site",
+    remote: "list the off-site copies",
+    fetch: "fetch the copy",
   }[mode];
   console.error(
     `Kooks could not ${doing}: ${

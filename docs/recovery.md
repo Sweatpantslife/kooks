@@ -13,7 +13,7 @@ Do these once, and again after changing the deployment:
 1. Check that the server's log, shortly after a deploy, says `Automatic backups are on`, and that **Household › Backup** shows a recent copy.
 2. Point an uptime monitor at `https://<your domain>/healthz/backups`, or set `KOOKS_BACKUP_PING_URL` to a monitor such as healthchecks.io. Either tells you when copies stop.
 3. Keep the deployment's settings somewhere off the server, such as a password manager: `KOOKS_PUBLIC_ORIGIN`, `KOOKS_OWNER_EMAIL` and the SMTP settings. Coolify holds them, so losing the server loses them.
-4. Download a backup from **Household › Backup** now and then and keep it on another computer. The automatic copies live on the same volume as the kitchen, so until copies also go somewhere else, that download is what survives losing the server.
+4. Make sure something survives losing the server: [off-site copies](hosting.md#off-site-copies), or a backup downloaded from **Household › Backup** now and then and kept on another computer. The automatic copies live on the same volume as the kitchen.
 5. Make sure Coolify's **Terminal Access** is on for the server (**Servers › your server › Security**), so you can reach its shell from the browser when you need to.
 
 ## A bad deploy
@@ -58,11 +58,17 @@ What's lost: changes made after the copy was taken. A whole restore also brings 
 
 ## A lost volume
 
-**You notice** The kitchen opens empty and only the owner can sign in: the volume at `/data` was deleted, or the server or its disk is gone. The automatic copies were on that volume too.
+**You notice** The kitchen opens empty and only the owner can sign in: the volume at `/data` was deleted, or the server or its disk is gone. The copies on that volume went with it; off-site copies did not.
 
 1. Tell the household not to add anything for now: a restore replaces whatever the empty kitchen holds by then.
-2. Find the newest copy that lives elsewhere: an automatic copy's folder that was copied off the server, or the backup downloaded from **Household › Backup** (`kooks-<day>.json`).
-3. Put it on the new volume. Coolify's terminal doesn't take uploads, so copy the file to the server first (with `scp`, say), then in the server's shell (Coolify's **Terminal**, picking the server, or SSH; add `sudo` if your user isn't in the `docker` group):
+2. If [off-site copies](hosting.md#off-site-copies) are set up, bring the newest back from the bucket, in the application's terminal:
+   ```sh
+   node scripts/backup.mjs remote
+   node scripts/backup.mjs fetch 2026-11-01T03-00-00Z
+   node scripts/backup.mjs stage 2026-11-01T03-00-00Z
+   ```
+   `remote` lists each copy in the bucket with when it was taken and how many records and accounts it holds. Copies taken since the loss are of the empty kitchen, and the server sends them too, so pick the newest copy from before. Then restart the application, and everyone's devices are signed in again as they were. Listing and fetching need a key that may read and list the bucket. If the server's key can only write, put a reading key in front of those two commands for this once: `KOOKS_BACKUP_S3_ACCESS_KEY_ID=… KOOKS_BACKUP_S3_SECRET_ACCESS_KEY=… node scripts/backup.mjs remote`. The provider's console also shows the copies' names.
+3. Otherwise, find the newest copy that lives elsewhere: an automatic copy's folder that was copied off the server, or the backup downloaded from **Household › Backup** (`kooks-<day>.json`), and put it on the new volume. Coolify's terminal doesn't take uploads, so copy the file to the server first (with `scp`, say), then in the server's shell (Coolify's **Terminal**, picking the server, or SSH; add `sudo` if your user isn't in the `docker` group):
    ```sh
    docker ps --format '{{.Names}}'     # the Kooks container's name
    docker exec <container> mkdir -p /data/backups
@@ -70,14 +76,13 @@ What's lost: changes made after the copy was taken. A whole restore also brings 
    docker cp kooks-2026-11-01.json <container>:/data/
    docker exec -u root <container> chown -R node:node /data/backups /data/kooks-2026-11-01.json
    ```
-   Make the folder first: copied to a `/data/backups/` that doesn't exist yet, the copy's files land in it loose and Kooks finds no copy. The `chown` matters too: `docker cp` leaves the files to root, and Kooks can't read them until they are its own.
-4. Restore it:
+   Make the folder first: copied to a `/data/backups/` that doesn't exist yet, the copy's files land in it loose and Kooks finds no copy. The `chown` matters too: `docker cp` leaves the files to root, and Kooks can't read them until they are its own. Then restore it:
    - **An automatic copy's folder** brings back every household and the accounts. In the application's terminal:
      ```sh
      node scripts/backup.mjs check 2026-11-01T03-00-00Z
      node scripts/backup.mjs stage 2026-11-01T03-00-00Z
      ```
-     then restart the application. Everyone's devices are signed in again as they were.
+     then restart the application.
    - **A downloaded backup** holds the first household's cookbook, not the accounts or the other households. It goes into the empty kitchen while Kooks runs; then invite everyone again from **Household › Members**:
      ```sh
      node scripts/backup.mjs restore /data/kooks-2026-11-01.json
