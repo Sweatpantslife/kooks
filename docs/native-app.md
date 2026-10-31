@@ -55,6 +55,13 @@ Android installs a newer version over an older one only when both are signed wit
 sh scripts/android-release-key.sh            # or: sh scripts/android-release-key.sh ~/somewhere-safe
 ```
 
+Without a copy of the repository, download the script on its own and run it:
+
+```sh
+curl -fsSLO https://raw.githubusercontent.com/Sweatpantslife/kooks/main/scripts/android-release-key.sh
+sh android-release-key.sh
+```
+
 It needs `openssl` (macOS and Linux have it; on Windows use Git Bash) and refuses to run where a key already exists. It makes a 4096-bit RSA key valid for 30 years in a PKCS #12 file with the alias `kooks`, in a folder only its owner can read (`~/kooks-android-release` by default), with the password, the key as base64 text, the public certificate and a `README.txt` beside it. It prints the certificate's SHA-256 fingerprint, which every release page also shows. With the GitHub CLI signed in, it offers to store the two secrets itself; otherwise it says what to paste where:
 
 | Actions secret                    | Value                                 |

@@ -20,9 +20,11 @@
 set -eu
 
 dir=${1:-"$HOME/kooks-android-release"}
+# The repository this script came from, or Kooks' own when it was
+# downloaded on its own; KOOKS_REPO=owner/name names another.
 repo=${KOOKS_REPO:-}
 if [ -z "$repo" ]; then
-  url=$(git remote get-url origin 2>/dev/null || true)
+  url=$(git -C "$(dirname "$0")" remote get-url origin 2>/dev/null || true)
   repo=$(printf '%s\n' "$url" |
     sed -n 's#^.*github\.com[:/]\([^/]*/[^/]*\)$#\1#p' | sed 's#\.git$##')
   repo=${repo:-Sweatpantslife/kooks}
