@@ -13,12 +13,12 @@ Adopted October 30, 2026, when the redesigned app replaced the previous browser 
 
 ## Navigation
 
-| Destination   | Icon                            | Holds                                                                                                    |
-| ------------- | ------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| **Week**      | calendar-days                   | This week's days with their plans, leftovers set aside and the week's cost; other weeks                  |
-| **Recipes**   | book-open                       | The cookbook: recipes, meals, ideas to try, techniques and books, with search and filters                |
-| **Groceries** | shopping-basket                 | To buy (by aisle, with the basket), shopping for the week, At home (pantry and leftovers)                |
-| **Household** | house, or the member's initials | Members and invites, people at the table, prices and budget, look and units, sign-in and devices, backup |
+| Destination   | Icon                            | Holds                                                                                                                                          |
+| ------------- | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Week**      | calendar-days                   | This week's days with their plans, leftovers set aside and the week's cost; other weeks                                                        |
+| **Recipes**   | book-open                       | The cookbook: recipes, meals, ideas to try, techniques and books, with search and filters                                                      |
+| **Groceries** | shopping-basket                 | To buy (by aisle, with the basket), shopping for the week, At home (pantry and leftovers)                                                      |
+| **Household** | house, or the member's initials | Members and invites, people at the table and which one you are, recent changes, prices and budget, look and units, sign-in and devices, backup |
 
 - At 840 px and wider a rail on the inline-start side carries the brand, the three tabs and Household at its foot. Below 840 px a top bar carries the brand and Household, and the three tabs sit at the bottom. Never both.
 - The current tab and the Household link carry `aria-current="page"`.
@@ -48,6 +48,7 @@ Hash routes, noun first. The address after `#` is the whole state of the page, s
 | `#/cook/<session>` · `/done`                                            | Cooking, and finishing it                                                 |
 | `#/household` · `/people` · `/prices` · `/look` · `/signin` · `/backup` | Household and its pages                                                   |
 | `#/household/people/new` · `/<id>` · `#/household/prices/new` · `/<id>` | Person and price forms                                                    |
+| `#/household/members` · `#/household/history`                           | Members and invites; recent changes, who made them, with Undo             |
 | `#/ask`                                                                 | Ask Kooks, or how to turn it on                                           |
 | `#/signin/<token>`                                                      | An emailed sign-in link                                                   |
 
@@ -72,7 +73,7 @@ The previous browser app's addresses open the page that replaced them, so bookma
 | At home               | What is in, what to use soon, leftovers                                                                                                   | Add                     |
 | Cooking               | One step at a time in large type, the dish's ingredients, every step, timers, and jobs anyone can pick up                                 | Next                    |
 | Finishing             | How it went per dish: rating, next time, notes, portions left over                                                                        | Done                    |
-| Household pages       | People and tastes; prices, budget and currency; colors and units; passkeys; backup                                                        | Add a person or a price |
+| Household pages       | People and tastes, and which one you are; recent changes; prices, budget and currency; colors and units; passkeys; backup                 | Add a person or a price |
 | Ask Kooks             | A conversation about the kitchen, kept in this tab until Start over. Answers are plain text, with suggested changes as cards below them   | Ask                     |
 
 ## Key flows
@@ -81,6 +82,8 @@ The previous browser app's addresses open the page that replaced them, so bookma
 - **Plan the week:** Week → Add on a day → pick a recipe or meal. Or a recipe → Add to the week → pick a day.
 - **Shop:** Groceries → Shop for the week → untick what you have → the list by aisle → tick into the basket → Put it all away, which fills At home.
 - **Cook:** a recipe, meal or today's plan → Cook → steps and timers → Finish → leftovers go to At home and the note shows as "Last time" and under "Cooked before" on the recipe. Cooking without the app? A recipe → Add a note.
+- **Who you are at the table:** Household › People at the table → This is me on your person, or Add me. Recent changes then names you to the others, What can I make? lists you first under Who's eating with Just me, and a cooking job offers I'll do it. Who's eating starts with everyone and this device remembers the pick.
+- **Take back a change:** Household › Recent changes → Undo on the line. Someone else's change asks first ("Undo Sam's change?"); your own goes at once, as Undo on a message does. Names are people at the table, never email addresses: "A member" for someone who has not said which person they are, "An agent" for an MCP agent.
 - **Write up an idea:** the idea → Write it up as a recipe → the editor starts from it → Save → the idea points at the recipe.
 - **Ask:** Ask Kooks → a starter or a question → while it reads, what it is doing → the answer, with a card per suggested change (plan a day, add groceries, shop for the week or a dish, save a draft) → Plan it, Add them, Choose what to buy or Save the draft, or No thanks. Nothing changes until a card is tapped, and the next question tells the assistant what became of its suggestions.
 

@@ -341,3 +341,177 @@ test("a member invites someone new, who joins by the emailed link, and someone t
   await expect(title(them)).toHaveText("Newcomer’s flat");
   await theirs.close();
 });
+
+test("members say who they are at the table, see who changed what, and are asked before undoing someone else's change", async ({
+  page,
+  browser,
+}) => {
+  const tag = Date.now().toString(36);
+  const cook = `Cook ${tag}`;
+  const baker = `Baker ${tag}`;
+  await page.goto(signedIn);
+  await signInByLink(page, "cook@example.test");
+
+  // The member adds themselves to the table.
+  await page.goto(`${signedIn}#/household/people`);
+  await expect(title(page)).toHaveText("People at the table");
+  await expect(
+    page.getByRole("heading", { name: "Which one is you?" }),
+  ).toBeVisible();
+  await expectAccessible(page, "People at the table, who is you");
+  await page.getByLabel("Your name").fill(cook);
+  await page.getByRole("button", { name: "Add me" }).click();
+  await expect(page.getByRole("status")).toContainText(
+    `You’re at the table as ${cook}.`,
+  );
+  await expect(
+    page.getByRole("heading", { name: `You’re ${cook}` }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("listitem").filter({ hasText: cook }).getByText("You"),
+  ).toBeVisible();
+  await expectAccessible(page, "People at the table, linked");
+
+  // Another member sees that person is taken, and picks their own.
+  const theirs = await browser.newContext();
+  const them = await theirs.newPage();
+  them.on("pageerror", (error) => {
+    throw error;
+  });
+  await them.goto(signedIn);
+  await signInByLink(them, "baker@example.test");
+  await them.goto(`${signedIn}#/household/people`);
+  const cookCard = them.getByRole("listitem").filter({ hasText: cook });
+  await expect(cookCard.getByText("A member")).toBeVisible();
+  await expect(
+    them.getByRole("button", { name: `This is me: ${cook}` }),
+  ).toHaveCount(0);
+  await them.getByLabel("Your name").fill(baker);
+  await them.getByRole("button", { name: "Add me" }).click();
+  await expect(
+    them.getByRole("heading", { name: `You’re ${baker}` }),
+  ).toBeVisible();
+  const made = await them.request.post(`${signedIn}api/tools/recipe_save`, {
+    headers: { Origin: signedIn.slice(0, -1) },
+    data: {
+      request_id: `baker-${tag}`,
+      recipe: { title: `Rye ${tag}` },
+    },
+  });
+  expect(made.ok(), await made.text()).toBe(true);
+  await theirs.close();
+
+  // History names who did what, by their name at the table.
+  await page.goto(`${signedIn}#/household`);
+  await page.getByRole("link", { name: /^Recent changes/ }).click();
+  await expect(title(page)).toHaveText("Recent changes");
+  const bakersLine = page
+    .getByRole("listitem")
+    .filter({ hasText: `${baker} added Rye ${tag}` });
+  await expect(bakersLine).toBeVisible();
+  await expect(
+    page
+      .getByRole("listitem")
+      .filter({ hasText: `You added ${cook} to the table` }),
+  ).toBeVisible();
+  await expect(page.getByText("@example.test")).toHaveCount(0);
+  await expectAccessible(page, "Household › Recent changes");
+
+  // Undoing someone else's change asks first, by their name.
+  let asked = "";
+  page.once("dialog", (dialog) => {
+    asked = dialog.message();
+    return dialog.accept();
+  });
+  await bakersLine.getByRole("button", { name: /^Undo/ }).click();
+  await expect(page.getByRole("status")).toContainText("Undone.");
+  expect(asked).toBe(`Undo ${baker}’s change?`);
+  await expect(
+    page
+      .getByRole("listitem")
+      .filter({ hasText: `You undid a change to Rye ${tag}` }),
+  ).toBeVisible();
+
+  // Members shows who each member is at the table, and the owner can take
+  // a claim back.
+  await page.goto(`${signedIn}#/household/members`);
+  await expect(
+    page.getByText(`At the table as ${baker}`, { exact: false }),
+  ).toBeVisible();
+  await expectAccessible(page, "Household › Members, linked");
+  await page
+    .getByRole("button", { name: `Unlink baker@example.test from ${baker}` })
+    .click();
+  await expect(page.getByRole("status")).toContainText(
+    `baker@example.test is no longer ${baker} at the table.`,
+  );
+  await expect(
+    page.getByText(`At the table as ${baker}`, { exact: false }),
+  ).toHaveCount(0);
+
+  // What can I make? asks who's eating: everyone to start, you first, and
+  // this browser remembers "Just me".
+  const soup = await page.request.post(`${signedIn}api/tools/recipe_save`, {
+    headers: { Origin: signedIn.slice(0, -1) },
+    data: {
+      request_id: `cook-${tag}`,
+      recipe: { title: `Soup ${tag}`, steps: [{ text: "Simmer." }] },
+    },
+  });
+  expect(soup.ok(), await soup.text()).toBe(true);
+  await page.goto(`${signedIn}#/recipes`);
+  await page.getByRole("button", { name: "What can I make?" }).click();
+  const eating = page.getByRole("group", { name: "Who’s eating" });
+  await expect(eating.getByRole("button").nth(1)).toHaveText(`${cook} (you)`);
+  await expect(eating.getByRole("button", { name: baker })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await eating.getByRole("button", { name: "Just me" }).click();
+  await expect(eating.getByRole("button", { name: baker })).toHaveAttribute(
+    "aria-pressed",
+    "false",
+  );
+  await expectAccessible(page, "What can I make?, who's eating");
+  await page.reload();
+  await page.getByRole("button", { name: "What can I make?" }).click();
+  await expect(
+    page
+      .getByRole("group", { name: "Who’s eating" })
+      .getByRole("button", { name: "Just me" }),
+  ).toHaveAttribute("aria-pressed", "true");
+
+  // A cooking job is one tap to take on.
+  await page.goto(
+    `${signedIn}#/recipes/${encodeURIComponent((await soup.json()).record.id)}`,
+  );
+  await page.getByRole("button", { name: "Cook" }).click();
+  await expect(title(page)).toHaveText("Step 1 of 1");
+  const jobs = page.getByRole("region", { name: "Jobs" });
+  await jobs.getByRole("textbox", { name: "A job" }).fill("Set the table");
+  await jobs.getByRole("textbox", { name: "A job" }).press("Enter");
+  await jobs.getByRole("button", { name: "I’ll do it: Set the table" }).click();
+  await expect(
+    jobs
+      .getByRole("combobox", { name: "Who: Set the table" })
+      .locator("option:checked"),
+  ).toHaveText(`${cook} (you)`);
+  await expect(
+    jobs.getByRole("button", { name: "I’ll do it: Set the table" }),
+  ).toHaveCount(0);
+  await expectAccessible(page, "Cooking, a job taken");
+  await page.getByRole("link", { name: "Finish" }).click();
+  await page.getByRole("button", { name: "Done cooking" }).click();
+  await expect(page.getByRole("status")).toContainText(`Soup ${tag} is done.`);
+
+  // Saying "That's not me" leaves the person at the table.
+  await page.goto(`${signedIn}#/household/people`);
+  await page.getByRole("button", { name: "That’s not me" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Which one is you?" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: `This is me: ${cook}` }),
+  ).toBeVisible();
+  await expectAccessible(page, "People at the table, choosing");
+});
