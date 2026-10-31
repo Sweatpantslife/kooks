@@ -1,16 +1,24 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import { Check, Pencil, Trash2, UserPlus, Users } from "lucide";
-import { change, record, records } from "../lib/store.js";
+import { Check, Pencil, Trash2, UserCheck, UserPlus, Users } from "lucide";
+import { auth } from "../lib/api.js";
+import { account, change, record, records } from "../lib/store.js";
 import { guardLeaving, leave } from "../lib/router.js";
-import { SPICE, byName, listOf } from "../lib/people.js";
+import { SPICE, beAtTable, byName, listOf, me } from "../lib/people.js";
+import { toast } from "../lib/toast.js";
 import { Empty, PageHeader } from "../ui/page.jsx";
 import { Field, FormError, hint, useWork } from "../ui/form.jsx";
 import { Icon } from "../ui/icon.jsx";
 import { passFocus } from "../ui/focus.js";
 import { toHousehold } from "./household.jsx";
 
-function Person({ person, work }) {
+function Person({ person, work, mine, taken, choosing }) {
   const d = person.data;
+  const isMe = mine?.id === person.id;
+  const pick = () =>
+    void work.run(async () => {
+      await beAtTable(person.id);
+      toast(`You’re ${d.name} at the table.`);
+    });
   const remove = (event) => {
     passFocus(event.currentTarget, "#add-person");
     void work.run(() =>
@@ -33,6 +41,8 @@ function Person({ person, work }) {
       </span>
       <div class="person-text">
         <h2>{d.name}</h2>
+        {isMe && <span class="badge badge-herb">You</span>}
+        {!isMe && taken && <span class="badge badge-sky">A member</span>}
         <dl class="tastes-list">
           {d.likes.length > 0 && (
             <div>
@@ -56,6 +66,18 @@ function Person({ person, work }) {
         {d.notes && <p class="muted small preline">{d.notes}</p>}
       </div>
       <div class="row person-actions" data-rows>
+        {choosing && !taken && (
+          <button
+            type="button"
+            class="btn btn-quiet"
+            aria-label={`This is me: ${d.name}`}
+            disabled={work.busy}
+            onClick={pick}
+          >
+            <Icon icon={UserCheck} />
+            This is me
+          </button>
+        )}
         <a
           class="btn btn-quiet"
           href={`#/household/people/${encodeURIComponent(person.id)}`}
@@ -80,9 +102,105 @@ function Person({ person, work }) {
   );
 }
 
+// Which person at the table the signed-in member is: who they are now, or
+// a way to add themselves; the cards below offer "This is me".
+function YouAtTheTable({ mine, work }) {
+  const [name, setName] = useState("");
+  if (mine)
+    return (
+      <section class="card" aria-labelledby="you">
+        <h2 id="you">You’re {mine.data.name}</h2>
+        <p class="muted">
+          The household sees your name on what you change, and What can I make?
+          and cooking jobs offer you first.
+        </p>
+        <div class="row">
+          <button
+            type="button"
+            class="btn btn-quiet"
+            disabled={work.busy}
+            onClick={() =>
+              void work.run(async () => {
+                await beAtTable(null);
+                toast(`You’re no longer ${mine.data.name} at the table.`);
+              })
+            }
+          >
+            That’s not me
+          </button>
+        </div>
+      </section>
+    );
+  const add = (event) => {
+    event.preventDefault();
+    const named = name.trim();
+    if (!named) return;
+    void work.run(async () => {
+      const { record: person } = await change("member_save", {
+        member: {
+          name: named,
+          likes: [],
+          dislikes: [],
+          spice_tolerance: null,
+          notes: "",
+        },
+      });
+      await beAtTable(person.id);
+      setName("");
+      toast(`You’re at the table as ${named}.`);
+    });
+  };
+  return (
+    <section class="card" aria-labelledby="you">
+      <h2 id="you">Which one is you?</h2>
+      <p class="muted">
+        Say which person you are, so the household sees your name on what you
+        change. Pick yourself below with This is me, or add yourself.
+      </p>
+      <form class="quick-add" onSubmit={add}>
+        <label for="me-name" class="sr-only">
+          Your name
+        </label>
+        <input
+          id="me-name"
+          class="input"
+          required
+          maxLength={500}
+          autoComplete="given-name"
+          placeholder="Your name"
+          value={name}
+          onInput={(event) => setName(event.currentTarget.value)}
+        />
+        <button type="submit" class="btn btn-primary" disabled={work.busy}>
+          <Icon icon={UserPlus} />
+          Add me
+        </button>
+      </form>
+    </section>
+  );
+}
+
 export function People() {
   const people = records("member").slice().sort(byName);
   const work = useWork();
+  const signedIn = Boolean(account.value?.household);
+  const mine = me();
+  // The people other members say they are, which nobody else can be.
+  const [taken, setTaken] = useState(new Set());
+  useEffect(() => {
+    if (!signedIn) return;
+    auth("household/members")
+      .then(({ members }) =>
+        setTaken(
+          new Set(
+            members
+              .filter((m) => m.person && m.email !== account.value?.email)
+              .map((m) => m.person),
+          ),
+        ),
+      )
+      .catch(() => {});
+  }, [signedIn, account.value?.household?.person, people.length]);
   return (
     <div class="stack-lg">
       {toHousehold}
@@ -101,10 +219,18 @@ export function People() {
         when it holds something one of them doesn’t like. These are tastes, not
         allergy records.
       </p>
+      {signedIn && <YouAtTheTable mine={mine} work={work} />}
       {people.length ? (
         <ul class="people" role="list" data-rows>
           {people.map((p) => (
-            <Person key={p.id} person={p} work={work} />
+            <Person
+              key={p.id}
+              person={p}
+              work={work}
+              mine={mine}
+              taken={taken.has(p.id)}
+              choosing={signedIn && !mine}
+            />
           ))}
         </ul>
       ) : (

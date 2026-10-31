@@ -5,6 +5,7 @@ import { normalize } from "../../../shared/quantities.js";
 import { tool } from "../lib/api.js";
 import { records, db } from "../lib/store.js";
 import { plural } from "../lib/format.js";
+import { me, meFirst } from "../lib/people.js";
 import {
   KINDS,
   hrefOf,
@@ -25,6 +26,31 @@ const quick = signal(false);
 const canMake = signal(false);
 // recipe_suggest's answer for "What can I make?": recipe id → what's missing.
 const suggestions = signal(null);
+// Who's eating, whose tastes break ties in "What can I make?": null for
+// everyone at the table, or the people picked. This device remembers it.
+const EATING = "kooks.eating";
+function remembered() {
+  try {
+    const ids = JSON.parse(localStorage.getItem(EATING) ?? "null");
+    return Array.isArray(ids) ? ids : null;
+  } catch {
+    return null;
+  }
+}
+const eating = signal(remembered());
+function eat(ids) {
+  eating.value = ids;
+  try {
+    if (ids) localStorage.setItem(EATING, JSON.stringify(ids));
+    else localStorage.removeItem(EATING);
+  } catch {
+    // Not remembered on this device; the pick still holds for now.
+  }
+}
+const eaters = () =>
+  records("member").filter(
+    (m) => eating.value === null || eating.value.includes(m.id),
+  );
 
 // Open the tab on one kind, as after saving an idea to try.
 export function showKind(k) {
@@ -39,8 +65,8 @@ async function suggest() {
   try {
     const { results, skipped } = await tool("recipe_suggest", {
       use_pantry: true,
-      // The people at the table: what they like breaks a tie.
-      member_ids: records("member").map((m) => m.id),
+      // Who's eating: what they like breaks a tie.
+      member_ids: eaters().map((m) => m.id),
       avoid_dislikes: false,
       limit: 100,
     });
@@ -68,11 +94,51 @@ function Chip({ pressed, onClick, children }) {
   );
 }
 
+// Everyone at the table to start with; the signed-in member first, with
+// "Just me" when there is anyone else.
+function WhosEating() {
+  const people = meFirst(records("member"));
+  const mine = me();
+  const picked = new Set(eaters().map((m) => m.id));
+  const toggle = (id) => {
+    const next = new Set(picked);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    eat(next.size === people.length ? null : [...next]);
+  };
+  return (
+    <div class="stack-sm">
+      <span id="eating" class="muted small">
+        Who’s eating
+      </span>
+      <div class="chips" role="group" aria-labelledby="eating">
+        {mine && people.length > 1 && (
+          <Chip
+            pressed={picked.size === 1 && picked.has(mine.id)}
+            onClick={() => eat([mine.id])}
+          >
+            Just me
+          </Chip>
+        )}
+        {people.map((p) => (
+          <Chip
+            key={p.id}
+            pressed={picked.has(p.id)}
+            onClick={() => toggle(p.id)}
+          >
+            {p.id === mine?.id ? `${p.data.name} (you)` : p.data.name}
+          </Chip>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function Recipes() {
   // A new answer whenever the kitchen changes while the ranking is shown.
   useEffect(() => {
     if (canMake.value) void suggest();
-  }, [canMake.value, db.value]);
+  }, [canMake.value, db.value, eating.value]);
 
   const counts = Object.fromEntries(
     KINDS.map(({ kind: k }) => [k, records(k).length]),
@@ -203,6 +269,7 @@ export function Recipes() {
           </Chip>
         </div>
       </div>
+      {canMake.value && records("member").length > 0 && <WhosEating />}
       <p class="results-note muted" role="status">
         {canMake.value && !ranking
           ? "Checking what’s at home…"

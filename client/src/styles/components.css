@@ -1731,12 +1731,13 @@ a.plan-title:hover {
 }
 .job {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
 }
 .job-text {
   display: flex;
-  flex: 1;
+  flex: 1 1 10em;
   align-items: center;
   gap: 10px;
   min-height: var(--target);

@@ -4,6 +4,7 @@ import {
   ArrowLeftRight,
   DoorOpen,
   Download,
+  History,
   House,
   KeyRound,
   Laptop,
@@ -23,6 +24,7 @@ import * as passkeys from "../lib/passkeys.js";
 import {
   account,
   enterHousehold,
+  record,
   records,
   refresh,
   sharing,
@@ -465,9 +467,29 @@ export function Members() {
                   <p class="muted small">
                     {m.role === "owner" ? "Owner" : "Member"}
                     {m.email === account.value.email && " · You"}
+                    {m.person &&
+                      record("member", m.person) &&
+                      ` · At the table as ${record("member", m.person).data.name}`}
                     {` · Joined ${dateLabel(localDay(m.joined_at))}`}
                   </p>
                 </div>
+                {owner &&
+                  m.email !== account.value.email &&
+                  m.person &&
+                  record("member", m.person) && (
+                    <button
+                      type="button"
+                      class="btn btn-quiet"
+                      disabled={busy}
+                      aria-label={`Unlink ${m.email} from ${record("member", m.person).data.name}`}
+                      onClick={run(
+                        () => auth("household/person", { member: m.email }),
+                        `${m.email} is no longer ${record("member", m.person).data.name} at the table.`,
+                      )}
+                    >
+                      Unlink
+                    </button>
+                  )}
                 {owner && m.email !== account.value.email && (
                   <button
                     type="button"
@@ -708,6 +730,13 @@ export function Household() {
       text: people.length
         ? names(people)
         : "Who you cook for, and what they like.",
+    },
+    {
+      href: "#/household/history",
+      icon: History,
+      tone: "plum",
+      title: "Recent changes",
+      text: "Who changed what, with Undo.",
     },
     {
       href: "#/household/prices",

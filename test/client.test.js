@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { applyChanges } from "../client/src/lib/store.js";
+import { describe, undoQuestion } from "../client/src/lib/history.js";
 import {
   monday,
   addDays,
@@ -205,4 +206,52 @@ test("a recipe says who at the table likes what's in it, and who doesn't", async
     ],
   );
   db.value = {};
+});
+
+test("history says who changed what by name, and asks before undoing someone else's change", () => {
+  const sam = { type: "member", person: "p", name: "Sam", you: false };
+  const line = (action, actor, changes) => describe({ action, actor, changes });
+  assert.equal(
+    line("recipe_save", sam, [
+      { kind: "recipe", before_version: 1, title: "Dal" },
+    ]),
+    "Sam edited Dal",
+  );
+  assert.equal(
+    line("member_save", { type: "member", you: true }, [
+      { kind: "member", before_version: null, title: "Ada" },
+    ]),
+    "You added Ada to the table",
+  );
+  assert.equal(
+    line("record_archive", { type: "agent", you: false }, [
+      { kind: "recipe", before_version: 2, archived: true, title: "Dal" },
+    ]),
+    "An agent removed Dal",
+  );
+  assert.equal(
+    line("recipe_import_commit", { type: "member", name: null }, [
+      { kind: "import", before_version: 1, title: "Draft" },
+      { kind: "recipe", before_version: null, title: "Pie" },
+    ]),
+    "A member added Pie from a draft",
+  );
+  // A change from before Kooks kept who made it starts with what it did.
+  assert.equal(
+    line("shopping_check", null, [{ kind: "shopping", title: "List" }]),
+    "Ticked groceries",
+  );
+  assert.equal(
+    line("cooking_timer", sam, [{ kind: "session" }]),
+    "Sam changed a timer",
+  );
+  assert.equal(undoQuestion(sam), "Undo Sam’s change?");
+  assert.equal(undoQuestion({ type: "member", you: true }), null);
+  assert.equal(undoQuestion({ type: "local", you: true }), null);
+  assert.equal(
+    undoQuestion({ type: "member", name: null }),
+    "Undo this member’s change?",
+  );
+  assert.equal(undoQuestion({ type: "agent" }), "Undo the agent’s change?");
+  assert.equal(undoQuestion(null), "Undo this change?");
 });

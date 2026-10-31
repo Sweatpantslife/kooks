@@ -24,6 +24,7 @@ import {
   Members,
 } from "./pages/household.jsx";
 import { People, PersonForm } from "./pages/people.jsx";
+import { RecentChanges } from "./pages/history.jsx";
 import { PriceForm, Prices } from "./pages/prices.jsx";
 import { AtHome, Groceries, PutAway, ShopFor } from "./pages/groceries.jsx";
 import { AddToDay, ChooseDay, Week } from "./pages/week.jsx";
@@ -70,6 +71,7 @@ const LIBRARY = {
 const HOUSEHOLD = {
   members: ["Members", Members],
   people: ["People at the table", People],
+  history: ["Recent changes", RecentChanges],
   prices: ["Prices and budget", Prices],
   look: ["Look and units", Look],
   signin: ["Sign-in", Account],

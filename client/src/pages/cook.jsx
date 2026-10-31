@@ -14,7 +14,7 @@ import { leave, navigate } from "../lib/router.js";
 import { toast } from "../lib/toast.js";
 import { localDay } from "../lib/format.js";
 import { measure, memories } from "../lib/kitchen.js";
-import { byName } from "../lib/people.js";
+import { me, meFirst } from "../lib/people.js";
 import {
   clock,
   edit,
@@ -189,7 +189,8 @@ function changeJob(session, jobId, patch) {
 // table or rinsing the rice, each with who is on it.
 function Jobs({ session }) {
   const jobs = session.data.tasks ?? [];
-  const people = records("member").sort(byName);
+  const people = meFirst(records("member"));
+  const mine = me();
   const [text, setText] = useState("");
   const [said, setSaid] = useState("");
   const dishOf = (job) =>
@@ -245,6 +246,18 @@ function Jobs({ session }) {
                     {dish && <span class="muted small"> · {dish}</span>}
                   </span>
                 </label>
+                {mine && !job.member_id && !job.completed && (
+                  <button
+                    type="button"
+                    class="btn btn-quiet"
+                    aria-label={`I’ll do it: ${job.text}`}
+                    onClick={() =>
+                      changeJob(session, job.id, { member_id: mine.id })
+                    }
+                  >
+                    I’ll do it
+                  </button>
+                )}
                 {people.length > 0 && (
                   <select
                     class="input job-who"
@@ -259,7 +272,9 @@ function Jobs({ session }) {
                     <option value="">Anyone</option>
                     {people.map((p) => (
                       <option key={p.id} value={p.id}>
-                        {p.data.name}
+                        {p.id === mine?.id
+                          ? `${p.data.name} (you)`
+                          : p.data.name}
                       </option>
                     ))}
                   </select>

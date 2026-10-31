@@ -98,6 +98,7 @@ test("every page fits a small phone, a phone, a tablet and a wide screen without
     "household",
     "household/people",
     "household/people/new",
+    "household/history",
     "household/prices",
     "household/prices/new",
     "household/look",
