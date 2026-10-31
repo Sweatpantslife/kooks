@@ -13,6 +13,7 @@ import {
   waiting,
 } from "../client/src/lib/outbox.js";
 import { kinds, sizeOf } from "../client/src/lib/waiting.js";
+import { CAP, overCap } from "../client/src/lib/photos.js";
 import { recipe } from "../mcp/schemas.js";
 
 test("the phone takes the kitchen's address as typed, as an https origin", () => {
@@ -264,4 +265,19 @@ test("ticks made out of the kitchen's reach keep only the latest for each grocer
   assert.deepEqual(ticks(), { "list-2": { c: true } });
   forgetWaiting();
   assert.deepEqual(waiting.value, []);
+});
+
+test("photos kept on the phone stay under the cap, the ones opened longest ago going first", () => {
+  const MB = 1024 * 1024;
+  const kept = [
+    { key: "a", size: 20 * MB, used: 3 },
+    { key: "b", size: 20 * MB, used: 1 },
+    { key: "c", size: 5 * MB, used: 2 },
+  ];
+  assert.equal(CAP, 50 * MB);
+  assert.deepEqual(overCap(kept), []);
+  const more = [...kept, { key: "d", size: 10 * MB, used: 4 }];
+  assert.deepEqual(overCap(more), ["b"]);
+  assert.deepEqual(overCap(more, 12 * MB), ["b", "c", "a"]);
+  assert.deepEqual(overCap([]), []);
 });

@@ -1,4 +1,5 @@
 import { kitchen, phone } from "./device.js";
+import { dropPhotos } from "./photos.js";
 
 // A phone can be out of the kitchen's reach: in a shop's basement, on a
 // train. It keeps a copy of the kitchen as it last saw it, in its own
@@ -6,7 +7,8 @@ import { kitchen, phone } from "./device.js";
 // keeps none: its page comes from the kitchen, so without the kitchen there
 // is no page to show a copy on.
 //
-// The copy lives in IndexedDB, one per kitchen address, and goes at sign-out.
+// The copy lives in IndexedDB, one per kitchen address, and goes at sign-out,
+// with the photos kept beside it (`photos.js`).
 
 const NAME = "kooks";
 const COPIES = "copies";
@@ -61,6 +63,7 @@ export function keepCopy(copy) {
 export async function dropCopies() {
   clearTimeout(timer);
   if (!phone) return;
+  await dropPhotos();
   try {
     await run("readwrite", (s) => s.clear());
   } catch {
