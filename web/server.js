@@ -616,8 +616,18 @@ export function createWebServer({
     if (route === "GET household/members")
       return send(res, 200, auth.members(session));
     // Which person at the table this member is: one already there, or none.
+    // An owner may also unlink another member, naming them.
     if (route === "POST household/person") {
-      const { person = null } = await input();
+      const { person = null, member = null } = await input();
+      if (member !== null) {
+        if (person !== null)
+          throw new AuthError(
+            "INVALID_INPUT",
+            "Only a member says which person they are; an owner can only unlink them.",
+          );
+        auth.unlinkMember(session, member);
+        return send(res, 200, { ok: true });
+      }
       if (person !== null) {
         const id = recordId.parse(person);
         const { store: cookbook } = kitchenOf(session.household);
