@@ -4,6 +4,10 @@ What changed in Kooks and how each change was verified, newest first. Kooks has 
 
 ## Unreleased
 
+### Native Android and iOS builds in CI
+
+A new workflow compiles the phone app's native projects whenever `client/`, `shared/`, the native projects or their build inputs change: the Android debug APK on Ubuntu (JDK 21, SDK Platform 36), kept as an artifact for seven days, and the unsigned iOS simulator app on macOS 26 with Xcode 26.6. The Android job also fails when `cap sync` changes a tracked file under `android/` or `ios/`. On its first run both builds succeeded (a 4 MB APK; `BUILD SUCCEEDED` for iOS) and the sync left no change. Neither app was signed, launched or run on a device.
+
 ### Docs describe sign-in as links and passkeys
 
 `docs/handoff.md` and `docs/native-app.md` still said the phone app signs in with an emailed six-digit code, and so did a comment in `web/server.js`; since the accounts change it waits for an emailed link confirmed on any device. The handoff's item 3 now lists what household identity still lacks (linking accounts to people at the table, and who made each change) instead of the invitations, households and devices list that are done, and the open decisions in `docs/decisions.md` drop the ones the accounts change settled. `npm run format:check` and `npm run lint` pass; nothing else changed.
