@@ -15,7 +15,18 @@ import {
   stepsText,
 } from "../../../shared/ingredients.js";
 import { formatLinkLines, parseLinkLines } from "../../../shared/links.js";
-import { change, record, records, refresh } from "../lib/store.js";
+import {
+  change,
+  keep,
+  record,
+  records,
+  refresh,
+  undoAction,
+  waitingHere,
+} from "../lib/store.js";
+import { phone } from "../lib/device.js";
+import { needsChoice } from "../lib/waiting.js";
+import { toast } from "../lib/toast.js";
 import { guardLeaving, leave } from "../lib/router.js";
 import { amount } from "../lib/kitchen.js";
 import { plural } from "../lib/format.js";
@@ -322,6 +333,31 @@ export function Editor({ mode, id }) {
     const recipe = recipeOf();
     const title = recipe.title;
     let result;
+    // On a phone an edit can wait for the kitchen, and meets changes made
+    // meanwhile part by part.
+    if (mode === "edit" && phone) {
+      result = await keep("edit", {
+        id,
+        base: { version: start.version, data: start.data },
+        recipe,
+      });
+      dirty.current = false;
+      if (result.choose) {
+        toast("Someone changed this recipe meanwhile. Choose what to keep.");
+        leave(`waiting/${encodeURIComponent(result.choose)}`);
+        return;
+      }
+      toast(
+        result.kept
+          ? "Your changes are on this phone. They go to the kitchen when it answers."
+          : "Changes saved.",
+        {
+          undo: result.action_id ? () => undoAction(result.action_id) : null,
+        },
+      );
+      leave(`recipes/${encodeURIComponent(id)}`);
+      return;
+    }
     if (mode === "edit")
       result = await change(
         "recipe_save",
@@ -415,6 +451,15 @@ export function Editor({ mode, id }) {
     leave(exit);
   };
 
+  // An earlier edit of this recipe that met a change in the kitchen: saving
+  // here starts again from the kitchen's version and replaces it.
+  const clashing =
+    mode === "edit" &&
+    phone &&
+    waitingHere.value.find(
+      (e) => e.kind === "edit" && e.input.id === id && needsChoice(e),
+    );
+
   return (
     <div class="stack-lg">
       <a class="back" href={`#/${exit}`} onClick={cancel}>
@@ -429,6 +474,18 @@ export function Editor({ mode, id }) {
         eyebrow={mode === "edit" ? start.data.title : undefined}
         title={words.title}
       />
+      {clashing && (
+        <p class="notice" role="status">
+          <span>
+            Your earlier edit met a change made in the kitchen.{" "}
+            <a href={`#/waiting/${encodeURIComponent(clashing.id)}`}>
+              Choose what to keep
+            </a>{" "}
+            first, or save here to replace it with an edit of the kitchen’s
+            version.
+          </span>
+        </p>
+      )}
       {mode === "draft" && (
         <p class="lede">
           Check the name, amounts and method against your original before you

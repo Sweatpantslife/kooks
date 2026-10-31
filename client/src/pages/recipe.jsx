@@ -15,7 +15,8 @@ import {
   UtensilsCrossed,
 } from "lucide";
 import { courseLabel, dietLabel } from "../../../shared/taxonomy.js";
-import { record, records } from "../lib/store.js";
+import { record, records, waitingHere } from "../lib/store.js";
+import { needsChoice } from "../lib/waiting.js";
 import { pastDayLabel, plural } from "../lib/format.js";
 import { nameKey } from "../lib/aisles.js";
 import { tastes } from "../lib/people.js";
@@ -359,6 +360,43 @@ function More({ r }) {
   return <MoreList id="more" title="More about this recipe" items={items} />;
 }
 
+// An edit of this recipe made on this phone that the kitchen has not taken
+// yet: waiting to send, or waiting for the member to choose.
+function EditWaiting({ r }) {
+  const entry = waitingHere.value.find(
+    (e) => e.kind === "edit" && e.input.id === r.id,
+  );
+  if (!entry) return null;
+  if (entry.problem && !needsChoice(entry))
+    return (
+      <p class="notice" role="status">
+        <span>
+          The kitchen didn’t take your edit: {entry.problem.message}{" "}
+          <a href="#/waiting">See what waits</a>
+        </span>
+      </p>
+    );
+  if (entry.problem)
+    return (
+      <p class="notice" role="status">
+        <span>
+          Your edit met a change made in the kitchen.{" "}
+          <a href={`#/waiting/${encodeURIComponent(entry.id)}`}>
+            Choose what to keep
+          </a>
+        </span>
+      </p>
+    );
+  return (
+    <p class="notice">
+      <Waiting />
+      <span>
+        Your changes are on this phone. They go to the kitchen when it answers.
+      </span>
+    </p>
+  );
+}
+
 export function Recipe({ id }) {
   const r = record("recipe", id);
   if (!r) return <Missing what="recipe" />;
@@ -395,6 +433,7 @@ export function Recipe({ id }) {
         </a>
         <CookButton source={{ kind: "recipe", id }} primary />
       </PageHeader>
+      <EditWaiting r={r} />
       <Facts d={d} />
       <Tastes d={d} />
       <LastTime notes={notes} />

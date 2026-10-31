@@ -21,7 +21,9 @@ import {
   unitLabel,
   unitSpelling,
 } from "../../../shared/quantities.js";
-import { records, change } from "./store.js";
+import { records, change, keep, undoAction, waitingHere } from "./store.js";
+import { phone } from "./device.js";
+import { needsChoice } from "./waiting.js";
 import { nameKey } from "./aisles.js";
 import { convert, units } from "./units.js";
 import { toast } from "./toast.js";
@@ -190,21 +192,43 @@ export function memories(record) {
     .sort((a, b) => day(b).localeCompare(day(a)));
 }
 
+// On a phone, a favorite is an edit like any other, so it can wait for the
+// kitchen and joins an edit of the recipe already waiting.
 export async function toggleFavorite(r) {
-  try {
-    await change(
-      "recipe_save",
-      {
-        id: r.id,
-        expected_version: r.version,
-        recipe: { ...r.data, favorite: !r.data.favorite },
-      },
-      {
-        done: r.data.favorite
-          ? `${r.data.title} is no longer a favorite.`
-          : `${r.data.title} is a favorite.`,
-      },
+  const recipe = { ...r.data, favorite: !r.data.favorite };
+  const done = r.data.favorite
+    ? `${r.data.title} is no longer a favorite.`
+    : `${r.data.title} is a favorite.`;
+  const choosing = waitingHere.value.some(
+    (e) => e.kind === "edit" && e.input.id === r.id && needsChoice(e),
+  );
+  if (phone && choosing) {
+    toast(
+      `Choose what to keep of your edit of ${r.data.title} first, from Waiting to send.`,
+      { error: true },
     );
+    return;
+  }
+  try {
+    if (!phone) {
+      await change(
+        "recipe_save",
+        { id: r.id, expected_version: r.version, recipe },
+        { done },
+      );
+      return;
+    }
+    const result = await keep("edit", {
+      id: r.id,
+      base: { version: r.version, data: r.data },
+      recipe,
+    });
+    if (result.choose)
+      toast("Someone changed this recipe meanwhile. Choose what to keep.");
+    else
+      toast(result.kept ? `${done} Waiting to send.` : done, {
+        undo: result.action_id ? () => undoAction(result.action_id) : null,
+      });
   } catch (error) {
     toast(error.message, { error: true });
   }

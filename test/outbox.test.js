@@ -19,6 +19,7 @@ import {
   waiting,
 } from "../client/src/lib/outbox.js";
 import { sizeOf, withWaiting } from "../client/src/lib/waiting.js";
+import { mergeParts, partsPhrase, same } from "../client/src/lib/merge.js";
 
 // A kitchen with the real tools, and a device that hears it only when it
 // asks: what the device read last can be out of date, the kitchen can stop
@@ -381,4 +382,157 @@ test("changes made in another household wait for it, and ticks an earlier versio
 
   forgetWaiting();
   assert.deepEqual(waiting.value, []);
+});
+
+test("parts of a recipe changed on one side are merged, and a part both changed is a clash", () => {
+  const base = {
+    title: "Soup",
+    servings: 4,
+    steps: [{ text: "Boil." }],
+    tags: [],
+    notes: "",
+  };
+  const mine = { ...base, title: "Lemon soup", notes: "Zest first." };
+  const theirs = {
+    ...base,
+    steps: [{ text: "Boil.", duration_seconds: null }, { text: "Serve." }],
+    notes: "Zest first.",
+  };
+  const parts = mergeParts(base, mine, theirs);
+  assert.deepEqual(parts.clashes, []);
+  assert.deepEqual(parts.mine, ["title"]);
+  assert.deepEqual(parts.theirs, ["steps"]);
+  assert.equal(parts.merged.title, "Lemon soup");
+  assert.equal(parts.merged.steps.length, 2);
+  // Defaults the kitchen fills in are not changes.
+  assert.ok(same({ a: [], b: null, c: "" }, {}));
+  assert.ok(same([{ text: "x", equipment_names: [] }], [{ text: "x" }]));
+  assert.ok(!same({ spice: 0 }, {}));
+  const clash = mergeParts(base, mine, { ...base, title: "Pea soup" });
+  assert.deepEqual(clash.clashes, ["title"]);
+  assert.equal(partsPhrase(["steps", "title"]), "the title and method");
+  assert.equal(
+    partsPhrase(["notes", "ingredients", "title"]),
+    "the title, ingredients and notes",
+  );
+});
+
+test("an edit kept without the kitchen goes as it is, merges with changes to other parts, and waits for the member where both changed a part", async (t) => {
+  const { k, recipe } = setUp(t);
+  const full = k.other("recipe_save", {
+    id: recipe.id,
+    expected_version: recipe.version,
+    recipe: {
+      title: "Lentil soup",
+      servings: 4,
+      ingredients: [{ name: "lentils", quantity: 200, unit: "g" }],
+      steps: [{ text: "Simmer." }],
+      tags: ["weeknight"],
+    },
+  }).record;
+  await k.refresh();
+  const base = { version: full.version, data: full.data };
+  const edit = (recipe) => ({ id: full.id, base, recipe });
+
+  // Two edits before the kitchen answers are one change.
+  const first = keepChange("edit", edit({ ...full.data, servings: 6 }));
+  const again = keepChange(
+    "edit",
+    edit({ ...full.data, servings: 6, title: "Red lentil soup" }),
+  );
+  assert.equal(again.id, first.id);
+  assert.equal(waiting.value.length, 1);
+  // Meanwhile another cook changes the method.
+  k.other("recipe_save", {
+    id: full.id,
+    expected_version: full.version,
+    recipe: { ...full.data, steps: [{ text: "Simmer." }, { text: "Blend." }] },
+  });
+  await sendWaiting(k);
+  assert.deepEqual(waiting.value, []);
+  let now = k.store.get("recipe", full.id).data;
+  assert.equal(now.title, "Red lentil soup");
+  assert.equal(now.servings, 6);
+  assert.equal(now.steps.length, 2, "their method is kept");
+  assert.deepEqual(now.tags, ["weeknight"]);
+  assert.equal(k.calls.filter((c) => c.name === "recipe_save").length, 2);
+
+  // Both change the title: nothing is sent, and the member is asked.
+  const before = k.store.get("recipe", full.id);
+  await k.refresh();
+  const clash = keepChange("edit", {
+    id: full.id,
+    base: { version: before.version, data: before.data },
+    recipe: { ...before.data, title: "Lentil soup, my way" },
+  });
+  k.other("recipe_save", {
+    id: full.id,
+    expected_version: before.version,
+    recipe: { ...before.data, title: "Dal" },
+  });
+  k.calls = [];
+  await sendWaiting(k);
+  assert.deepEqual(waiting.value[0].problem, {
+    message: "Someone changed the title while your edit waited.",
+    parts: ["title"],
+  });
+  assert.equal(k.store.get("recipe", full.id).data.title, "Dal");
+  // Another edit of the same recipe replaces the one waiting for a choice,
+  // made from the kitchen's version.
+  await k.refresh();
+  const dal = k.read("recipe", full.id);
+  keepChange("edit", {
+    id: full.id,
+    base: { version: dal.version, data: dal.data },
+    recipe: { ...dal.data, notes: "Lots of cumin." },
+  });
+  assert.equal(waiting.value.length, 1);
+  assert.equal(waiting.value[0].id, clash.id);
+  assert.equal(waiting.value[0].problem, undefined);
+  await sendWaiting(k);
+  now = k.store.get("recipe", full.id).data;
+  assert.equal(now.title, "Dal");
+  assert.equal(now.notes, "Lots of cumin.");
+
+  // A recipe taken out of the cookbook meanwhile has nothing to save to.
+  await k.refresh();
+  const last = k.read("recipe", full.id);
+  keepChange("edit", {
+    id: full.id,
+    base: { version: last.version, data: last.data },
+    recipe: { ...last.data, servings: 2 },
+  });
+  k.other("record_archive", {
+    kind: "recipe",
+    id: full.id,
+    expected_version: last.version,
+    archived: true,
+  });
+  await sendWaiting(k);
+  assert.equal(waiting.value[0].problem.gone, true);
+});
+
+test("an edit made while an earlier one is on its way waits behind it, and both arrive", async (t) => {
+  const { k, recipe } = setUp(t);
+  await k.refresh();
+  const base = { version: recipe.version, data: recipe.data };
+  const one = { ...recipe.data, servings: 6 };
+  keepChange("edit", { id: recipe.id, base, recipe: one });
+  k.lose = 1;
+  await sendWaiting(k);
+  assert.ok(waiting.value[0].sent, "its answer was lost");
+  // The phone shows the first edit, so the second starts from it.
+  const second = keepChange("edit", {
+    id: recipe.id,
+    base: { version: recipe.version, data: one },
+    recipe: { ...one, notes: "Double it." },
+  });
+  assert.equal(waiting.value.length, 2);
+  assert.notEqual(second.id, waiting.value[0].id);
+  await sendWaiting(k);
+  assert.deepEqual(waiting.value, []);
+  const now = k.store.get("recipe", recipe.id);
+  assert.equal(now.data.servings, 6);
+  assert.equal(now.data.notes, "Double it.");
+  assert.equal(now.version, recipe.version + 2);
 });

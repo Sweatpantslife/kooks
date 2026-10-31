@@ -1,6 +1,6 @@
 import { CircleAlert, CloudOff } from "lucide";
 import { offline, waitingHere } from "../lib/store.js";
-import { sizeOf } from "../lib/waiting.js";
+import { needsChoice, sizeOf } from "../lib/waiting.js";
 import { route } from "../lib/router.js";
 import { localDay, pastDayLabel, plural } from "../lib/format.js";
 import { Icon } from "./icon.jsx";
@@ -14,16 +14,42 @@ export function Offline() {
   const entries = waitingHere.value;
   const there = route.value[0] === "waiting";
   if (since == null) {
-    const refused = entries.filter((e) => e.problem).length;
-    if (!refused || there) return null;
+    if (there) return null;
+    const choosing = entries.filter(needsChoice);
+    const refused = entries.filter((e) => e.problem && !needsChoice(e));
+    if (!choosing.length && !refused.length) return null;
     return (
       <p class="offline" role="status">
         <Icon icon={CircleAlert} />
         <span>
-          <strong>
-            The kitchen didn’t take {plural(refused, "change")} made here.
-          </strong>{" "}
-          <a href="#/waiting">See why</a>
+          {choosing.length > 0 && (
+            <>
+              <strong>
+                {choosing.length === 1
+                  ? "An edit made here met a change in the kitchen."
+                  : `${choosing.length} edits made here met changes in the kitchen.`}
+              </strong>{" "}
+              <a
+                href={
+                  choosing.length === 1
+                    ? `#/waiting/${encodeURIComponent(choosing[0].id)}`
+                    : "#/waiting"
+                }
+              >
+                Choose what to keep
+              </a>
+              {refused.length > 0 && " "}
+            </>
+          )}
+          {refused.length > 0 && (
+            <>
+              <strong>
+                The kitchen didn’t take {plural(refused.length, "change")} made
+                here.
+              </strong>{" "}
+              <a href="#/waiting">See why</a>
+            </>
+          )}
         </span>
       </p>
     );

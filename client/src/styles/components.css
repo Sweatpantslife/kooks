@@ -1558,6 +1558,97 @@ a.plan-title:hover {
 .offline a {
   color: inherit;
 }
+/* A change made here that the kitchen has not taken, said on its page. */
+.notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  background: var(--saffron-soft);
+  color: var(--saffron-ink);
+  font-size: var(--text-sm);
+}
+.notice a {
+  color: inherit;
+  font-weight: 700;
+}
+/* Choosing between an edit made here and the kitchen's, part by part. */
+.compare-kept {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+.compare-kept li {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+.compare-kept svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--herb-ink);
+}
+.compare-part {
+  display: grid;
+  gap: 12px;
+}
+.compare-part legend {
+  float: inline-start;
+  width: 100%;
+  font-weight: 700;
+}
+.compare-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  gap: 12px;
+}
+.compare-option {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  padding: 12px 14px;
+  border: 2px solid var(--field-line);
+  border-radius: var(--radius-md);
+}
+.compare-option:has(input:checked) {
+  border-color: var(--accent);
+}
+@media (forced-colors: active) {
+  .compare-option:has(input:checked) {
+    outline: 2px solid CanvasText;
+  }
+}
+.compare-pick {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  font-weight: 700;
+}
+.compare-pick input {
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+.compare-pick label {
+  flex: 1;
+}
+.compare-value {
+  overflow-wrap: anywhere;
+}
+.compare-lines {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-inline-start: 1.2em;
+}
 /* Why the kitchen would not take a change made here. */
 .waiting-problem {
   color: var(--danger);

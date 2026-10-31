@@ -1,7 +1,7 @@
 import { CloudCheck } from "lucide";
 import { offline, record, sendNow, waitingHere } from "../lib/store.js";
 import { discard, retry } from "../lib/outbox.js";
-import { kinds } from "../lib/waiting.js";
+import { kinds, needsChoice } from "../lib/waiting.js";
 import { localDay, pastDayLabel } from "../lib/format.js";
 import { toast } from "../lib/toast.js";
 import { phone } from "../lib/device.js";
@@ -67,14 +67,26 @@ export function WaitingList() {
                       {text}
                     </a>
                     <span class="muted small">
-                      {problem
-                        ? `Made ${madeAt(entry.made_at)} · The kitchen didn’t take it`
-                        : `Made ${madeAt(entry.made_at)} · Waiting to send`}
+                      {`Made ${madeAt(entry.made_at)} · `}
+                      {needsChoice(entry)
+                        ? "Needs your choice"
+                        : problem
+                          ? "The kitchen didn’t take it"
+                          : "Waiting to send"}
                     </span>
                     {problem && <span class="waiting-problem">{problem}</span>}
                   </span>
                   <span class="plan-actions">
-                    {problem && !away && (
+                    {needsChoice(entry) && (
+                      <a
+                        class="btn btn-small btn-primary"
+                        href={`#/waiting/${encodeURIComponent(entry.id)}`}
+                        aria-label={`Choose what to keep, ${text}`}
+                      >
+                        Choose what to keep
+                      </a>
+                    )}
+                    {problem && !away && !needsChoice(entry) && (
                       <button
                         type="button"
                         class="btn btn-quiet btn-small"
