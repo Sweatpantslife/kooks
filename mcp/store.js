@@ -56,13 +56,28 @@ export function splitAsset(data) {
 const byId = (a, b) => Buffer.compare(Buffer.from(a.id), Buffer.from(b.id));
 const active = (record) => !record.archived;
 // An action's history line for one record: what changed, between which
-// versions.
+// versions, and whether it was left archived.
 const summary = ({ kind, id, before, after }) => ({
   kind,
   id,
   before_version: before?.version ?? null,
   after_version: after.version,
+  archived: Boolean(after.archived),
 });
+// Who made a change, as the action keeps it: a member of the household (an
+// opaque account id, never an address, and the person at the table they
+// were linked to then), an agent through MCP, or someone at the kitchen's own
+// computer with sign-in off. Older actions have none.
+const actorOf = (actor) => {
+  if (!actor) return null;
+  if (actor.type === "member")
+    return {
+      type: "member",
+      account: String(actor.account),
+      person: actor.person ? String(actor.person) : null,
+    };
+  return { type: actor.type === "agent" ? "agent" : "local" };
+};
 
 // SQLite serializes transactions across MCP processes. The domain layer never
 // awaits while a transaction is open, so reads and writes form one atomic action.
@@ -109,6 +124,15 @@ export class Store {
         -- Finds the actions old enough to trim without reading the history.
         CREATE INDEX IF NOT EXISTS actions_created ON actions(created_at);
       `);
+      // Who made each action. An added column, not a new schema version:
+      // a server from before it leaves it empty and can still open the file.
+      if (
+        !this.db
+          .prepare("PRAGMA table_info(actions)")
+          .all()
+          .some((column) => column.name === "actor")
+      )
+        this.db.exec("ALTER TABLE actions ADD actor TEXT");
       // Re-read inside the transaction: another process may have upgraded
       // the file between the first check and the lock.
       if (this.userVersion() < SCHEMA_VERSION) moved = this.#migrateAssets();
@@ -347,7 +371,7 @@ export class Store {
     this.changes.push({ kind, id, before, after: record });
     return record;
   }
-  mutate(action, args, fn) {
+  mutate(action, args, fn, actor = null) {
     const fingerprint = digest({ action, args });
     this.db.exec("BEGIN IMMEDIATE");
     try {
@@ -368,7 +392,7 @@ export class Store {
       const actionId = randomUUID();
       const result = { ...data, action_id: actionId, replayed: false };
       this.#query(
-        "INSERT INTO actions(id, request_id, fingerprint, action, created_at, changes, result) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO actions(id, request_id, fingerprint, action, created_at, changes, result, actor) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
       ).run(
         actionId,
         args.request_id,
@@ -377,6 +401,7 @@ export class Store {
         new Date().toISOString(),
         JSON.stringify(this.changes),
         JSON.stringify(result),
+        actor ? JSON.stringify(actorOf(actor)) : null,
       );
       // A server can run for months; trim once a day as it writes.
       if (Date.now() - this.#trimmedAt >= DAY) this.#trim(Date.now());
@@ -448,13 +473,14 @@ export class Store {
   history(limit, offset) {
     return this.db
       .prepare(
-        "SELECT id, action, request_id, created_at, changes FROM actions ORDER BY seq DESC LIMIT ? OFFSET ?",
+        "SELECT id, action, request_id, created_at, changes, actor FROM actions ORDER BY seq DESC LIMIT ? OFFSET ?",
       )
       .all(limit, offset)
       .map((row) => {
         const changes = JSON.parse(row.changes);
         return {
           ...row,
+          actor: row.actor ? JSON.parse(row.actor) : null,
           changes: changes.map((change) =>
             change.after ? summary(change) : change,
           ),

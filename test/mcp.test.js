@@ -93,6 +93,15 @@ test(
     });
     assert.equal(saved.isError, undefined);
     const record = saved.structuredContent.record;
+    // History records changes made through MCP as an agent's.
+    const history = await client.callTool({
+      name: "history_list",
+      arguments: { limit: 1 },
+    });
+    assert.deepEqual(history.structuredContent.actions[0].actor, {
+      type: "agent",
+      you: false,
+    });
     const scaled = await client.callTool({
       name: "recipe_scale",
       arguments: { id: record.id, servings: 3 },
