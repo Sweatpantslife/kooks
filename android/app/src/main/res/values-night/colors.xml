@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The launch screen behind the icon when the phone is in dark mode:
+         the app's dark ground (client/src/styles/tokens.css). -->
+    <color name="kooks_paper">#151412</color>
+</resources>

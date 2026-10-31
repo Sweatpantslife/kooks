@@ -1,7 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { kitchenAddress } from "../client/src/lib/device.js";
+import { SystemBarsStyle } from "@capacitor/core";
 import {
+  barStyleFor,
   notificationChanges,
   notificationIdOf,
 } from "../client/src/lib/native.js";
@@ -260,4 +262,12 @@ test("ticks made out of the kitchen's reach keep only the latest for each grocer
   assert.deepEqual(waiting.value, { "list-2": { c: true } });
   forgetWaiting();
   assert.equal(waitingCount(), 0);
+});
+
+// A look chosen by hand must not leave dark text on a dark page under the
+// status bar, or light text on a light one.
+test("the phone's bars follow the app's look", () => {
+  assert.equal(barStyleFor("system"), SystemBarsStyle.Default);
+  assert.equal(barStyleFor("dark"), SystemBarsStyle.Dark);
+  assert.equal(barStyleFor("light"), SystemBarsStyle.Light);
 });

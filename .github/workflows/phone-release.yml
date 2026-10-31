@@ -1,0 +1,175 @@
+name: Phone release
+
+# Builds the Android app for release and publishes it on the repository's
+# Releases page as a pre-release named after package.json's version, with the
+# APK to install on a phone. Run it from the Actions tab, on main; the release
+# key comes from the KOOKS_ANDROID_KEYSTORE and KOOKS_ANDROID_KEYSTORE_PASSWORD
+# secrets (scripts/android-release-key.sh makes them). docs/native-app.md
+# describes the whole release.
+#
+# A pull request that changes the release build runs it too, signed with a
+# throwaway key and published nowhere, so the release key never reaches a
+# pull request's run.
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "android/app/build.gradle"
+      - "android/build.gradle"
+      - "android/variables.gradle"
+      - "android/gradle/**"
+      - "scripts/native-version.mjs"
+      - ".github/workflows/phone-release.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phone-release-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  android:
+    name: Android release APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Release only from main
+        if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Run the Phone release workflow on main, not on ${GITHUB_REF_NAME}."
+          exit 1
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+      - name: Version
+        id: version
+        run: |
+          version=$(node -p 'require("./package.json").version')
+          node scripts/native-version.mjs
+          if ! git diff --exit-code -- android ios; then
+            echo "::error::The native projects don't carry version ${version}. Run npm run native:version and commit the result."
+            exit 1
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "code=$(node --input-type=module -e 'import { buildNumber } from "./scripts/native-version.mjs"; console.log(buildNumber(process.argv[1]))' "$version")" >> "$GITHUB_OUTPUT"
+      - name: Refuse a version that is already released
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/v${VERSION}" > /dev/null 2>&1; then
+            echo "::error::v${VERSION} is already released. Raise the version (npm version patch --no-git-tag-version), merge it, and run this again."
+            exit 1
+          fi
+      - run: npm ci
+      - name: Install Android SDK Platform 36
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "platforms;android-36" > /dev/null
+      - run: npm run cap:sync
+      - name: Build and sign
+        env:
+          KEYSTORE: ${{ github.event_name == 'workflow_dispatch' && secrets.KOOKS_ANDROID_KEYSTORE || '' }}
+          KEYSTORE_PASSWORD: ${{ github.event_name == 'workflow_dispatch' && secrets.KOOKS_ANDROID_KEYSTORE_PASSWORD || '' }}
+        run: |
+          key="${RUNNER_TEMP}/kooks-release.p12"
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            if [ -z "$KEYSTORE" ] || [ -z "$KEYSTORE_PASSWORD" ]; then
+              echo "::error::The release key is missing. Run scripts/android-release-key.sh once to make it and store it as the KOOKS_ANDROID_KEYSTORE and KOOKS_ANDROID_KEYSTORE_PASSWORD secrets (docs/native-app.md)."
+              exit 1
+            fi
+            printf '%s' "$KEYSTORE" | base64 -d > "$key"
+          else
+            # A pull request proves the release build signs, with a key made
+            # for this run only.
+            KEYSTORE_PASSWORD=$(openssl rand -hex 16)
+            openssl req -x509 -newkey rsa:2048 -sha256 -days 1 -nodes \
+              -subj "/CN=Kooks throwaway" -keyout "${RUNNER_TEMP}/key.pem" \
+              -out "${RUNNER_TEMP}/cert.pem" 2> /dev/null
+            openssl pkcs12 -export -name kooks -inkey "${RUNNER_TEMP}/key.pem" \
+              -in "${RUNNER_TEMP}/cert.pem" -passout "pass:${KEYSTORE_PASSWORD}" -out "$key"
+            rm "${RUNNER_TEMP}/key.pem"
+          fi
+          cd android
+          KOOKS_ANDROID_KEYSTORE="$key" KOOKS_ANDROID_KEYSTORE_PASSWORD="$KEYSTORE_PASSWORD" \
+            ./gradlew :app:assembleRelease
+          rm "$key"
+      - name: Check the APK
+        id: apk
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          CODE: ${{ steps.version.outputs.code }}
+        run: |
+          tools=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n 1)
+          apk=android/app/build/outputs/apk/release/app-release.apk
+          "${tools}apksigner" verify --min-sdk-version 24 --print-certs "$apk" | tee signers.txt
+          "${tools}aapt2" dump badging "$apk" > badging.txt
+          sed -n 1p badging.txt
+          expected="package: name='app.kooks.household' versionCode='${CODE}' versionName='${VERSION}'"
+          if ! sed -n 1p badging.txt | grep -F "$expected" > /dev/null; then
+            echo "::error::The APK should start with: ${expected}"
+            exit 1
+          fi
+          if grep '^application-debuggable' badging.txt; then
+            echo "::error::The release APK is debuggable."
+            exit 1
+          fi
+          mkdir -p dist
+          cp "$apk" "dist/kooks-${VERSION}.apk"
+          certificate=$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' signers.txt | tr a-f A-F | sed 's/../&:/g; s/:$//')
+          checksum=$(sha256sum "dist/kooks-${VERSION}.apk" | cut -d ' ' -f 1)
+          cat > dist/release-notes.md <<EOF
+          Kooks ${VERSION} for Android phones (Android 7 or newer), built from ${GITHUB_SHA::7}.
+
+          **To install**, open this page on the phone, tap **kooks-${VERSION}.apk** under Assets and open the download. The first time, Android asks you to allow installs from your browser. A newer release installs over this one, and you stay signed in. Step by step: [Install on Android](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/blob/main/docs/native-app.md#install-on-android).
+
+          What changed is in the [changelog](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/blob/main/CHANGELOG.md).
+
+          | | |
+          | --- | --- |
+          | Version | ${VERSION} (build ${CODE}) |
+          | Signing certificate SHA-256 | \`${certificate}\` |
+          | APK SHA-256 | \`${checksum}\` |
+
+          Every release is signed with the same certificate. If this one doesn't match the fingerprint that \`scripts/android-release-key.sh\` printed, don't install it.
+          EOF
+          cat dist/release-notes.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.event_name == 'workflow_dispatch' && format('kooks-android-{0}', steps.version.outputs.version) || 'kooks-android-throwaway-key-do-not-install' }}
+          path: dist/
+          retention-days: ${{ github.event_name == 'workflow_dispatch' && 90 || 7 }}
+
+  publish:
+    name: Publish the release
+    needs: android
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: kooks-android-${{ needs.android.outputs.version }}
+          path: dist
+      - name: Create the pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.android.outputs.version }}
+        run: |
+          gh release create "v${VERSION}" "dist/kooks-${VERSION}.apk" \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
+            --title "Kooks ${VERSION}" --notes-file dist/release-notes.md
+          echo "Published ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/v${VERSION}" >> "$GITHUB_STEP_SUMMARY"
