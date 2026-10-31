@@ -1263,6 +1263,7 @@ test("members say who they are at the table, history names them, and leaving lea
     400,
   );
   assert.equal((await unlink("kim@example.test", owner)).status, 404);
+  assert.equal((await unlink(["sam@example.test"], owner)).status, 400);
   assert.equal((await unlink("sam@example.test", owner)).status, 200);
   assert.equal((await state(sam)).account.household.person, null);
   assert.equal((await state(owner)).account.household.person, ada);

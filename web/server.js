@@ -620,10 +620,10 @@ export function createWebServer({
     if (route === "POST household/person") {
       const { person = null, member = null } = await input();
       if (member !== null) {
-        if (person !== null)
+        if (typeof member !== "string" || person !== null)
           throw new AuthError(
             "INVALID_INPUT",
-            "Only a member says which person they are; an owner can only unlink them.",
+            "To unlink a member, name them by their email address and give no person: only a member says which person they are.",
           );
         auth.unlinkMember(session, member);
         return send(res, 200, { ok: true });
