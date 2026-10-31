@@ -26,6 +26,7 @@ import {
 } from "./auth.js";
 import { createMailer, isEmail } from "./mail.js";
 import { askInput, createAssistant } from "./assistant.js";
+import { applyRestore, backupSettings, createBackups } from "./backups.js";
 
 // The app, built by `npm run build:client`, is the files in client/dist.
 const builtClient = fileURLToPath(new URL("../client/dist/", import.meta.url));
@@ -257,6 +258,8 @@ export function createWebServer({
   clientRoot = builtClient,
   toolOptions = {},
   assistantOptions = {},
+  // The automatic backups' schedule, when they are on; see backups.js.
+  backups = null,
 }) {
   const external = publicOrigin ? parseOrigin(publicOrigin) : null;
   // Kooks speaks plain HTTP, so an HTTPS origin means a proxy in front.
@@ -688,6 +691,20 @@ export function createWebServer({
       }
       if (url.pathname === "/healthz" && req.method === "GET")
         return send(res, 200, { ok: true });
+      // For an uptime monitor: 503 once no good copy has been taken for an
+      // interval and a half. It says when the last one was, nothing else.
+      if (url.pathname === "/healthz/backups" && req.method === "GET") {
+        if (!backups)
+          return send(res, 404, {
+            ok: false,
+            message: "Automatic backups are off.",
+          });
+        const health = backups.health();
+        return send(res, health.ok ? 200 : 503, {
+          ok: health.ok,
+          last_copy_at: health.last_copy_at,
+        });
+      }
       // A configured origin is the only accepted Host; otherwise the server
       // is on loopback, where only loopback names defeat DNS rebinding.
       if (
@@ -751,6 +768,32 @@ export function createWebServer({
           error: "NO_HOUSEHOLD",
           message: "Start a household or join one first.",
         });
+      // The automatic backups copy every household on the server, so only
+      // whoever runs it sees them: the person at this computer, or the
+      // owner named by KOOKS_OWNER_EMAIL. Everyone else learns they exist.
+      if (url.pathname === "/api/backups" && req.method === "GET") {
+        const operator =
+          !auth || Boolean(owner && session.email === normalizeEmail(owner));
+        if (!backups || !operator)
+          return send(res, 200, { on: Boolean(backups), operator });
+        const health = backups.health();
+        return send(res, 200, {
+          on: true,
+          operator,
+          every_hours: backups.settings.every / 3600000,
+          keep_daily: backups.settings.keepDaily,
+          keep_weekly: backups.settings.keepWeekly,
+          dir: backups.settings.dir,
+          late: health.late,
+          last_copy_at: health.last_copy_at,
+          failure: health.failure,
+          copies: health.copies.map((c) => ({
+            name: c.name,
+            taken_at: c.taken_at,
+            bytes: c.bytes,
+          })),
+        });
+      }
       const kitchen = kitchenOf(session?.household ?? HOME);
       const { store, tools, assistant } = kitchen;
       // Who is asking, recorded on each change they make, and how history
@@ -1068,7 +1111,7 @@ if (
   process.umask(0o077);
   const host = process.env.KOOKS_HOST ?? "127.0.0.1";
   const port = Number(process.env.PORT ?? 4317);
-  let store, server;
+  let store, server, backups;
   try {
     if (process.env.KOOKS_ACCESS_TOKEN || process.env.KOOKS_ACCESS_TOKEN_FILE)
       throw new Error(
@@ -1099,11 +1142,19 @@ if (
         ? resolve(process.env.KOOKS_MAIL_OUTBOX)
         : "",
     });
-    store = new Store(
-      process.env.KOOKS_DB_PATH
-        ? resolve(process.env.KOOKS_DB_PATH)
-        : fileURLToPath(new URL("../.data/kooks.sqlite", import.meta.url)),
-    );
+    const dbPath = process.env.KOOKS_DB_PATH
+      ? resolve(process.env.KOOKS_DB_PATH)
+      : fileURLToPath(new URL("../.data/kooks.sqlite", import.meta.url));
+    const settings = backupSettings(process.env, dbPath);
+    // A copy staged with `node scripts/backup.mjs stage` goes in place
+    // before any database is opened.
+    const restored = applyRestore(dbPath);
+    if (restored)
+      console.log(
+        `Kooks restored the copy taken ${restored.taken_at} (${restored.copy}): ${restored.whole ? "every household and the accounts" : restored.files.join(", ")}. The files it replaced are in ${restored.aside}.`,
+      );
+    store = new Store(dbPath);
+    backups = settings && createBackups(settings);
     server = createWebServer({
       store,
       host,
@@ -1125,6 +1176,7 @@ if (
             }
           : {}),
       },
+      backups,
     });
     server.listen(port, host, () => {
       console.log(`Kooks is ready at http://${host}:${port}`);
@@ -1136,6 +1188,12 @@ if (
         console.log(
           `The assistant is on, with ${server.assistant.model}; questions and what it reads to answer them go to Anthropic.`,
         );
+      console.log(
+        backups
+          ? `Automatic backups are on: a copy every ${settings.every / 3600000} hours in ${settings.dir}, keeping one for each of the last ${settings.keepDaily} days and ${settings.keepWeekly} weeks${settings.ping ? ", with a monitor pinged after each" : ""}.`
+          : "Automatic backups are off (KOOKS_BACKUPS=off).",
+      );
+      backups?.start();
     });
   } catch (error) {
     console.error(`Kooks could not start: ${error.message}`);
@@ -1144,6 +1202,7 @@ if (
   }
   for (const signal of ["SIGINT", "SIGTERM"])
     process.once(signal, () => {
+      backups?.stop();
       server.close(() => {
         server.auth?.close();
         server.assistant?.close();

@@ -208,7 +208,8 @@ test("each action records who made it, and history names them without an address
       ["Ada", null],
     ],
   );
-  assert.equal(JSON.stringify(history).includes("acc-"), false);
+  // The account ids themselves: a random record id can hold "acc-" too.
+  assert.doesNotMatch(JSON.stringify(history), /acc-(ada|ben|cy)/);
 
   // Linking later names changes made before by the person linked now.
   members.set("acc-ben", ben);

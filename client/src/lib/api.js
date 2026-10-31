@@ -79,6 +79,10 @@ export const tool = (name, input = {}, { timeout } = {}) =>
 
 export const auth = (path, input) => request(`/api/auth/${path}`, input);
 
+// How the server's automatic backups are doing; the details only for
+// whoever runs it.
+export const backups = () => request("/api/backups");
+
 // A question for the assistant. The answer streams as lines of JSON: what
 // it is doing, as it does it, then the answer or why there is none.
 export async function ask(input, { signal, onStep }) {

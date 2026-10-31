@@ -1,5 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { readFile } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { scan } from "../axe-scan.js";
 
 // Household in the app, against the server without sign-in.
@@ -203,4 +205,30 @@ test("amounts read in metric or US units on this device, and the backup download
   );
   const backup = JSON.parse(await readFile(await download.path(), "utf8"));
   expect(backup.records.some((r) => r.id === salad.id)).toBe(true);
+});
+
+test("the Backup page shows the server's automatic copies to whoever runs it", async ({
+  page,
+}) => {
+  // A copy taken with the backup script beside the running server counts
+  // like one the schedule took.
+  await promisify(execFile)(
+    process.execPath,
+    ["scripts/backup.mjs", "snapshot"],
+    {
+      env: { ...process.env, KOOKS_DB_PATH: process.env.KOOKS_E2E_DB },
+    },
+  );
+  await page.goto("/#/household/backup");
+  const copies = page.getByRole("region", { name: "Automatic copies" });
+  await expect(copies).toContainText(
+    "Kooks copies every household on this server once a day",
+  );
+  await expect(copies).toContainText(/Last copy .*, \d+(\.\d)? [KM]B\./);
+  await expect(copies).not.toContainText("failed");
+  await expectAccessible(page, "Backup with automatic copies");
+  await page.goto("/#/household");
+  await expect(page.getByRole("link", { name: /Backup/ })).toContainText(
+    "Download everything this kitchen keeps.",
+  );
 });

@@ -51,10 +51,45 @@ Any member can invite someone by email under **Household › Members**. The invi
 
 Sign-in state lives in `auth_` tables inside the first household's SQLite file and is not part of cookbook backups. After restoring to a fresh database, people sign in with a link again and add their passkeys afresh. The page answers every link request the same way and at once, and the email follows in the background, so neither the reply nor its timing reveals who has an account. That also means people are not told when mail fails: if links are not arriving, look for “Kooks could not email a sign-in link” in the application log, which carries the SMTP server's reply. At most 100 sign-in and invite emails go out per hour, sign-in links only to people with accounts, so requests for other addresses cannot use up that budget; a member sends at most 20 invites a day.
 
+## Backups
+
+Kooks copies the whole server once a day while it runs: every household's cookbook, with its photos and books, and the accounts with their members, passkeys and sessions. It is on unless `KOOKS_BACKUPS=off`. A copy is a folder named by when it was taken (`/data/backups/2026-11-01T03-00-00Z/`) holding each database compressed and a `manifest.json` with each file's checksum and record count.
+
+- `KOOKS_BACKUPS`: `on` (the default) or `off`.
+- `KOOKS_BACKUP_DIR`: where copies go; `backups/` beside the database by default, which in the image is `/data/backups` on the same volume as the kitchen. Mount another volume there, on another disk if the host has one, to keep the copies apart from the database.
+- `KOOKS_BACKUP_EVERY_HOURS`: how often, 24 by default (1 to 168).
+- `KOOKS_BACKUP_KEEP_DAILY` and `KOOKS_BACKUP_KEEP_WEEKLY`: Kooks keeps the newest copy of each of the last 7 days and of each of the last 4 weeks that have one (Monday to Sunday), so about a month back. Days the server was off do not count, so a long outage never empties the folder.
+- `KOOKS_BACKUP_PING_URL` (optional): a monitor such as [healthchecks.io](https://healthchecks.io) or Uptime Kuma's push monitor. Kooks requests the address after every good copy and the address with `/fail` added after a failed one; the monitor raises the alarm when the pings stop, which also covers a server that is down.
+
+Every quarter of an hour the server looks at its newest copy and takes a new one once it is older than the interval, so restarts and deploys neither skip nor repeat a day; after a failure it tries again an hour later. A copy is taken in a background thread with SQLite's `VACUUM INTO`, which writes one consistent moment of each database while people go on cooking. Each file is checked with SQLite's integrity check before it is compressed, and only a complete, checked copy takes its name and lets older copies go. A damaged database therefore fails the backup, which is reported, and keeps every older copy. A copy is not taken when it would leave less than 1 GB free on the disk. Copies are readable by the container's user only. Each is about the size of the databases compressed; record text shrinks about tenfold, but photos and ebooks barely shrink, so a kitchen with 300 MB of books keeps about eleven times that.
+
+Watching them:
+
+- **Household › Backup** shows the server's owner (the address in `KOOKS_OWNER_EMAIL`, or anyone on a kitchen without sign-in) when the last copy was taken, its size and how many are kept, and says so plainly when the last attempt failed or there has been no copy for a day and a half. The Household page then reads "Automatic copies need a look". Other members only learn that copies exist.
+- **`GET /healthz/backups`** answers 200 with the time of the last copy, 503 once there has been none for an interval and a half (counting from the start when there is none yet), and 404 when backups are off. Point an uptime monitor at `https://<your origin>/healthz/backups`.
+- The application log says when each copy was taken and how large it was, or why it failed.
+
+The copies sit on the server, so they help after a bad deploy, a damaged database or a change someone regrets, but not when the server or its volume is lost. Keep a copy elsewhere too: download a portable backup from Household › Backup now and then.
+
+### The backup script
+
+In Coolify, open the application's **Terminal** and run these in `/app` (elsewhere, from the repository with `KOOKS_DB_PATH` set as for the server):
+
+```sh
+node scripts/backup.mjs snapshot          # take a copy now, as the schedule does
+node scripts/backup.mjs list              # the copies kept, newest first
+node scripts/backup.mjs check [copy]      # expand a copy and check it (the newest without a name)
+node scripts/backup.mjs stage <copy>      # put a whole copy back at the next start
+node scripts/backup.mjs stage <copy> --household <id>   # or only one household's cookbook
+node scripts/backup.mjs unstage           # forget a staged copy
+```
+
+Restoring is two steps so that it works while the server runs. `stage` checks the copy and expands it into `/data/restore/`; nothing live changes. Restart the application, and before it opens any database the server moves the files the copy replaces into `/data/replaced-<time>/`, with their write-ahead logs, and puts the copy's files in their place. The log says what it restored. A whole restore brings back the accounts, members, passkeys and sessions as they were, and also moves aside any household started after the copy, since the accounts it brings back do not know it. Changes made after the copy are not in it; the replaced files keep them. Delete the `replaced-` folder once the kitchen looks right. A household's id is the name of its file in `/data/households/`; the first household lives in `kooks.sqlite` with the accounts, so it comes back only with a whole restore. A restore that stops part way, such as at a power cut, finishes at the next start.
+
 ## Verification and recovery
 
-After deployment, verify HTTPS and the HTTP redirect, unauthenticated API rejection, an email link sign-in as the owner, adding a passkey and signing in with it, an invite, recipe save/reload/edit, and persistence after a container restart. Test only synthetic records and archive them afterward. Verify the running commit in Coolify's deployment log.
+After deployment, verify HTTPS and the HTTP redirect, unauthenticated API rejection, an email link sign-in as the owner, adding a passkey and signing in with it, an invite, recipe save/reload/edit, and persistence after a container restart. Test only synthetic records and archive them afterward. Verify the running commit in Coolify's deployment log, and that the log says automatic backups are on.
 
-Export the cookbook through the authenticated application (Household › Backup streams the download, so the proxy needs no extra body or buffering limits for it) and store backups privately outside the server. `node scripts/backup.mjs export` and `restore` do the same on the server itself; see [household features](household-features.md). A volume is persistence, not a backup. For filesystem-level backups, stop the application and snapshot the complete data volume, including SQLite WAL files. Restore into an isolated volume and test before replacing live data.
+Export the cookbook through the authenticated application (Household › Backup streams the download, so the proxy needs no extra body or buffering limits for it) and store backups privately outside the server. `node scripts/backup.mjs export` and `restore` do the same on the server itself for the first household; see [household features](household-features.md). A volume is persistence, not a backup: the automatic copies above live on it too.
 
-If health checks, sign-in, or saves fail, stop the new deployment and redeploy the last verified commit with the same volume and runtime configuration. Back up before schema upgrades; restoring older code is not safe when it cannot read the current database schema.
+If health checks, sign-in, or saves fail, stop the new deployment and redeploy the last verified commit with the same volume and runtime configuration. Take a copy (`node scripts/backup.mjs snapshot`) before a deployment that upgrades the database; older code refuses a database a newer Kooks wrote, so going back means restoring the copy taken before the upgrade.
