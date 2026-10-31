@@ -1,5 +1,5 @@
 # The browser app is built here; only its output reaches the image.
-FROM node:22-bookworm-slim AS client
+FROM node:24-bookworm-slim AS client
 WORKDIR /build
 COPY package.json package-lock.json ./
 RUN npm ci
@@ -8,7 +8,7 @@ COPY client ./client
 COPY shared ./shared
 RUN npm run build:client
 
-FROM node:22-bookworm-slim
+FROM node:24-bookworm-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends tesseract-ocr ca-certificates && rm -rf /var/lib/apt/lists/*
 WORKDIR /app

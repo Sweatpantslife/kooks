@@ -4,6 +4,10 @@ What changed in Kooks and how each change was verified, newest first. Kooks has 
 
 ## Unreleased
 
+### Docker image on Node 24
+
+Both stages of the image, the one that builds the client and the one that runs the server, move from `node:22-bookworm-slim` to `node:24-bookworm-slim`. `package.json` still accepts Node 22.13 or newer, and CI tests both. An image built without the Tesseract layer, which this environment cannot download, runs Node 24.22.2. With a private-network `KOOKS_PUBLIC_ORIGIN` and `KOOKS_OWNER_EMAIL` it reports healthy, serves the app, answers 401 to an unauthenticated API request and 403 to another `Host`, and logs no SQLite warning. The full image with Tesseract was not built here.
+
 ### Native Android and iOS builds in CI
 
 A new workflow compiles the phone app's native projects whenever `client/`, `shared/`, the native projects or their build inputs change: the Android debug APK on Ubuntu (JDK 21, SDK Platform 36), kept as an artifact for seven days, and the unsigned iOS simulator app on macOS 26 with Xcode 26.6. The Android job also fails when `cap sync` changes a tracked file under `android/` or `ios/`. On its first run both builds succeeded (a 4 MB APK; `BUILD SUCCEEDED` for iOS) and the sync left no change. Neither app was signed, launched or run on a device.

@@ -1,6 +1,6 @@
 # Hosting the household web app
 
-The root Dockerfile runs the shared browser/MCP backend on Node 22 with local Tesseract OCR. People have accounts named by their email address and sign in with a passkey or a one-time link sent to their email; there are no passwords and no shared household key. Each account belongs to one or more households, and each household is a kitchen with its own cookbook. Households grow by invitation.
+The root Dockerfile runs the shared browser/MCP backend on Node 24, the current LTS release, with local Tesseract OCR. Node 22.13 or newer still runs Kooks outside the image, and CI tests both. People have accounts named by their email address and sign in with a passkey or a one-time link sent to their email; there are no passwords and no shared household key. Each account belongs to one or more households, and each household is a kitchen with its own cookbook. Households grow by invitation.
 
 ## Coolify
 
