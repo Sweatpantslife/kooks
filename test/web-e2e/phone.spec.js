@@ -193,7 +193,7 @@ test("out of the kitchen's reach, a phone shows its copy, keeps the ticks made a
   await box.check();
   const bar = page.getByRole("status").filter({ hasText: "Can’t reach" });
   await expect(bar).toContainText(
-    "1 tick on the grocery list will go when it answers.",
+    "1 change made here will go when it answers.",
   );
   await expect(box).toBeChecked();
   expect(await scan(page, "Groceries, out of reach")).toEqual([]);
@@ -221,4 +221,255 @@ test("out of the kitchen's reach, a phone shows its copy, keeps the ticks made a
   await page.getByRole("button", { name: "Sign out", exact: true }).click();
   await expect(title(page)).toHaveText("Welcome to your kitchen.");
   await expect.poll(() => copies(page)).toBe(0);
+});
+
+// A tool call as another cook, or as the phone, straight to the kitchen.
+async function call(request, token, name, input) {
+  const response = await request.post(`${kitchen}/api/tools/${name}`, {
+    headers: { Authorization: `Bearer ${token}`, Origin: kitchen },
+    data: { request_id: `${name}-${Date.now()}-${Math.random()}`, ...input },
+  });
+  expect(response.ok(), await response.text()).toBe(true);
+  return response.json();
+}
+async function kitchenNow(request, token) {
+  const state = await request.get(`${kitchen}/api/state`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return (await state.json()).records;
+}
+const today = () => new Date().toLocaleDateString("en-CA");
+
+test("out of the kitchen's reach, a phone keeps groceries added, leftovers eaten and a cooking note, and each arrives once when it answers", async ({
+  page,
+  request,
+}) => {
+  await signIn(page, request, "taster@example.test");
+  const token = await stored(page, "kooks.device");
+  const stamp = Date.now();
+  const soup = `Lentil soup ${stamp}`;
+  const { record: recipe } = await call(request, token, "recipe_save", {
+    recipe: { title: soup, servings: 4 },
+  });
+  await call(request, token, "batch_create", {
+    recipe_id: recipe.id,
+    portions: 3,
+    cooked_on: today(),
+  });
+  // The household's first grocery makes its list, which needs the kitchen.
+  await page.getByRole("link", { name: "Groceries" }).first().click();
+  const add = page.getByRole("textbox", { name: "Add to the list" });
+  await add.fill(`bread ${stamp}`);
+  await add.press("Enter");
+  const bread = page.getByRole("checkbox", {
+    name: new RegExp(`^bread ${stamp}`),
+  });
+  await expect(bread).toBeVisible();
+  await expect.poll(() => stored(page, "kooks.outbox")).toBeNull();
+  // The phone has heard of the leftovers before the kitchen goes quiet.
+  await page.getByRole("link", { name: "At home" }).click();
+  await expect(
+    page.getByRole("button", { name: `Ate one, ${soup}` }),
+  ).toBeVisible();
+  await page.getByRole("link", { name: "To buy" }).click();
+  const away = (route) => route.abort("internetdisconnected");
+  await page.route(`${kitchen}/api/**`, away);
+  const bar = page.getByRole("status").filter({ hasText: "Can’t reach" });
+  await expect(bar).toBeVisible();
+
+  // Groceries added by hand show at once, waiting to send; one is ticked
+  // into the basket, and one is thought better of.
+  const lemons = `lemons ${stamp}`;
+  await add.fill(`2 ${lemons}`);
+  await add.press("Enter");
+  const lemonBox = page.getByRole("checkbox", {
+    name: new RegExp(`^${lemons}`),
+  });
+  await expect(lemonBox).toBeVisible();
+  await expect(lemonBox).toHaveAccessibleDescription("Waiting to send");
+  await lemonBox.check();
+  await expect(lemonBox).toBeChecked();
+  const parsley = `parsley ${stamp}`;
+  await add.fill(parsley);
+  await add.press("Enter");
+  await page
+    .getByRole("button", { name: `Remove ${parsley} from the list` })
+    .click();
+  await expect(page.getByRole("status").last()).toContainText(
+    `${parsley} won’t be added.`,
+  );
+  await expect(
+    page.getByRole("checkbox", { name: new RegExp(`^${parsley}`) }),
+  ).toHaveCount(0);
+  expect(await scan(page, "Groceries, waiting to send")).toEqual([]);
+
+  // A portion of the leftovers eaten.
+  await page.getByRole("link", { name: "At home" }).click();
+  await page.getByRole("button", { name: `Ate one, ${soup}` }).click();
+  const leftovers = page.locator("li").filter({ hasText: soup });
+  await expect(leftovers).toContainText("2 portions left");
+  await expect(leftovers).toContainText("Waiting to send");
+
+  // A note after dinner.
+  await page.goto(`${kitchen}/#/recipes/${recipe.id}/note`);
+  await page.getByLabel("Notes").fill("More lemon next time.");
+  await page.getByRole("button", { name: "Save note" }).click();
+  await expect(title(page)).toHaveText(soup);
+  await expect(page.getByRole("status").last()).toContainText(
+    "It goes to the kitchen when it answers.",
+  );
+  const cooked = page.locator(".cooked").filter({ hasText: "More lemon" });
+  await expect(cooked).toContainText("Waiting to send");
+
+  // Everything waiting is listed, in order, from the bar.
+  await expect(bar).toContainText(
+    "3 changes made here will go when it answers.",
+  );
+  await bar.getByRole("link").click();
+  await expect(title(page)).toHaveText("Waiting to send");
+  const rows = page.locator("[data-rows=waiting] li");
+  await expect(rows).toHaveCount(3);
+  await expect(rows.nth(0)).toContainText(
+    `Add 2 ${lemons} to the grocery list`,
+  );
+  await expect(rows.nth(1)).toContainText(`Ate a portion of ${soup}`);
+  await expect(rows.nth(2)).toContainText(`A note on ${soup}`);
+  expect(await scan(page, "Waiting to send")).toEqual([]);
+
+  // Started again without the kitchen, nothing made here is lost.
+  await page.reload();
+  await expect(title(page)).toHaveText("Waiting to send");
+  await expect(rows).toHaveCount(3);
+
+  // The kitchen answers: each change goes, once, and nothing waits.
+  await page.unroute(`${kitchen}/api/**`, away);
+  await expect(bar).toHaveCount(0);
+  await expect(
+    page.getByText("Everything made here is in the kitchen."),
+  ).toBeVisible();
+  expect(await stored(page, "kooks.outbox")).toBeNull();
+  const now = await kitchenNow(request, token);
+  const list = now.shopping[0];
+  const named = (name) => list.items.filter((row) => row.name === name);
+  expect(named(lemons)).toHaveLength(1);
+  expect(named(lemons)[0].checked).toBe(true);
+  expect(named(parsley)).toHaveLength(0);
+  const batch = now.batch.find((b) => b.data.recipe_id === recipe.id);
+  expect(batch.remaining_portions).toBe(2);
+  const notes = now.note.filter((n) => n.data.recipe_id === recipe.id);
+  expect(notes.map((n) => n.data.text)).toEqual(["More lemon next time."]);
+});
+
+test("a change whose answer is lost on the way is made once, and one the kitchen refuses says why until it is discarded", async ({
+  page,
+  request,
+}) => {
+  await signIn(page, request, "baker@example.test");
+  const token = await stored(page, "kooks.device");
+  const stamp = Date.now();
+  const stew = `Bean stew ${stamp}`;
+  const { record: recipe } = await call(request, token, "recipe_save", {
+    recipe: { title: stew, servings: 2 },
+  });
+  const { record: batch } = await call(request, token, "batch_create", {
+    recipe_id: recipe.id,
+    portions: 2,
+    cooked_on: today(),
+  });
+  await page.getByRole("link", { name: "Groceries" }).first().click();
+  const add = page.getByRole("textbox", { name: "Add to the list" });
+  await add.fill(`rice ${stamp}`);
+  await add.press("Enter");
+  await expect(
+    page.getByRole("checkbox", { name: new RegExp(`^rice ${stamp}`) }),
+  ).toBeVisible();
+  await expect.poll(() => stored(page, "kooks.outbox")).toBeNull();
+
+  // The kitchen makes the change, and the answer never reaches the phone.
+  const tools = `${kitchen}/api/tools/shopping_manual_item`;
+  const lost = async (route) => {
+    await route.fetch();
+    await route.abort("connectionreset");
+  };
+  await page.route(tools, lost, { times: 1 });
+  const oats = `oats ${stamp}`;
+  await add.fill(oats);
+  await add.press("Enter");
+  const oatBox = page.getByRole("checkbox", { name: new RegExp(`^${oats}`) });
+  await expect(oatBox).toBeVisible();
+  // The next answer from the kitchen sends it again, as it was: the kitchen
+  // knows its request id and makes nothing new.
+  await expect(oatBox).not.toHaveAccessibleDescription("Waiting to send");
+  await expect.poll(() => stored(page, "kooks.outbox")).toBeNull();
+  let list = (await kitchenNow(request, token)).shopping[0];
+  expect(list.items.filter((row) => row.name === oats)).toHaveLength(1);
+
+  // Out of reach, the phone eats both portions; meanwhile another cook
+  // eats one.
+  const away = (route) => route.abort("internetdisconnected");
+  await page.route(`${kitchen}/api/**`, away);
+  await page.getByRole("link", { name: "At home" }).click();
+  await expect(
+    page.getByRole("status").filter({ hasText: "Can’t reach" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: `All gone, ${stew}` }).click();
+  await page.getByRole("link", { name: "Groceries" }).first().click();
+  await page.getByRole("link", { name: "At home" }).click();
+  await call(request, token, "batch_allocate", {
+    id: batch.id,
+    expected_version: batch.version,
+    allocation: { portions: 1, status: "eaten" },
+  });
+  await page.unroute(`${kitchen}/api/**`, away);
+  // All gone eats whatever is left when it arrives.
+  await expect.poll(() => stored(page, "kooks.outbox")).toBeNull();
+  const eaten = (await kitchenNow(request, token)).batch.find(
+    (b) => b.id === batch.id,
+  );
+  expect(eaten.remaining_portions).toBe(0);
+
+  // A second batch: the phone eats two portions out of reach, another cook
+  // eats one first, and the kitchen will not take the phone's two.
+  const { record: second } = await call(request, token, "batch_create", {
+    recipe_id: recipe.id,
+    portions: 2,
+    cooked_on: today(),
+  });
+  await expect(page.locator("li").filter({ hasText: stew })).toContainText(
+    "2 portions left",
+  );
+  await page.route(`${kitchen}/api/**`, away);
+  await expect(
+    page.getByRole("status").filter({ hasText: "Can’t reach" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: `Ate one, ${stew}` }).click();
+  await page.getByRole("button", { name: `Ate one, ${stew}` }).click();
+  await call(request, token, "batch_allocate", {
+    id: second.id,
+    expected_version: second.version,
+    allocation: { portions: 1, status: "eaten" },
+  });
+  await page.unroute(`${kitchen}/api/**`, away);
+  const refused = page
+    .getByRole("status")
+    .filter({ hasText: "The kitchen didn’t take 1 change made here." });
+  await expect(refused).toBeVisible();
+  await refused.getByRole("link", { name: "See why" }).click();
+  await expect(title(page)).toHaveText("Waiting to send");
+  await expect(page.locator("[data-rows=waiting] li")).toHaveCount(1);
+  await expect(page.locator("[data-rows=waiting]")).toContainText(
+    `No portion of ${stew} was left when this arrived.`,
+  );
+  expect(await scan(page, "Waiting to send, refused")).toEqual([]);
+  await page
+    .getByRole("button", { name: `Discard, Ate a portion of ${stew}` })
+    .click();
+  await expect(
+    page.getByText("Everything made here is in the kitchen."),
+  ).toBeVisible();
+  list = (await kitchenNow(request, token)).batch.find(
+    (b) => b.id === second.id,
+  );
+  expect(list.remaining_portions).toBe(0);
+  expect(await stored(page, "kooks.outbox")).toBeNull();
 });

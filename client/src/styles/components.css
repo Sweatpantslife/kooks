@@ -1555,6 +1555,15 @@ a.plan-title:hover {
   flex: none;
   margin-block-start: 2px;
 }
+.offline a {
+  color: inherit;
+}
+/* Why the kitchen would not take a change made here. */
+.waiting-problem {
+  color: var(--danger);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
 
 /* ---------- Cooking ---------- */
 /* At the top of every page, in the flow: a bar that stayed on screen

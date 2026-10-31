@@ -10,10 +10,9 @@ import {
   drop,
   forgetWaiting,
   hold,
-  release,
   waiting,
-  waitingCount,
 } from "../client/src/lib/outbox.js";
+import { kinds, sizeOf } from "../client/src/lib/waiting.js";
 import { recipe } from "../mcp/schemas.js";
 
 test("the phone takes the kitchen's address as typed, as an https origin", () => {
@@ -242,22 +241,27 @@ test("ticks made out of the kitchen's reach keep only the latest for each grocer
   hold("list-1", ["a", "b"], true);
   hold("list-1", ["b"], false);
   hold("list-2", ["c"], true);
-  assert.deepEqual(waiting.value, {
+  const ticks = () =>
+    Object.fromEntries(waiting.value.map((e) => [e.input.list, e.input.ticks]));
+  assert.deepEqual(ticks(), {
     "list-1": { a: true, b: false },
     "list-2": { c: true },
   });
-  assert.equal(waitingCount(), 3);
+  assert.equal(
+    waiting.value.reduce((n, e) => n + sizeOf(e), 0),
+    3,
+  );
   // Sent as they were: a tick changed since stays to be sent.
   hold("list-1", ["a"], false);
-  release("list-1", { a: true, b: false });
-  assert.deepEqual(waiting.value, {
-    "list-1": { a: false },
-    "list-2": { c: true },
+  const [first] = waiting.value;
+  const left = kinds.ticks.after(first, {
+    input: { item_ids: ["a", "b"], checked: true },
   });
+  assert.deepEqual(left.input.ticks, { a: false, b: false });
   // A tick made with the kitchen answering says the last word.
-  drop("list-1", ["a"]);
+  drop("list-1", ["a", "b"]);
   drop("list-3", ["x"]);
-  assert.deepEqual(waiting.value, { "list-2": { c: true } });
+  assert.deepEqual(ticks(), { "list-2": { c: true } });
   forgetWaiting();
-  assert.equal(waitingCount(), 0);
+  assert.deepEqual(waiting.value, []);
 });

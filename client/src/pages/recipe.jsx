@@ -31,6 +31,7 @@ import {
 import { Art } from "../ui/tile.jsx";
 import { Empty, PageHeader } from "../ui/page.jsx";
 import { Icon } from "../ui/icon.jsx";
+import { Waiting } from "../ui/waiting.jsx";
 import { CookButton } from "../ui/cook-button.jsx";
 import { MoreList, linkItems } from "../ui/more.jsx";
 
@@ -166,6 +167,7 @@ function CookedBefore({ r, notes }) {
     return (
       <li key={note.id} class="cooked">
         <p class="eyebrow">{about.join(" · ")}</p>
+        {note.waiting && <Waiting />}
         {n.text !== "Cooked." && <p class="preline">{n.text}</p>}
         {n.changes && (
           <p class="preline">
