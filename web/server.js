@@ -11,7 +11,7 @@ import { dirname, join, resolve, extname, sep } from "node:path";
 import { ZodError } from "zod";
 import { Store, KooksError } from "../mcp/store.js";
 import { createTools } from "../mcp/tools.js";
-import { kind } from "../mcp/schemas.js";
+import { id as recordId, kind } from "../mcp/schemas.js";
 import { batchView } from "../mcp/features.js";
 import { backupChunks } from "../mcp/backup.js";
 import { shoppingItems } from "../mcp/shopping.js";
@@ -615,6 +615,27 @@ export function createWebServer({
       });
     if (route === "GET household/members")
       return send(res, 200, auth.members(session));
+    // Which person at the table this member is: one already there, or none.
+    // An owner may also unlink another member, naming them.
+    if (route === "POST household/person") {
+      const { person = null, member = null } = await input();
+      if (member !== null) {
+        if (typeof member !== "string" || person !== null)
+          throw new AuthError(
+            "INVALID_INPUT",
+            "To unlink a member, name them by their email address and give no person: only a member says which person they are.",
+          );
+        auth.unlinkMember(session, member);
+        return send(res, 200, { ok: true });
+      }
+      if (person !== null) {
+        const id = recordId.parse(person);
+        const { store: cookbook } = kitchenOf(session.household);
+        cookbook.read(() => cookbook.get("member", id));
+      }
+      auth.linkPerson(session, person);
+      return send(res, 200, { ok: true });
+    }
     if (route === "POST household/rename") {
       auth.renameHousehold(session, (await input()).name);
       return send(res, 200, { ok: true });
@@ -732,6 +753,18 @@ export function createWebServer({
         });
       const kitchen = kitchenOf(session?.household ?? HOME);
       const { store, tools, assistant } = kitchen;
+      // Who is asking, recorded on each change they make, and how history
+      // names this household's members.
+      const context = session
+        ? {
+            actor: {
+              type: "member",
+              account: session.account,
+              person: session.person,
+            },
+            links: () => auth.links(kitchen.id),
+          }
+        : { actor: { type: "local" } };
       if (url.pathname === "/api/state" && req.method === "GET") {
         const state = store.read(() => {
           const sequence = store.sequence();
@@ -906,7 +939,7 @@ export function createWebServer({
               });
             pagesInProgress++;
             try {
-              return send(res, 200, await tool.execute(input));
+              return send(res, 200, await tool.execute(input, context));
             } finally {
               pagesInProgress--;
             }
@@ -919,12 +952,12 @@ export function createWebServer({
               });
             importsInProgress++;
             try {
-              return send(res, 200, await tool.execute(input));
+              return send(res, 200, await tool.execute(input, context));
             } finally {
               importsInProgress--;
             }
           }
-          return send(res, 200, await tool.execute(input));
+          return send(res, 200, await tool.execute(input, context));
         };
         if (!largeBodies.has(tool.name)) return await run(toolBody);
         if (largeUploads >= maxLargeUploads)

@@ -251,6 +251,7 @@ test("HTTPS hosting signs members in with emailed links and passkeys behind its 
     id: "home",
     name: "Our kitchen",
     role: "owner",
+    person: null,
     members: 1,
   });
   const saved = await post(
@@ -1110,6 +1111,209 @@ test("households keep their own cookbooks and grow by emailed invitation", async
   const last = await post("/api/auth/household/leave", {}, owner);
   assert.equal(last.status, 409);
   assert.equal((await last.json()).error, "LAST_MEMBER");
+});
+
+test("members say who they are at the table, history names them, and leaving leaves a plain person", async (t) => {
+  const box = mailbox();
+  const { get, post } = await setup(t, { owner: member, mailer: box });
+  const signIn = async (email) => {
+    await post("/api/auth/link", { email });
+    return {
+      Cookie: sessionCookie(
+        await post("/api/auth/link/confirm", {
+          token: tokenIn(box.sent.at(-1)),
+        }),
+      ),
+    };
+  };
+  const owner = await signIn(member);
+  await post(
+    "/api/auth/household/invite",
+    { email: "sam@example.test" },
+    owner,
+  );
+  const sam = {
+    Cookie: sessionCookie(
+      await post("/api/auth/invite/accept", {
+        token: box.sent.at(-1).text.match(/#\/join\/([\w-]{43})/)[1],
+      }),
+    ),
+  };
+  let requests = 0;
+  const tool = async (name, input, who) =>
+    (
+      await post(
+        `/api/tools/${name}`,
+        { request_id: `people-${++requests}`, ...input },
+        who,
+      )
+    ).json();
+  const state = async (who) => (await get("/api/state", who)).json();
+  const link = (person, who) =>
+    post("/api/auth/household/person", { person }, who);
+
+  // Sam changes something before saying who they are.
+  const early = await tool(
+    "recipe_save",
+    { recipe: { title: "Early toast" } },
+    sam,
+  );
+  const ada = (await tool("member_save", { member: { name: "Ada" } }, owner))
+    .record.id;
+  const soup = await tool(
+    "recipe_save",
+    { recipe: { title: "Ada's soup" } },
+    owner,
+  );
+  assert.equal((await state(owner)).account.household.person, null);
+
+  // Only a person at this household's table, and each for one member.
+  assert.equal((await link("../member", owner)).status, 400);
+  assert.equal((await link("no-such-person", owner)).status, 404);
+  assert.equal((await link(soup.record.id, owner)).status, 404);
+  assert.equal((await link(ada, owner)).status, 200);
+  assert.equal((await state(owner)).account.household.person, ada);
+  const taken = await link(ada, sam);
+  assert.equal(taken.status, 409);
+  assert.equal((await taken.json()).error, "PERSON_TAKEN");
+  // Or a new person, added and then linked.
+  const samPerson = (
+    await tool("member_save", { member: { name: "Sam" } }, sam)
+  ).record.id;
+  assert.equal((await link(samPerson, sam)).status, 200);
+  const edited = await tool(
+    "recipe_save",
+    {
+      id: soup.record.id,
+      expected_version: 1,
+      recipe: { title: "Ada's soup, saltier" },
+    },
+    sam,
+  );
+  const { members } = await (
+    await get("/api/auth/household/members", owner)
+  ).json();
+  assert.deepEqual(
+    members.map((m) => [m.email, m.person]),
+    [
+      [member, ada],
+      ["sam@example.test", samPerson],
+    ],
+  );
+
+  // History names members by their person at the table, and says which
+  // changes were the reader's own; it never shows an address or account.
+  const history = async (who) =>
+    (await (await post("/api/tools/history_list", { limit: 10 }, who)).json())
+      .actions;
+  const seenByOwner = await history(owner);
+  const actorOf = (actions, action) =>
+    actions.find((a) => a.id === action.action_id).actor;
+  assert.deepEqual(actorOf(seenByOwner, edited), {
+    type: "member",
+    person: samPerson,
+    name: "Sam",
+    you: false,
+  });
+  assert.deepEqual(actorOf(seenByOwner, soup), {
+    type: "member",
+    person: ada,
+    name: "Ada",
+    you: true,
+  });
+  // Sam's change from before they linked is theirs by name now too.
+  assert.equal(actorOf(seenByOwner, early).name, "Sam");
+  assert.equal(actorOf(await history(sam), edited).you, true);
+  assert.doesNotMatch(JSON.stringify(seenByOwner), /@|example\.test/);
+  // Undo of another member's change is the undoer's own change.
+  assert.equal(
+    (
+      await post(
+        "/api/tools/history_undo",
+        { request_id: "undo-sam", action_id: edited.action_id },
+        owner,
+      )
+    ).status,
+    200,
+  );
+  assert.equal((await history(sam))[0].actor.name, "Ada");
+
+  // A portable backup is the cookbook alone: people, but no addresses or
+  // links to accounts.
+  const backup = (await get("/api/backup", owner)).text();
+  assert.match(backup, /"Sam"/);
+  assert.doesNotMatch(backup, /example\.test|"person"/);
+
+  // Unlinking says nobody; linking again is allowed.
+  assert.equal((await link(null, owner)).status, 200);
+  assert.equal((await state(owner)).account.household.person, null);
+  assert.equal((await link(ada, owner)).status, 200);
+  // Relinking does not rename what was done as someone else.
+  assert.equal((await link(null, sam)).status, 200);
+  assert.equal(actorOf(await history(owner), edited).name, "Sam");
+  assert.equal((await link(samPerson, sam)).status, 200);
+
+  // An owner can take back another member's claim, and only that; a
+  // member cannot unlink anyone else.
+  const unlink = (email, who, extra = {}) =>
+    post("/api/auth/household/person", { member: email, ...extra }, who);
+  assert.equal((await unlink(member, sam)).status, 403);
+  assert.equal(
+    (await unlink("sam@example.test", owner, { person: ada })).status,
+    400,
+  );
+  assert.equal((await unlink("kim@example.test", owner)).status, 404);
+  assert.equal((await unlink(["sam@example.test"], owner)).status, 400);
+  assert.equal((await unlink("sam@example.test", owner)).status, 200);
+  assert.equal((await state(sam)).account.household.person, null);
+  assert.equal((await state(owner)).account.household.person, ada);
+  assert.equal((await link(samPerson, sam)).status, 200);
+
+  // Removed, Sam takes only the link: their person stays at the table,
+  // and history still names their changes by it.
+  assert.equal(
+    (
+      await post(
+        "/api/auth/household/remove",
+        { email: "sam@example.test" },
+        owner,
+      )
+    ).status,
+    200,
+  );
+  const after = await state(owner);
+  assert.deepEqual(after.records.member.map((m) => m.data.name).sort(), [
+    "Ada",
+    "Sam",
+  ]);
+  assert.equal(actorOf(await history(owner), edited).name, "Sam");
+  // Invited back, Sam is linked to nobody until they say so again, and
+  // their old person is free for them.
+  await post(
+    "/api/auth/household/invite",
+    { email: "sam@example.test" },
+    owner,
+  );
+  const back = (await state(sam)).account.invites[0];
+  await post("/api/auth/household/join", { id: back.id }, sam);
+  assert.equal((await state(sam)).account.household.person, null);
+  assert.equal((await link(samPerson, sam)).status, 200);
+});
+
+test("without sign-in, changes are the kitchen computer's, and its own", async (t) => {
+  const { post } = await setup(t);
+  await post("/api/tools/recipe_save", {
+    request_id: "local-1",
+    recipe: { title: "Toast" },
+  });
+  const { actions } = await (
+    await post("/api/tools/history_list", { limit: 1 })
+  ).json();
+  assert.deepEqual(actions[0].actor, { type: "local", you: true });
+  assert.equal(
+    (await post("/api/auth/household/person", { person: null })).status,
+    404,
+  );
 });
 
 test("members see their signed-in devices and sign the others out", async (t) => {

@@ -111,7 +111,7 @@ export function createTools(store, { readPage = fetchPage } = {}) {
         "ebook_library",
       ],
       limits: [
-        "One household database. Browser clients share this server; no hosted cloud sync or individual accounts.",
+        "One household's database. Members sign in to this server from browsers and phones, and each household on it has a database of its own; there is no hosted cloud sync. Changes made through MCP are recorded as an agent's.",
         "No direct WhatsApp, video, or model-provider connection. Recipe links are stored and opened by the apps; recipe_import_link fetches one public page the user names, for its schema.org Recipe data only. Photo OCR runs locally and requires review.",
         "Photos and ebooks (PDF, EPUB) are stored locally as immutable assets; this server never reads, summarizes or fetches them, and the browser opens PDFs in its own viewer and downloads EPUBs.",
         "Timers store deadlines but do not deliver background alarms.",
@@ -466,12 +466,51 @@ export function createTools(store, { readPage = fetchPage } = {}) {
     false,
     (args) => kooks.archive(args),
   );
+  // What one record is called, for a history line: archived records too.
+  const titleOf = (kind, id) => {
+    try {
+      const { data } = store.get(kind, id, true);
+      return data.title ?? data.name ?? null;
+    } catch {
+      return null;
+    }
+  };
+  // Who made an action, by name and never by address: the person at the
+  // table the member was linked to when they made it, which later links
+  // never change, or, for a change made before they said, the person they
+  // are linked to now; you, when it was the caller's own; an agent through
+  // MCP.
+  function named(actor, { actor: viewer = null, links = null } = {}) {
+    if (!actor) return null;
+    if (actor.type !== "member")
+      return {
+        type: actor.type,
+        you: actor.type === "local" && viewer?.type === "local",
+      };
+    const current = actor.person ? null : links?.();
+    const person = actor.person ?? current?.get(actor.account) ?? null;
+    return {
+      type: "member",
+      person: person ?? null,
+      name: person ? titleOf("member", person) : null,
+      you: viewer?.type === "member" && viewer.account === actor.account,
+    };
+  }
   tool(
     "history_list",
-    "Read the local action history, affected IDs and versions, and action IDs for undo. Actions older than 90 days are trimmed: they keep this history line but can no longer be undone.",
+    "Read the household's action history, newest first: each action's tool, time, the records it changed with their versions and current titles, and who made it (a member by the name of their person at the table, an agent through MCP, or the kitchen's own computer; never an email address). Use action IDs for undo. Actions older than 90 days are trimmed: they keep this history line but can no longer be undone.",
     s.pagination,
     true,
-    (args) => ({ actions: store.history(args.limit, args.offset) }),
+    (args, _prepared, context) => ({
+      actions: store.history(args.limit, args.offset).map((action) => ({
+        ...action,
+        actor: named(action.actor, context),
+        changes: action.changes.map((change) => ({
+          ...change,
+          title: titleOf(change.kind, change.id),
+        })),
+      })),
+    }),
   );
   tool(
     "history_undo",
@@ -505,16 +544,24 @@ export function createTools(store, { readPage = fetchPage } = {}) {
   addLibraryTools(tool, store, kooks);
   return definitions.map((definition) => ({
     ...definition,
-    execute(input) {
+    // context.actor is who is asking, recorded on every change they make;
+    // context.links, where there is sign-in, maps each current member's
+    // account to their person at the table, for naming them in history.
+    execute(input, context = {}) {
       const args = definition.schema.parse(input);
       const run = (prepared) => {
         if (definition.readOnly)
-          return store.read(() => definition.handler(args, prepared));
-        return store.mutate(definition.name, args, () => {
-          const result = definition.handler(args, prepared);
-          kooks.validateRelations(store.changes);
-          return result;
-        });
+          return store.read(() => definition.handler(args, prepared, context));
+        return store.mutate(
+          definition.name,
+          args,
+          () => {
+            const result = definition.handler(args, prepared, context);
+            kooks.validateRelations(store.changes);
+            return result;
+          },
+          context.actor ?? null,
+        );
       };
       // OCR must finish before opening a SQLite transaction. Existing tools
       // stay synchronous for both MCP and direct application callers.
