@@ -10,6 +10,7 @@
 !ocr/
 !ocr/**
 !scripts/backup.mjs
+!scripts/accounts.mjs
 !scripts/assistant-trial.mjs
 !client/
 !client/**

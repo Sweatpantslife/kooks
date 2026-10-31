@@ -18,8 +18,9 @@ COPY mcp ./mcp
 COPY shared ./shared
 COPY web ./web
 COPY ocr ./ocr
-# The backup script, for copies and restores run in the container's terminal.
-COPY scripts/backup.mjs scripts/assistant-trial.mjs ./scripts/
+# Scripts for whoever runs the server, from the container's terminal:
+# copies and restores, accounts, and the assistant trial.
+COPY scripts/backup.mjs scripts/accounts.mjs scripts/assistant-trial.mjs ./scripts/
 COPY --from=client /build/client/dist ./client/dist
 COPY LICENSE ./LICENSE
 RUN mkdir -p /data && chown node:node /data
