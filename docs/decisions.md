@@ -28,6 +28,6 @@ Reconciled October 9, 2026 against the source. See [the developer handoff](hando
 - Confirm the first phone release scope.
 - Decide whether the assistant should answer from the phone without a connection (it does not), and whether a household wants a monthly limit as well as the daily token allowance.
 - Validate actual device timer behavior, incoming sharing, interface/recipe languages, right-to-left needs, regional units, accessibility, and import quality.
-- Establish signing, distribution, durable operational backups, recovery, and release acceptance criteria.
+- Establish signing and distribution. Durable backups, recovery and the pilot's acceptance criteria are in [hosting](hosting.md#backups), [recovery](recovery.md) and [the pilot release](pilot.md); whether to send copies off-site, and to which storage, is the owner's choice.
 
 The historical phase plan remains useful design context, but completion must be assessed per feature and platform rather than by its old phase numbers.
