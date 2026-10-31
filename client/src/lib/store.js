@@ -4,6 +4,7 @@ import { toast } from "./toast.js";
 import { plural } from "./format.js";
 import { deviceToken, keepToken, phone } from "./device.js";
 import { dropCopies, keepCopy, readCopy } from "./offline.js";
+import { dropPhotos } from "./photos.js";
 import {
   belongs,
   discard,
@@ -159,6 +160,7 @@ async function load() {
   }
   if (value.unchanged && value.account) account.value = value.account;
   if (!value.unchanged) {
+    const was = household();
     batch(() => {
       db.value = value.changes
         ? applyChanges(db.value, value.changes)
@@ -169,6 +171,9 @@ async function load() {
       status.value = "ready";
     });
     revision = value.revision;
+    // Moved to another household by the kitchen (removed from this one):
+    // its photos go from the phone.
+    if (was && was !== household()) void dropPhotos();
     keepCopy({
       records: db.value,
       revision,

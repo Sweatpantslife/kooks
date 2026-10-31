@@ -619,3 +619,110 @@ test("a recipe edited out of the kitchen's reach keeps changes made meanwhile to
   expect(now.data.notes).toBe("Mint at the end.");
   expect(now.data.steps).toHaveLength(2);
 });
+
+const photosKept = (page) =>
+  page.evaluate(
+    () =>
+      new Promise((resolve, reject) => {
+        const open = indexedDB.open("kooks-photos", 1);
+        open.onupgradeneeded = () => {
+          open.result.createObjectStore("photos");
+          open.result.createObjectStore("used");
+        };
+        open.onerror = () => reject(open.error);
+        open.onsuccess = () => {
+          const count = open.result
+            .transaction("photos")
+            .objectStore("photos")
+            .count();
+          count.onsuccess = () => {
+            open.result.close();
+            resolve(count.result);
+          };
+        };
+      }),
+  );
+const copied = (page, text) =>
+  page.evaluate(
+    (text) =>
+      new Promise((resolve, reject) => {
+        const open = indexedDB.open("kooks", 1);
+        open.onupgradeneeded = () => open.result.createObjectStore("copies");
+        open.onerror = () => reject(open.error);
+        open.onsuccess = () => {
+          const all = open.result
+            .transaction("copies")
+            .objectStore("copies")
+            .getAll();
+          all.onsuccess = () => {
+            open.result.close();
+            resolve(JSON.stringify(all.result).includes(text));
+          };
+        };
+      }),
+    text,
+  );
+const shown = (image) =>
+  image.evaluate((img) => img.complete && img.naturalWidth > 0);
+
+// Last, since it signs the shared phone out.
+test("photos a phone has opened show without the kitchen, are not fetched again, and go at sign-out", async ({
+  page,
+  request,
+}) => {
+  await signedIn(page, request);
+  const token = await stored(page, "kooks.device");
+  const pngs = [
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGM4EaABAAMkAUEdGZ/EAAAAAElFTkSuQmCC",
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGPQqLABAAGoAN2QFCk0AAAAAElFTkSuQmCC",
+  ];
+  const photo_ids = [];
+  for (const [n, base64] of pngs.entries()) {
+    const { record } = await call(request, token, "asset_save", {
+      file: { name: `dish-${n}.png`, mime_type: "image/png", base64 },
+    });
+    photo_ids.push(record.id);
+  }
+  const dish = `Market dumplings ${Date.now()}`;
+  const { record: idea } = await call(request, token, "inspiration_save", {
+    inspiration: { title: dish, photo_ids },
+  });
+  await page.evaluate(
+    (id) => (location.hash = `#/recipes/idea/${encodeURIComponent(id)}`),
+    idea.id,
+  );
+  await expect(title(page)).toHaveText(dish);
+  const second = page.getByRole("img", { name: `${dish}, photo 2` });
+  await expect.poll(() => shown(second)).toBe(true);
+  await expect.poll(() => photosKept(page)).toBe(2);
+  // The copy of the kitchen, written a moment after it changed, has the idea.
+  await expect.poll(() => copied(page, idea.id)).toBe(true);
+
+  // Started again without the kitchen, the phone shows the photos it kept.
+  const away = (route) => route.abort("internetdisconnected");
+  await page.route(`${kitchen}/api/**`, away);
+  await page.reload();
+  await expect(title(page)).toHaveText(dish);
+  await expect(
+    page.getByRole("status").filter({ hasText: "Can’t reach" }),
+  ).toBeVisible();
+  await expect.poll(() => shown(second)).toBe(true);
+  await page.unroute(`${kitchen}/api/**`, away);
+
+  // With the kitchen, a kept photo is not fetched again.
+  const fetched = [];
+  page.on("request", (r) => {
+    if (r.url().includes("/api/assets/")) fetched.push(r.url());
+  });
+  await page.reload();
+  await expect(title(page)).toHaveText(dish);
+  await expect.poll(() => shown(second)).toBe(true);
+  expect(fetched).toEqual([]);
+
+  await page.getByRole("link", { name: "Household" }).click();
+  await page.getByRole("link", { name: /^Sign-in/ }).click();
+  await page.getByRole("button", { name: "Sign out", exact: true }).click();
+  await expect(title(page)).toHaveText("Welcome to your kitchen.");
+  device = null;
+  await expect.poll(() => photosKept(page)).toBe(0);
+});

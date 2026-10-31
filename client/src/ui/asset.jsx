@@ -2,22 +2,36 @@ import { useEffect, useState } from "preact/hooks";
 import { file } from "../lib/api.js";
 import { native, phone } from "../lib/device.js";
 import { shareFile } from "../lib/native.js";
+import { keepPhoto, keptPhoto } from "../lib/photos.js";
+import { account, offline } from "../lib/store.js";
 import { toast } from "../lib/toast.js";
 
 export const assetPath = (id) => `/api/assets/${encodeURIComponent(id)}`;
 
 // A phone fetches each photo once with its token and shows it from memory;
-// an image tag on its own could not say who is asking.
+// an image tag on its own could not say who is asking. It keeps each photo
+// it has opened, so the photo shows without the kitchen too, and a kept one
+// is not fetched again: a photo in the kitchen never changes.
 const fetched = new Map();
+async function photo(id) {
+  const household = account.value?.household?.id ?? null;
+  const kept = await keptPhoto(household, id);
+  if (kept) return kept;
+  const blob = await file(assetPath(id));
+  void keepPhoto(household, id, blob);
+  return blob;
+}
 function useAsset(id) {
   const [url, setUrl] = useState(() => (phone ? null : assetPath(id)));
+  // A photo the kitchen could not send is asked for again once it answers.
+  const away = phone && offline.value !== null;
   useEffect(() => {
     if (!phone) return setUrl(assetPath(id));
     let live = true;
     if (!fetched.has(id))
       fetched.set(
         id,
-        file(assetPath(id)).then(
+        photo(id).then(
           (blob) => URL.createObjectURL(blob),
           (error) => {
             fetched.delete(id);
@@ -32,7 +46,7 @@ function useAsset(id) {
     return () => {
       live = false;
     };
-  }, [id]);
+  }, [id, away]);
   return url;
 }
 
