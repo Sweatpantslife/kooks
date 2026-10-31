@@ -24,6 +24,7 @@ import * as passkeys from "../lib/passkeys.js";
 import {
   account,
   enterHousehold,
+  letWaitingGo,
   record,
   records,
   refresh,
@@ -129,6 +130,7 @@ function Passkeys({ email }) {
   };
 
   async function leave() {
+    if (!letWaitingGo()) return;
     setBusy(true);
     try {
       await signOut();
@@ -302,6 +304,7 @@ function Devices() {
 function ThisPhone({ email }) {
   const [busy, setBusy] = useState(false);
   const leave = (forget) => async () => {
+    if (!letWaitingGo()) return;
     setBusy(true);
     await signOut();
     if (forget) setKitchen("");
@@ -423,7 +426,8 @@ export function Members() {
     if (
       !confirm(
         `Leave ${mine.name}? You won’t see its recipes, week or groceries until someone invites you again.`,
-      )
+      ) ||
+      !letWaitingGo()
     )
       return;
     setBusy(true);
@@ -436,6 +440,7 @@ export function Members() {
     }
   }
   const switchTo = (h) => async () => {
+    if (!letWaitingGo()) return;
     setBusy(true);
     try {
       await enterHousehold(

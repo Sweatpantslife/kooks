@@ -1,6 +1,7 @@
 import { useState } from "preact/hooks";
 import { ArrowLeft, NotebookPen } from "lucide";
-import { change, record } from "../lib/store.js";
+import { keep, record, undoAction } from "../lib/store.js";
+import { toast } from "../lib/toast.js";
 import { leave } from "../lib/router.js";
 import { localDay } from "../lib/format.js";
 import { PageHeader } from "../ui/page.jsx";
@@ -31,17 +32,20 @@ export function NoteForm({ id }) {
   const submit = (event) => {
     event.preventDefault();
     void work.run(async () => {
-      await change(
-        "note_save",
-        {
-          recipe_id: id,
-          cooked_on: n.cooked_on || today,
-          text: n.text.trim() || "Cooked.",
-          ...(n.rating ? { rating: n.rating } : {}),
-          ...(n.changes.trim() ? { changes: n.changes.trim() } : {}),
-          ...(n.next_time.trim() ? { next_time: n.next_time.trim() } : {}),
-        },
-        { done: "Your note is with the recipe." },
+      // On a phone out of the kitchen's reach, the note waits on the phone.
+      const result = await keep("note", {
+        recipe_id: id,
+        cooked_on: n.cooked_on || today,
+        text: n.text.trim() || "Cooked.",
+        ...(n.rating ? { rating: n.rating } : {}),
+        ...(n.changes.trim() ? { changes: n.changes.trim() } : {}),
+        ...(n.next_time.trim() ? { next_time: n.next_time.trim() } : {}),
+      });
+      toast(
+        result.kept
+          ? "Your note is with the recipe on this phone. It goes to the kitchen when it answers."
+          : "Your note is with the recipe.",
+        { undo: result.action_id ? () => undoAction(result.action_id) : null },
       );
       dirty.current = false;
       leave(`recipes/${encodeURIComponent(id)}`);

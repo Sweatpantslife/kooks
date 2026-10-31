@@ -1,9 +1,19 @@
-import { signal, computed, batch } from "@preact/signals";
+import { signal, computed, batch, effect, untracked } from "@preact/signals";
 import * as api from "./api.js";
 import { toast } from "./toast.js";
+import { plural } from "./format.js";
 import { deviceToken, keepToken, phone } from "./device.js";
 import { dropCopies, keepCopy, readCopy } from "./offline.js";
-import { forgetWaiting } from "./outbox.js";
+import {
+  belongs,
+  discard,
+  forgetWaiting,
+  keepChange,
+  outcomes,
+  sendWaiting,
+  waiting,
+} from "./outbox.js";
+import { withWaiting } from "./waiting.js";
 
 // The kitchen as this tab last saw it: every record by kind, in the server's
 // id order. Pages read it through `records()`; nothing else holds a copy.
@@ -34,11 +44,21 @@ export const answered = signal(0);
 let revision = "";
 let heard = 0;
 
-export const records = (kind) => db.value[kind] ?? [];
+// The household this device is in, or null on a server without sign-in.
+const household = () => account.value?.household?.id ?? null;
+// The changes made on this device that wait for this household's kitchen.
+export const waitingHere = computed(() =>
+  waiting.value.filter((entry) => belongs(entry, household())),
+);
+// What the pages show: the kitchen as last heard, with what waits to be
+// sent already in it, marked as waiting.
+export const view = computed(() => withWaiting(db.value, waitingHere.value));
+
+export const records = (kind) => view.value[kind] ?? [];
 export const record = (kind, id) => records(kind).find((r) => r.id === id);
 export const counts = computed(() =>
   Object.fromEntries(
-    Object.entries(db.value).map(([kind, list]) => [kind, list.length]),
+    Object.entries(view.value).map(([kind, list]) => [kind, list.length]),
   ),
 );
 
@@ -67,12 +87,16 @@ export async function refresh({ fresh = false } = {}) {
 }
 // Back to the sign-in page, forgetting what this tab knew. A phone forgets
 // its token too, which the kitchen no longer takes, and its copy of the
-// kitchen.
-function signedOut() {
+// kitchen. Changes waiting to be sent go too: when the kitchen ended the
+// sign-in rather than the member, the sign-in page says how many.
+function signedOut({ ended = true } = {}) {
   revision = "";
   if (phone) keepToken("");
   void dropCopies();
+  const unsent = waiting.value.length;
   forgetWaiting();
+  if (ended && unsent)
+    signInError.value = `This ${phone ? "phone" : "browser"} was signed out, so ${plural(unsent, "change")} made on it ${unsent === 1 ? "was" : "were"} not sent.`;
   batch(() => {
     db.value = {};
     account.value = null;
@@ -194,6 +218,50 @@ export async function change(name, input, { done, undo = true } = {}) {
   }
 }
 
+// Changes kept on this device go to the kitchen in the order they were
+// made, whenever it answers: each answer to a poll sends what waits.
+const kitchenLink = {
+  call: (name, input) => api.tool(name, input, { timeout: 20000 }),
+  read: (kind, id) => db.value[kind]?.find((r) => r.id === id),
+  refresh: () => refresh({ fresh: true }),
+  household,
+  ended: () => signedOut(),
+};
+export const sendNow = () =>
+  status.value === "ready" ? sendWaiting(kitchenLink) : Promise.resolve();
+effect(() => {
+  if (answered.value) untracked(() => void sendNow());
+});
+
+// A change of a kind a phone may keep while the kitchen is out of reach
+// (`waiting.js`; grocery ticks, kept in a browser too, go by `hold`). It goes
+// at once when the kitchen answers and nothing else waits; otherwise it
+// waits on the device, after what was kept before it, and shows as made.
+// Returns the kitchen's answer, or { kept: true } while the change waits.
+// A change the kitchen refuses at once is not kept: the refusal is thrown.
+// A browser keeps nothing else: without the kitchen, the change fails as
+// any other does.
+export async function keep(kind, input) {
+  const entry = keepChange(kind, input, { household: household() });
+  if (phone && (offline.value !== null || status.value !== "ready"))
+    return { kept: true };
+  await sendNow();
+  const outcome = outcomes.get(entry.id);
+  outcomes.delete(entry.id);
+  if (outcome?.problem) {
+    discard(entry.id);
+    throw outcome.problem;
+  }
+  if (outcome) return outcome.done ?? {};
+  if (phone) return { kept: true };
+  discard(entry.id);
+  throw new api.ApiError(
+    "Could not reach the kitchen. Check your connection and try again.",
+    "OFFLINE",
+    0,
+  );
+}
+
 export async function undoAction(action_id) {
   try {
     await api.write("history_undo", { action_id });
@@ -212,7 +280,7 @@ export async function signOut() {
   } catch (error) {
     if (!phone) throw error;
   }
-  signedOut();
+  signedOut({ ended: false });
 }
 
 // After a sign-in, load the kitchen as this person.
@@ -273,6 +341,18 @@ export async function acceptInvite() {
   await api.auth("invite/accept", { token });
   invitation.value = null;
   await signedIn(`Welcome to ${household}.`);
+}
+
+// Whether changes made here that the kitchen has not taken may go, as they
+// do when this device moves to another household: asked when any wait.
+export function letWaitingGo() {
+  const unsent = waitingHere.value.length;
+  return (
+    !unsent ||
+    confirm(
+      `${plural(unsent, "change")} made on this ${phone ? "phone" : "browser"} ${unsent === 1 ? "hasn’t" : "haven’t"} reached the kitchen yet. If you go on, ${unsent === 1 ? "it won’t be" : "they won’t be"} sent.`,
+    )
+  );
 }
 
 // Moving between households, or into a new one: the tab forgets the kitchen

@@ -1,8 +1,16 @@
-import { effect, signal, untracked } from "@preact/signals";
+import { signal } from "@preact/signals";
 import * as api from "./api.js";
-import { answered, change, record, records, refresh } from "./store.js";
-import { drop, hold, release, waiting } from "./outbox.js";
-import { toast } from "./toast.js";
+import {
+  account,
+  change,
+  keep,
+  offline,
+  record,
+  records,
+  refresh,
+  sendNow,
+} from "./store.js";
+import { drop, hold, updateInput, waiting } from "./outbox.js";
 import { amount, number } from "./kitchen.js";
 import { normalize } from "../../../shared/quantities.js";
 
@@ -46,9 +54,26 @@ async function ensureList() {
 const edit = (list) => ({ id: list.id, expected_version: list.version });
 
 // A tick made while the kitchen is out of reach waits on this device, shows
-// as made, and is sent when the kitchen answers again.
+// as made, and is sent when the kitchen answers again. A grocery added while
+// it was out of reach is ticked on the change that adds it.
 export async function check(ids, checked) {
   const list = theList();
+  for (const id of ids.filter((id) => id.startsWith("waiting-")))
+    updateInput(id.slice("waiting-".length), (input) => ({
+      ...input,
+      checked,
+    }));
+  ids = ids.filter((id) => !id.startsWith("waiting-"));
+  if (!ids.length) return;
+  // While other ticks wait, or the kitchen is known to be out of reach,
+  // this one joins them, so it goes after them.
+  const queued =
+    offline.value !== null ||
+    waiting.value.some((e) => e.kind === "ticks" && !e.problem);
+  if (list && queued) {
+    hold(list.id, ids, checked, account.value?.household?.id ?? null);
+    return sendNow();
+  }
   if (list) drop(list.id, ids);
   try {
     await onList((now) =>
@@ -56,60 +81,21 @@ export async function check(ids, checked) {
     );
   } catch (error) {
     if (error.code !== "OFFLINE" || !list) throw error;
-    hold(list.id, ids, checked);
+    hold(list.id, ids, checked, account.value?.household?.id ?? null);
   }
 }
 
-// What waited, sent once the kitchen answers: the groceries ticked, then
-// those put back. A grocery that changed meanwhile, such as one whose
-// amount grew, is a new grocery, and the tick on the old one goes.
-let sending = false;
-async function sendWaiting() {
-  if (sending) return;
-  sending = true;
-  try {
-    for (const [listId, ticks] of Object.entries(waiting.value)) {
-      const on = new Set(
-        record("shopping", listId)?.items.map((row) => row.id) ?? [],
-      );
-      release(
-        listId,
-        Object.fromEntries(Object.entries(ticks).filter(([id]) => !on.has(id))),
-      );
-      for (const checked of [true, false]) {
-        const ids = Object.keys(ticks).filter(
-          (id) => on.has(id) && ticks[id] === checked,
-        );
-        if (!ids.length) continue;
-        try {
-          await onList(
-            (list) =>
-              change("shopping_check", {
-                ...edit(list),
-                item_ids: ids,
-                checked,
-              }),
-            () => record("shopping", listId),
-          );
-        } catch (error) {
-          if (error.code === "OFFLINE") return;
-          toast(error.message, { error: true });
-        }
-        release(listId, Object.fromEntries(ids.map((id) => [id, checked])));
-      }
-    }
-  } finally {
-    sending = false;
-  }
+// A grocery added by hand. On a phone without the kitchen it waits, shows
+// on the list as waiting, and is added when the kitchen answers. The first
+// grocery of a household makes its list, which needs the kitchen.
+export function addItem(item) {
+  const list = theList();
+  if (!list)
+    return onList((made) =>
+      change("shopping_manual_item", { ...edit(made), item }),
+    );
+  return keep("grocery", { list: list.id, item });
 }
-effect(() => {
-  if (answered.value) untracked(() => void sendWaiting());
-});
-
-export const addItem = (item, options) =>
-  onList((list) =>
-    change("shopping_manual_item", { ...edit(list), item }, options),
-  );
 
 // What a recipe, meal or planned day puts on the list, dish by dish, with
 // the amounts the server will add: a plan keeps the dishes it was planned

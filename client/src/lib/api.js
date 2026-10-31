@@ -13,12 +13,18 @@ export class ApiError extends Error {
 
 // A phone sends its device token and never a cookie; a browser sends its
 // cookie to its own server.
-function send(path, input, signal) {
+function send(path, input, signal, timeout) {
   const token = deviceToken();
   const headers = {
     ...(input === undefined ? {} : { "Content-Type": "application/json" }),
     ...(phone && token ? { Authorization: `Bearer ${token}` } : {}),
   };
+  // A connection that hangs, as one with a bar of signal can, counts as
+  // none after a while.
+  if (timeout) {
+    const late = AbortSignal.timeout(timeout);
+    signal = signal ? AbortSignal.any([signal, late]) : late;
+  }
   return fetch(`${base()}${path}`, {
     credentials: phone ? "omit" : "same-origin",
     headers,
@@ -47,10 +53,10 @@ export async function file(path) {
   return response.blob();
 }
 
-async function request(path, input) {
+async function request(path, input, timeout) {
   let response;
   try {
-    response = await send(path, input);
+    response = await send(path, input, undefined, timeout);
   } catch {
     throw new ApiError(
       "Could not reach the kitchen. Check your connection and try again.",
@@ -68,8 +74,8 @@ async function request(path, input) {
   return value;
 }
 
-export const tool = (name, input = {}) =>
-  request(`/api/tools/${encodeURIComponent(name)}`, input);
+export const tool = (name, input = {}, { timeout } = {}) =>
+  request(`/api/tools/${encodeURIComponent(name)}`, input, timeout);
 
 export const auth = (path, input) => request(`/api/auth/${path}`, input);
 
@@ -125,6 +131,9 @@ export async function state(revision) {
   try {
     response = await send(
       `/api/state${revision ? `?revision=${encodeURIComponent(revision)}` : ""}`,
+      undefined,
+      undefined,
+      20000,
     );
   } catch {
     throw new ApiError("Could not reach the kitchen.", "OFFLINE", 0);

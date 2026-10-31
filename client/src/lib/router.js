@@ -25,6 +25,7 @@ export const section = (parts) =>
     groceries: "groceries",
     household: "household",
     ask: "ask",
+    waiting: "waiting",
   })[parts[0]] ?? "week";
 
 export const href = (...parts) =>

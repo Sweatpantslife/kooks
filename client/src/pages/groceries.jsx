@@ -10,8 +10,8 @@ import {
   X,
 } from "lucide";
 import { parseIngredient } from "../../../shared/ingredients.js";
-import { change, record, records, undoAction } from "../lib/store.js";
-import { waiting } from "../lib/outbox.js";
+import { change, keep, record, records, undoAction } from "../lib/store.js";
+import { discard } from "../lib/outbox.js";
 import { leave } from "../lib/router.js";
 import { toast } from "../lib/toast.js";
 import {
@@ -43,6 +43,7 @@ import {
 import { FormError, useWork } from "../ui/form.jsx";
 import { Empty, PageHeader } from "../ui/page.jsx";
 import { Icon } from "../ui/icon.jsx";
+import { Waiting } from "../ui/waiting.jsx";
 import { slotOrder, weekTitle } from "./week.jsx";
 import { slotNow } from "../lib/cooking.js";
 
@@ -99,7 +100,7 @@ function QuickAdd() {
     run(async () => {
       const { name, quantity, unit, preparation, original_text } =
         parseIngredient(line);
-      await addItem({
+      const result = await addItem({
         name,
         quantity,
         unit,
@@ -108,7 +109,9 @@ function QuickAdd() {
         category: aisleOf({ name }),
       });
       setText("");
-      said.value = `${line} is on the list.`;
+      said.value = result.kept
+        ? `${line} is on the list, waiting to send.`
+        : `${line} is on the list.`;
     });
   };
   return (
@@ -158,6 +161,13 @@ function Row({ row }) {
   const remove = async (event) => {
     settle(row.id, "gone");
     passFocus(event.currentTarget, "#grocery-add");
+    // Added while the kitchen was out of reach: it is not sent.
+    if (row.waiting) {
+      const back = discard(row.waiting);
+      settle(row.id);
+      toast(`${row.name} won’t be added.`, { undo: back });
+      return;
+    }
     try {
       const results = await takeOut([row]);
       done(results.length === 1 && results[0], `${row.name} is off the list.`);
@@ -174,7 +184,11 @@ function Row({ row }) {
         id={id}
         data-row="check"
         checked={row.checked}
-        aria-describedby={note ? `${id}-for` : undefined}
+        aria-describedby={
+          [note && `${id}-for`, row.waiting && `${id}-waiting`]
+            .filter(Boolean)
+            .join(" ") || undefined
+        }
         onChange={tick}
       />
       <span class="grocery-text">
@@ -190,6 +204,7 @@ function Row({ row }) {
             {note}
           </span>
         )}
+        {row.waiting && <Waiting id={`${id}-waiting`} />}
       </span>
       <button
         type="button"
@@ -269,9 +284,8 @@ function Sources({ list }) {
 export function Groceries() {
   const lists = records("shopping");
   const list = theList();
-  const held = (list && waiting.value[list.id]) ?? {};
   const rows = (list?.items ?? []).flatMap((row) => {
-    const now = pending.value[row.id] ?? held[row.id];
+    const now = pending.value[row.id];
     if (now === "gone") return [];
     return [now === undefined ? row : { ...row, checked: now }];
   });
@@ -371,18 +385,15 @@ function Leftovers() {
   if (!batches.length) return null;
   const eat = async (b, portions, text) => {
     try {
-      const result = await change("batch_allocate", {
-        id: b.id,
-        expected_version: b.version,
-        allocation: {
-          portions,
-          date: localDay(),
-          slot: slotNow(),
-          storage: b.data.storage,
-          status: "eaten",
-        },
+      const result = await keep("eaten", {
+        batch: b.id,
+        title: b.data.title,
+        ...(portions === "all" ? { all: true } : { portions }),
+        date: localDay(),
+        slot: slotNow(),
+        storage: b.data.storage,
       });
-      done(result, text);
+      done(result, result.kept ? `${text} Waiting to send.` : text);
     } catch (error) {
       failed(error);
     }
@@ -409,6 +420,7 @@ function Leftovers() {
                     .filter(Boolean)
                     .join(" · ")}
                 </span>
+                {b.waiting && <Waiting />}
               </span>
               {free > 0 && (
                 <span class="plan-actions">
@@ -425,7 +437,7 @@ function Leftovers() {
                   <button
                     type="button"
                     class="btn btn-quiet btn-small"
-                    onClick={() => eat(b, free, `${title} is all gone.`)}
+                    onClick={() => eat(b, "all", `${title} is all gone.`)}
                     aria-label={`All gone, ${title}`}
                   >
                     All gone
@@ -474,16 +486,19 @@ function PantryRow({ p }) {
             type="button"
             class="btn btn-quiet btn-small"
             onClick={(event) =>
-              run(event, async () =>
+              run(event, async () => {
+                const result = await addItem({
+                  name: d.name,
+                  preparation: d.preparation,
+                  category: aisleOf(d),
+                });
                 done(
-                  await addItem({
-                    name: d.name,
-                    preparation: d.preparation,
-                    category: aisleOf(d),
-                  }),
-                  `${d.name} is on the list.`,
-                ),
-              )
+                  result,
+                  result.kept
+                    ? `${d.name} is on the list, waiting to send.`
+                    : `${d.name} is on the list.`,
+                );
+              })
             }
             aria-label={`Add to the list, ${d.name}`}
           >

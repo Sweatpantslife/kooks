@@ -56,11 +56,30 @@ Passkeys stay browser-only, since a passkey belongs to the kitchen's own web add
 
 ## Without a connection
 
-The phone keeps a copy of the kitchen as it last saw it, in the app's IndexedDB, written a moment after each change arrives. When the app starts, it shows that copy at once and then catches up from it. When the kitchen does not answer, in a shop's basement or on a train, every page says **Can’t reach the kitchen** and since when, and everything stays readable: the week, the recipes, the grocery list.
+The phone keeps a copy of the kitchen as it last saw it, in the app's IndexedDB, written a moment after each change arrives. When the app starts, it shows that copy at once and then catches up from it. When the kitchen does not answer, in a shop's basement or on a train, every page says **Can’t reach the kitchen** and since when, and everything stays readable: the week, the recipes, the grocery list. A request that hangs, as one can on a bar of signal, counts as no answer after 20 seconds.
 
-Ticks on the grocery list still work. A tick made while the kitchen is out of reach shows at once and waits on the phone (in its web storage, the latest tick per grocery), and is sent as soon as the kitchen answers, against whatever version the list has by then: ticking only says "in the basket" or "back on the list", so it cannot overwrite anyone else's change. A grocery that changed meanwhile, for example because its amount grew, is a new grocery on the list, and the old tick is let go. Other changes need the kitchen and say so. Photos are not kept, so they stay blank until the kitchen answers.
+Some changes still work, the ones that cannot overwrite anyone when they arrive late:
 
-Signing out, or the kitchen ending the token, removes the copy and any waiting ticks.
+| Change                                     | Where                                     | When it arrives                                                                                                                                                                                           |
+| ------------------------------------------ | ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Ticking a grocery into the basket, or back | To buy                                    | Sent against whatever version the list has by then: a tick only says "in the basket" or not. A grocery that changed meanwhile, say because its amount grew, is a new grocery, and the old tick is let go. |
+| Adding a grocery by hand                   | To buy, and At home's **Add to the list** | Added to the list as it is by then, beside what others added. Ticked while it waits, it is ticked once it is on the list.                                                                                 |
+| **Ate one** and **All gone** on leftovers  | At home                                   | One portion is refused if none is free by then; All gone eats whatever is left, or nothing.                                                                                                               |
+| A cooking note (**Add a note**)            | A recipe                                  | A note is a record of its own, so nothing meets it.                                                                                                                                                       |
+
+Everything else needs the kitchen and says so: cooking (its progress is shared with whoever else is at the stove, and a timer's deadline is set when the kitchen hears of it, so a timer started offline would ring late), planning, recipes, imports, the household.
+
+A change made out of reach shows at once where it was made, marked **Waiting to send**, and the bar counts what waits and links to **Waiting to send** (`#/waiting`), which lists each change in the order it will go, when it was made, and a **Discard** button with Undo. Changes wait in the app's web storage (`kooks.outbox`), and go to the kitchen in the order they were made as soon as it answers.
+
+Each change is a call to one of the kitchen's tools with a request id fixed when it was made. The kitchen makes a request id's change once and answers it again with what it did, and it checks the request id before anything else, so:
+
+- a change whose answer was lost, because the connection dropped after the kitchen made it, is asked again exactly as it was and the kitchen says it is done; nothing is made twice;
+- a change the kitchen refused as stale was not made, so it goes again with the same request id against the version the kitchen has now;
+- a change the kitchen will not take at all (the last portion was eaten by someone else, the list is gone) is never dropped: the bar says **The kitchen didn’t take a change made here**, and Waiting to send shows why, with **Try again** and **Discard**.
+
+Signing out removes the copy and anything waiting, and asks first when something waits. Moving to another household asks the same. When the kitchen ends the sign-in itself, the sign-in page says how many changes made on the phone were not sent. Photos are not kept, so they stay blank until the kitchen answers.
+
+A browser keeps no copy, since its page comes from the kitchen, and of these changes keeps only grocery ticks while a tab is open without the kitchen; the rest fail with **Could not reach the kitchen** as before.
 
 ## Recipes from the previous phone app
 
