@@ -25,6 +25,12 @@ import {
 // 180 days from then, and members see and end their signed-in devices.
 // Everything lives in auth_* tables beside the first household's cookbook;
 // only hashes of tokens are stored.
+//
+// A member may say which person at the household's table they are. The
+// link is kept here with the membership, never in the cookbook, so a
+// cookbook and its backups hold no addresses, and a member who leaves or
+// is removed takes only the link with them: their person stays at the
+// table. Changes in the cookbook name their maker by an opaque account id.
 
 export class AuthError extends KooksError {
   constructor(code, message, status = 400) {
@@ -198,9 +204,16 @@ export function createAuth({
     ["used_at", "TEXT"],
   ]);
   addColumns("auth_links", [["wait_hash", "TEXT"]]);
-  db.exec(
-    "UPDATE auth_sessions SET id = lower(hex(randomblob(8))) WHERE id IS NULL",
-  );
+  addColumns("auth_accounts", [["id", "TEXT"]]);
+  addColumns("auth_members", [["person", "TEXT"]]);
+  db.exec(`
+    UPDATE auth_sessions SET id = lower(hex(randomblob(8))) WHERE id IS NULL;
+    UPDATE auth_accounts SET id = lower(hex(randomblob(8))) WHERE id IS NULL;
+    CREATE UNIQUE INDEX IF NOT EXISTS auth_accounts_id ON auth_accounts(id);
+    -- One member per person at a household's table.
+    CREATE UNIQUE INDEX IF NOT EXISTS auth_members_person
+      ON auth_members(household, person) WHERE person IS NOT NULL;
+  `);
 
   const statements = new Map();
   const q = (sql) => {
@@ -230,29 +243,28 @@ export function createAuth({
       if (pending.expires < t) challenges.delete(key);
   }
   const accountOf = (email) =>
-    q("SELECT email, handle FROM auth_accounts WHERE email = ?").get(email);
+    q("SELECT email, handle, id FROM auth_accounts WHERE email = ?").get(email);
   function ensureAccount(email) {
     let row = accountOf(email);
     if (!row) {
-      row = { email, handle: secret() };
+      row = { email, handle: secret(), id: randomBytes(8).toString("hex") };
       q(
-        "INSERT INTO auth_accounts(email, handle, created_at) VALUES (?, ?, ?)",
-      ).run(email, row.handle, iso(now()));
+        "INSERT INTO auth_accounts(email, handle, id, created_at) VALUES (?, ?, ?, ?)",
+      ).run(email, row.handle, row.id, iso(now()));
     }
     return row;
   }
   const membership = (email, household) =>
-    q("SELECT role FROM auth_members WHERE email = ? AND household = ?").get(
-      email,
-      household,
-    );
+    q(
+      "SELECT role, person FROM auth_members WHERE email = ? AND household = ?",
+    ).get(email, household);
   const join = (email, household, role = "member") =>
     q(
       "INSERT OR IGNORE INTO auth_members(email, household, role, joined_at) VALUES (?, ?, ?, ?)",
     ).run(email, household, role, iso(now()));
   const householdsOf = (email) =>
     q(
-      `SELECT h.id, h.name, m.role,
+      `SELECT h.id, h.name, m.role, m.person,
         (SELECT count(*) FROM auth_members o WHERE o.household = h.id) AS members
        FROM auth_members m JOIN auth_households h ON h.id = m.household
        WHERE m.email = ? ORDER BY m.joined_at, m.rowid`,
@@ -477,13 +489,16 @@ export function createAuth({
       ).get(key);
       if (!row) return null;
       const t = now();
-      if (row.expires_at < t || !accountOf(row.email)) {
+      const owner = accountOf(row.email);
+      if (row.expires_at < t || !owner) {
         q("DELETE FROM auth_sessions WHERE token_hash = ?").run(key);
         return null;
       }
       let household = row.household;
-      if (!household || !membership(row.email, household)) {
+      let member = household && membership(row.email, household);
+      if (!member) {
         household = householdsOf(row.email)[0]?.id ?? null;
+        member = household && membership(row.email, household);
         q("UPDATE auth_sessions SET household = ? WHERE token_hash = ?").run(
           household,
           key,
@@ -497,8 +512,11 @@ export function createAuth({
       return {
         id: row.id,
         email: row.email,
+        account: owner.id,
         method: row.method,
         household,
+        // The person at this household's table the member says they are.
+        person: member?.person ?? null,
         renewed,
       };
     },
@@ -593,7 +611,7 @@ export function createAuth({
       requireMember(session.email, session.household);
       return {
         members: q(
-          "SELECT email, role, joined_at FROM auth_members WHERE household = ? ORDER BY joined_at, rowid",
+          "SELECT email, role, joined_at, person FROM auth_members WHERE household = ? ORDER BY joined_at, rowid",
         ).all(session.household),
         invites: q(
           "SELECT id, email, invited_by, created_at, expires_at FROM auth_invites WHERE household = ? AND expires_at >= ? ORDER BY created_at",
@@ -724,6 +742,42 @@ export function createAuth({
         session.email,
       );
     },
+    // A member says which person at the table they are, or that they are
+    // none of them. The caller checks that the person is at this
+    // household's table; each person stands for one member at most.
+    linkPerson(session, person) {
+      requireMember(session.email, session.household);
+      const id = person == null ? null : String(person);
+      transaction(() => {
+        if (
+          id &&
+          q(
+            "SELECT 1 FROM auth_members WHERE household = ? AND person = ? AND email != ?",
+          ).get(session.household, id, session.email)
+        )
+          throw new AuthError(
+            "PERSON_TAKEN",
+            "Another member is already that person. They can unlink it from People at the table.",
+            409,
+          );
+        q(
+          "UPDATE auth_members SET person = ? WHERE email = ? AND household = ?",
+        ).run(id, session.email, session.household);
+      });
+    },
+    // Each current member's account id, and the person they are at this
+    // household's table, if they said: how history names them.
+    links: (household) =>
+      new Map(
+        q(
+          `SELECT a.id, m.person FROM auth_members m
+           JOIN auth_accounts a ON a.email = m.email WHERE m.household = ?`,
+        )
+          .all(household)
+          .map((row) => [row.id, row.person]),
+      ),
+    // Leaving, or being removed, deletes the membership and the link with
+    // it; the person stays at the table, linked to nobody.
     leave(session) {
       requireMember(session.email, session.household);
       transaction(() => {

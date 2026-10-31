@@ -43,6 +43,8 @@ try {
       "backup_restore",
       { request_id: randomUUID(), file: path },
       () => restoreBackupFile(store, path),
+      // Made at the kitchen's own computer.
+      { type: "local" },
     );
     console.error(
       `Restored ${result.restored_records} records into ${store.path}.`,

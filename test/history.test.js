@@ -74,6 +74,8 @@ test("actions older than the undo window keep their history line but not their c
       id: created.record.id,
       before_version: 1,
       after_version: 2,
+      archived: false,
+      title: "Lemon orzo",
     },
   ]);
   assert.deepEqual(actions[2].changes[0].before_version, null);
@@ -144,4 +146,108 @@ test("a long-running server trims once a day as it writes, and opening a databas
     march.action_id,
     january.action_id,
   ]);
+});
+
+test("each action records who made it, and history names them without an address", (t) => {
+  const store = new Store(":memory:");
+  t.after(() => store.close());
+  const tools = new Map(createTools(store).map((tool) => [tool.name, tool]));
+  let sequence = 0;
+  const as =
+    (context) =>
+    (name, input = {}) => {
+      const tool = tools.get(name);
+      return tool.execute(
+        tool.readOnly ? input : { request_id: `who-${++sequence}`, ...input },
+        context,
+      );
+    };
+  const ada = as({})("member_save", { member: { name: "Ada" } }).record.id;
+  const ben = as({})("member_save", { member: { name: "Ben" } }).record.id;
+  // Ada's account is linked to Ada; Ben's account linked to nobody yet;
+  // Cy, who has left, was linked to Ben when they made their change.
+  const members = new Map([
+    ["acc-ada", ada],
+    ["acc-ben", null],
+  ]);
+  const member = (account, person = null) => ({
+    actor: { type: "member", account, person },
+    links: () => members,
+  });
+  const byAda = as(member("acc-ada", ada))("recipe_save", {
+    recipe: dish("Orzo"),
+  });
+  as(member("acc-ben"))("recipe_save", { recipe: dish("Pilaf") });
+  as(member("acc-cy", ben))("recipe_save", { recipe: dish("Stew") });
+  as({ actor: { type: "agent" } })("recipe_save", { recipe: dish("Soup") });
+  as({ actor: { type: "local" } })("recipe_save", { recipe: dish("Rice") });
+
+  // What the cookbook keeps: an opaque account id and the person then.
+  assert.deepEqual(
+    JSON.parse(
+      store.db
+        .prepare("SELECT actor FROM actions WHERE id = ?")
+        .get(byAda.action_id).actor,
+    ),
+    { type: "member", account: "acc-ada", person: ada },
+  );
+
+  const history = as(member("acc-ada", ada))("history_list").actions;
+  assert.deepEqual(
+    history.map((a) => [a.changes[0].title, a.actor]),
+    [
+      ["Rice", { type: "local", you: false }],
+      ["Soup", { type: "agent", you: false }],
+      // Cy left: named by the person they were then.
+      ["Stew", { type: "member", person: ben, name: "Ben", you: false }],
+      // Ben is a member linked to nobody now.
+      ["Pilaf", { type: "member", person: null, name: null, you: false }],
+      ["Orzo", { type: "member", person: ada, name: "Ada", you: true }],
+      // Before anyone said who: no actor at all.
+      ["Ben", null],
+      ["Ada", null],
+    ],
+  );
+  assert.equal(JSON.stringify(history).includes("acc-"), false);
+
+  // Linking later names earlier changes by the person linked now.
+  members.set("acc-ben", ben);
+  assert.deepEqual(
+    as(member("acc-ada", ada))("history_list").actions[3].actor,
+    { type: "member", person: ben, name: "Ben", you: false },
+  );
+  // Undo works on anyone's change, and is itself recorded as the undoer's.
+  as(member("acc-ben", ben))("history_undo", { action_id: byAda.action_id });
+  const undone = as(member("acc-ada", ada))("history_list", { limit: 1 })
+    .actions[0];
+  assert.equal(undone.action, "history_undo");
+  assert.deepEqual(undone.actor, {
+    type: "member",
+    person: ben,
+    name: "Ben",
+    you: false,
+  });
+  assert.equal(undone.changes[0].archived, true);
+});
+
+test("a database from before actors gains the column, and its older actions have none", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "kooks-actors-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const path = join(dir, "kooks.sqlite");
+  const first = new Store(path);
+  createTools(first)
+    .find((tool) => tool.name === "recipe_save")
+    .execute({ request_id: "old-1", recipe: dish("Orzo") });
+  // As a server from before this change left it.
+  first.db.exec("ALTER TABLE actions DROP COLUMN actor");
+  first.close();
+  const second = harness(t, path);
+  const columns = second.store.db
+    .prepare("PRAGMA table_info(actions)")
+    .all()
+    .map((column) => column.name);
+  assert.ok(columns.includes("actor"));
+  assert.equal(second.call("history_list").actions[0].actor, null);
+  // The schema version is unchanged, so an older server still opens it.
+  assert.equal(second.store.userVersion(), 2);
 });
