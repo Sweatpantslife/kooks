@@ -1248,6 +1248,25 @@ test("members say who they are at the table, history names them, and leaving lea
   assert.equal((await link(null, owner)).status, 200);
   assert.equal((await state(owner)).account.household.person, null);
   assert.equal((await link(ada, owner)).status, 200);
+  // Relinking does not rename what was done as someone else.
+  assert.equal((await link(null, sam)).status, 200);
+  assert.equal(actorOf(await history(owner), edited).name, "Sam");
+  assert.equal((await link(samPerson, sam)).status, 200);
+
+  // An owner can take back another member's claim, and only that; a
+  // member cannot unlink anyone else.
+  const unlink = (email, who, extra = {}) =>
+    post("/api/auth/household/person", { member: email, ...extra }, who);
+  assert.equal((await unlink(member, sam)).status, 403);
+  assert.equal(
+    (await unlink("sam@example.test", owner, { person: ada })).status,
+    400,
+  );
+  assert.equal((await unlink("kim@example.test", owner)).status, 404);
+  assert.equal((await unlink("sam@example.test", owner)).status, 200);
+  assert.equal((await state(sam)).account.household.person, null);
+  assert.equal((await state(owner)).account.household.person, ada);
+  assert.equal((await link(samPerson, sam)).status, 200);
 
   // Removed, Sam takes only the link: their person stays at the table,
   // and history still names their changes by it.

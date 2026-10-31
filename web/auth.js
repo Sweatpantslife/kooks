@@ -757,13 +757,32 @@ export function createAuth({
         )
           throw new AuthError(
             "PERSON_TAKEN",
-            "Another member is already that person. They can unlink it from People at the table.",
+            "Another member is already that person. They can unlink it on People at the table, or the household's owner on Members.",
             409,
           );
         q(
           "UPDATE auth_members SET person = ? WHERE email = ? AND household = ?",
         ).run(id, session.email, session.household);
       });
+    },
+    // An owner takes back another member's claim to a person, so that a
+    // wrong one does not keep the right member from it.
+    unlinkMember(session, email) {
+      if (requireMember(session.email, session.household).role !== "owner")
+        throw new AuthError(
+          "NOT_OWNER",
+          "Only the household's owner can unlink someone else.",
+          403,
+        );
+      const { changes } = q(
+        "UPDATE auth_members SET person = NULL WHERE email = ? AND household = ?",
+      ).run(normalizeEmail(email), session.household);
+      if (!changes)
+        throw new AuthError(
+          "NOT_FOUND",
+          `${normalizeEmail(email)} is not in this household.`,
+          404,
+        );
     },
     // Each current member's account id, and the person they are at this
     // household's table, if they said: how history names them.

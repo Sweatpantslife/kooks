@@ -476,8 +476,10 @@ export function createTools(store, { readPage = fetchPage } = {}) {
     }
   };
   // Who made an action, by name and never by address: the person at the
-  // table the member is linked to now, or was linked to then if they have
-  // left; you, when it was the caller's own; an agent through MCP.
+  // table the member was linked to when they made it, which later links
+  // never change, or, for a change made before they said, the person they
+  // are linked to now; you, when it was the caller's own; an agent through
+  // MCP.
   function named(actor, { actor: viewer = null, links = null } = {}) {
     if (!actor) return null;
     if (actor.type !== "member")
@@ -485,10 +487,8 @@ export function createTools(store, { readPage = fetchPage } = {}) {
         type: actor.type,
         you: actor.type === "local" && viewer?.type === "local",
       };
-    const current = links?.();
-    const person = current?.has(actor.account)
-      ? current.get(actor.account)
-      : actor.person;
+    const current = actor.person ? null : links?.();
+    const person = actor.person ?? current?.get(actor.account) ?? null;
     return {
       type: "member",
       person: person ?? null,

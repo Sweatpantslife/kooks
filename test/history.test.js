@@ -210,12 +210,23 @@ test("each action records who made it, and history names them without an address
   );
   assert.equal(JSON.stringify(history).includes("acc-"), false);
 
-  // Linking later names earlier changes by the person linked now.
+  // Linking later names changes made before by the person linked now.
   members.set("acc-ben", ben);
   assert.deepEqual(
     as(member("acc-ada", ada))("history_list").actions[3].actor,
     { type: "member", person: ben, name: "Ben", you: false },
   );
+  // A change keeps the person it was made as, whatever the member links to
+  // later, or if they unlink: history cannot be renamed after the fact.
+  members.set("acc-ada", ben);
+  const orzo = () =>
+    as(member("acc-ada"))("history_list").actions.find(
+      (a) => a.id === byAda.action_id,
+    ).actor;
+  assert.equal(orzo().name, "Ada");
+  members.set("acc-ada", null);
+  assert.equal(orzo().name, "Ada");
+  members.set("acc-ada", ada);
   // Undo works on anyone's change, and is itself recorded as the undoer's.
   as(member("acc-ben", ben))("history_undo", { action_id: byAda.action_id });
   const undone = as(member("acc-ada", ada))("history_list", { limit: 1 })
