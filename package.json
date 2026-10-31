@@ -25,6 +25,8 @@
     "build:ios": "npm run cap:sync && node scripts/native-build.mjs ios",
     "native:doctor": "node scripts/native-build.mjs doctor",
     "native:assets": "node scripts/native-assets.mjs",
+    "native:version": "node scripts/native-version.mjs",
+    "version": "node scripts/native-version.mjs && git add android/app/build.gradle ios/App/App.xcodeproj/project.pbxproj",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint .",

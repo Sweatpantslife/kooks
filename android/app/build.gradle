@@ -7,7 +7,7 @@ android {
         applicationId "app.kooks.household"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
+        versionCode 200
         versionName "0.2.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
@@ -16,10 +16,28 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // A release is signed only when the build is given the release key, as
+    // the Phone release workflow does from its secrets (docs/native-app.md).
+    // Without it, assembleRelease leaves an unsigned APK.
+    def releaseKeystore = System.getenv('KOOKS_ANDROID_KEYSTORE')
+    signingConfigs {
+        if (releaseKeystore) {
+            release {
+                storeFile = file(releaseKeystore)
+                storeType = 'pkcs12'
+                storePassword = System.getenv('KOOKS_ANDROID_KEYSTORE_PASSWORD')
+                keyAlias = System.getenv('KOOKS_ANDROID_KEY_ALIAS') ?: 'kooks'
+                keyPassword = System.getenv('KOOKS_ANDROID_KEYSTORE_PASSWORD')
+            }
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (releaseKeystore) {
+                signingConfig = signingConfigs.release
+            }
         }
     }
 }

@@ -37,11 +37,65 @@ Native requirements follow [Capacitor's environment guide](https://capacitorjs.c
 - iOS: macOS, Xcode 26 or newer, its iOS SDK and a simulator runtime. Select Xcode's Command Line Tools in Xcode Settings → Locations. Dependencies use Swift Package Manager; CocoaPods is not needed. Deployment target: iOS 15.
 - Android: Android Studio 2025.2.1 or newer, JDK 21 or newer, Android SDK Platform 36 and build tools. Set `JAVA_HOME` and `ANDROID_HOME`, or configure the SDK through Android Studio. Minimum Android API: 24; compile/target API: 36.
 
-For a physical iPhone, select your Apple development team in Xcode's Signing & Capabilities. Store releases also require your signing credentials and distribution setup. The development identifier is `app.kooks.household`; confirm the identifier before a store release and update it consistently in Capacitor, the Xcode target, and `android/app/build.gradle` if needed. No signing credentials are stored here.
+The identifier is `app.kooks.household` on both platforms. No signing credentials are stored here: the Android release key lives in the repository's Actions secrets and with its owner, and an iPhone build signs with the developer's own Apple team. [Releases](#releases) describes how a version reaches the phones.
+
+## Releases
+
+Kooks is not listed in the App Store or Google Play. Android releases are published on the repository's [Releases page](https://github.com/Sweatpantslife/kooks/releases) as pre-releases, each with a signed APK to install on a phone; see [Install on Android](#install-on-android). The repository is public, so anyone can download that APK, but it only works with an account on a kitchen, and kitchens take members by invitation.
+
+### Version and build numbers
+
+Both apps take their version from `package.json`. `npm run native:version` (`scripts/native-version.mjs`) writes it into `android/app/build.gradle` (`versionName`, `versionCode`) and the Xcode project (`MARKETING_VERSION`, `CURRENT_PROJECT_VERSION`), and `npm version` runs it. The build number grows with the version, major × 10000 + minor × 100 + patch (0.3.0 is build 300), so every release installs over the one before and a version always has the same build number. Versions are three plain numbers, with minor and patch below 100. `npm test` fails when the native projects say anything else.
+
+### The Android release key
+
+Android installs a newer version over an older one only when both are signed with the same key. The key is made once, on the owner's computer, with `scripts/android-release-key.sh`:
+
+```sh
+sh scripts/android-release-key.sh            # or: sh scripts/android-release-key.sh ~/somewhere-safe
+```
+
+It needs `openssl` (macOS and Linux have it; on Windows use Git Bash) and refuses to run where a key already exists. It makes a 4096-bit RSA key valid for 30 years in a PKCS #12 file with the alias `kooks`, in a folder only its owner can read (`~/kooks-android-release` by default), with the password, the key as base64 text, the public certificate and a `README.txt` beside it. It prints the certificate's SHA-256 fingerprint, which every release page also shows. With the GitHub CLI signed in, it offers to store the two secrets itself; otherwise it says what to paste where:
+
+| Actions secret                    | Value                                 |
+| --------------------------------- | ------------------------------------- |
+| `KOOKS_ANDROID_KEYSTORE`          | the contents of `keystore.base64.txt` |
+| `KOOKS_ANDROID_KEYSTORE_PASSWORD` | the line in `password.txt`            |
+
+Keep the folder, or at least `kooks-release.p12` and its password, in a password manager or another safe place: GitHub never shows a secret again. If the key is lost, a release signed with a new one installs only after the app is uninstalled, and the phone then signs in again; the recipes live in the kitchen, so nothing else is lost.
+
+### Making a release
+
+1. On a branch, raise the version: `npm version minor --no-git-tag-version` (or `patch`). This changes `package.json`, `package-lock.json` and both native projects. In `CHANGELOG.md`, turn **Unreleased** into a heading with the version and date and start a new, empty **Unreleased** above it. Merge the pull request.
+2. In the repository's **Actions** tab, open **Phone release** and choose **Run workflow** on `main`. The workflow (`.github/workflows/phone-release.yml`) builds the app, signs the APK with the release key, checks the signature, the version and build number and that the APK is not debuggable, and publishes the pre-release `v<version>` with `kooks-<version>.apk`, its SHA-256 and the signing certificate's fingerprint. It refuses a version that is already released and runs only on `main`.
+3. Install it on each phone and go through the [device check](#device-check) for what the release changed.
+
+A pull request that changes the Android build or the workflow runs the same build, signed with a throwaway key made for that run, and publishes nothing; the release key never reaches a pull request. `npm run build:android` still makes the debug APK, which installs beside nothing: a debug build and a release build of the same app are signed differently, so one must be uninstalled before the other goes on.
+
+### Install on Android
+
+Kooks runs on Android 7 or newer.
+
+1. On the phone, open the repository's [Releases page](https://github.com/Sweatpantslife/kooks/releases) and the newest **Kooks** release.
+2. Under **Assets**, tap `kooks-<version>.apk`. If the browser warns that the file might be harmful, choose **Download anyway**.
+3. Open the download. The first time, Android asks whether the browser may install unknown apps: tap **Settings**, turn on **Allow from this source**, and go back.
+4. Tap **Install**. If Google Play Protect says it doesn't recognise the developer, tap **More details**, then **Install anyway**.
+5. Open Kooks, type the kitchen's address and your email, and open the link the kitchen emails you, on the phone or anywhere else. It asks before it signs the app in.
+
+A later release installs the same way, over the one on the phone, which stays signed in. If Android says the app conflicts with one already installed, a Kooks signed with another key is on the phone, such as a debug build from Android Studio. Uninstalling it removes what it kept, so if it is the earlier phone app with recipes of its own, bring those recipes somewhere safe first. [Obtainium](https://github.com/ImranR98/Obtainium) can watch the Releases page and offer each new version: add the repository's address and turn on **Include prereleases**.
+
+Google is moving Android towards installing only apps from registered developers. As of October 2026 this applies to apps from participating stores in Brazil, Indonesia, Singapore and Thailand, and Google plans to roll it out globally in 2027. Once it reaches a phone, an unregistered APK installs only through Developer options' **Allow apps from unverified developers** (a one-time 24-hour wait), or with `adb install` from a computer. The other way is registering `app.kooks.household` and the release certificate in the free limited-distribution tier of the [Android Developer Console](https://developer.android.com/developer-verification). The key script's `kooks-release-certificate.pem` is what that asks for.
+
+### iPhone
+
+An iPhone runs only apps signed by an Apple developer team. There are two routes:
+
+- **TestFlight**, with the Apple Developer Program ($99 a year). Each release is uploaded to App Store Connect and the iPhone installs and updates it from the TestFlight app. A build lasts 90 days. This route is not set up yet.
+- **Xcode on a Mac**, free with an Apple ID. On a Mac with Xcode 26: `npm ci`, then `npm run cap:ios`. In Xcode, select the **App** target, then **Signing & Capabilities**, and choose your Apple ID's personal team as **Team**. If Xcode says the identifier is taken, change the bundle identifier for your build only. Connect the iPhone and turn on **Settings › Privacy & Security › Developer Mode**. Choose the iPhone as the run destination and press **Run**, then trust the developer in **Settings › General › VPN & Device Management**. An app signed by a personal team stops opening after 7 days, until it is run from Xcode again.
 
 ## Signing in
 
-The first screen asks where the kitchen is: the address the household opens Kooks at, such as `kooks.example.com`. The app checks that it answers like a Kooks kitchen with sign-in on, then asks for the member's email address and emails a sign-in link. The member opens it on the phone or any other device and confirms that the app may sign in; the app, asking every few seconds, then signs in by itself. The app keeps the kitchen's address and a device token in its web storage and sends the token with every request; [the hosting guide](hosting.md) describes the server's side. The kitchen must be reachable over https: Android refuses plain-http traffic, and so does the page's own policy. **Household › This phone** signs out, or signs out and forgets the kitchen to use another one.
+The first screen asks where the kitchen is: the address the household opens Kooks at, such as `kooks.example.com`. The app checks that it answers like a Kooks kitchen with sign-in on, then asks for the member's email address and emails a sign-in link. The member opens it on the phone or any other device and confirms that the app may sign in; the app, asking every few seconds, then signs in by itself. The app keeps the kitchen's address and a device token in its web storage and sends the token with every request; [the hosting guide](hosting.md) describes the server's side. The kitchen must be reachable over https: Android refuses plain-http traffic, and so does the page's own policy. **Household › Sign-in** has **This phone**, which signs out, or signs out and forgets the kitchen to use another one.
 
 Passkeys stay browser-only, since a passkey belongs to the kitchen's own web address, and so does opening a link: it opens in the browser, which signs the app in rather than itself.
 
@@ -51,7 +105,7 @@ Passkeys stay browser-only, since a passkey belongs to the kitchen's own web add
 - Cooking timers ring as notifications with the phone locked or the app closed. Kooks asks for permission when the first timer starts. Every timer still counting in an active cooking session is scheduled, and a timer that is cancelled, changed or done is taken off again, whichever device did it, the next time the app is open. Android uses ordinary notifications without special exact-alarm access, so alerts can be late; Focus, Do Not Disturb and battery settings affect them too. See the [Local Notifications plugin](https://capacitorjs.com/docs/apis/local-notifications).
 - A light tap when a cooking step is done.
 - Photos and books come with the device token, so they load into memory rather than by address. **Download** and **Open** on a book, the backup and the bookmarks file hand the file to the phone's share sheet (Books, Files, Mail). The file is written to an `exports` folder in the app's cache first, the only folder Android's file provider shares (`android/app/src/main/res/xml/file_paths.xml`).
-- The status and navigation bars follow the phone's light or dark look, and the layout keeps to the safe areas.
+- The app follows the phone's light or dark mode, as in a browser, unless a look is chosen in **Household › Look and units**, and the status and navigation bars follow the app's look so their text stays readable. The layout keeps to the safe areas. (Until October 31, 2026 both native projects pinned the light look: iOS through `UIUserInterfaceStyle` in `Info.plist`, Android through a `Theme.AppCompat.Light` theme, which keeps the web view's `prefers-color-scheme` light. Both now follow the phone, and `test/native-config.test.js` keeps it so.)
 - Coming back to the app fetches what changed while it was away.
 
 ## Without a connection
@@ -84,6 +138,24 @@ npm run native:assets       # Regenerate checked-in icons/splashes from resource
 
 Playwright uses its managed Chromium by default (run `npx playwright install chromium` once). Set `PLAYWRIGHT_CHANNEL=chrome` to use an installed Chrome, or `PLAYWRIGHT_EXECUTABLE_PATH` to point at a specific browser binary.
 
-The phone's screens are checked in Chromium, not in a native WebView. The [native builds workflow](../.github/workflows/native.yml) compiles both apps whenever the phone app or the native projects change: the Android debug APK on Ubuntu with JDK 21 and SDK Platform 36 (kept as a seven-day artifact), and the iOS simulator app on macOS with Xcode 26. It also fails when `cap sync` would change a tracked file in `android/` or `ios/`, so commit the result of `npm run cap:sync`. Nothing runs either app, so no simulator run, signing or physical-device notification delivery has been verified. Before distribution, run both native builds and exercise cold launch, sign-in against a real kitchen, safe areas and the keyboard, back navigation, sharing a book and a backup, timer permission and delivery, and bringing in recipes from the previous app, on actual iOS and Android devices.
+The phone's screens are checked in Chromium, not in a native WebView. The [native builds workflow](../.github/workflows/native.yml) compiles both apps whenever the phone app or the native projects change: the Android debug APK on Ubuntu with JDK 21 and SDK Platform 36 (kept as a seven-day artifact), and the iOS simulator app on macOS with Xcode 26. It also fails when `cap sync` would change a tracked file in `android/` or `ios/`, so commit the result of `npm run cap:sync`. [Phone release](#making-a-release) builds and signs the release APK. Nothing in CI runs either app: behaviour on a phone is checked by hand, with the device check below, on each release.
+
+### Device check
+
+About 20 minutes per phone, on the release about to be used. Use the household's real kitchen, but only test records you then delete, such as a recipe called "Test toast".
+
+1. **Install and first launch.** Install the release ([Android](#install-on-android)); the icon and name read Kooks. A cold launch shows the splash, then the kitchen screen, in the phone's light or dark mode.
+2. **Sign in.** Type the kitchen's address without `https://`, then your email. Open the emailed link on another device, then on the phone itself the next time: either one asks before it signs the app in, and the app signs in within a few seconds. Week opens with the household's food.
+3. **Safe areas and the keyboard.** Nothing hides under the notch, the status bar or the gesture bar, in portrait and landscape. Add a grocery and write a recipe: the field being typed in stays above the keyboard, and the tab bar doesn't ride up over the form.
+4. **Moving around.** Open a recipe from Recipes, then a meal from it. Android's back gesture or button goes back page by page and leaves the app from Week. The iPhone has no back button of its own: note whether going back by the tabs is enough.
+5. **Dark mode.** Switch the phone between light and dark: the app follows. Choose Dark, then Light, in **Household › Look and units**: the status bar's text stays readable on each.
+6. **Without a connection.** Open Groceries, then turn on flight mode. Every page says **Can't reach the kitchen**, recipes and the week still open, and ticking two groceries works. Turn flight mode off: the ticks reach the kitchen (check in a browser).
+7. **Timers with the phone locked.** Cook a recipe and start a 1-minute timer. Allow notifications when asked. Lock the phone: the notification arrives at about one minute, with sound. Start another, cancel it from a browser, then open the app: no notification arrives. Note how late Android's alert was (it uses ordinary notifications, not exact alarms), and check with Do Not Disturb or battery saving on too.
+8. **The share sheet.** **Household › Backup**, **Download a backup**: the share sheet opens with the backup file, which can go to Files or Drive. If the shelf has a book, open it from Recipes (the **Books** chip) and tap **Open the book** or **Download**: it goes to the share sheet too.
+9. **Coming back.** Leave the app for a minute, change something in a browser, and come back: the change shows within a few seconds.
+10. **Recipes from the previous phone app.** Only on a phone that had the earlier Kooks app with recipes of its own: Recipes offers **Recipes on this phone**, and **Bring them in** adds them once.
+11. **Sign out.** **Household › Sign-in**, then **Sign out** under This phone, returns to the sign-in screen, and the phone disappears from the signed-in devices that **Household › Sign-in** lists in a browser.
+
+Note the phone, its OS version and the Kooks version with anything that went wrong.
 
 `npm audit` reports no vulnerabilities. The Capacitor CLI's build-only `xcode → uuid` advisory is gone from CLI 8.6.0, whose `xcode` 4 no longer depends on `uuid`; the CLI was never part of the app bundle.
