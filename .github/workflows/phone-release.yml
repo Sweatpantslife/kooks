@@ -127,7 +127,13 @@ jobs:
           fi
           mkdir -p dist
           cp "$apk" "dist/kooks-${VERSION}.apk"
-          certificate=$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' signers.txt | tr a-f A-F | sed 's/../&:/g; s/:$//')
+          # apksigner prints "V2 Signer: certificate SHA-256 digest: <hex>"
+          # (the scheme varies with minSdk); the first signer is the key.
+          certificate=$(awk -F 'digest: ' '/certificate SHA-256 digest: / { print $2; exit }' signers.txt | tr a-f A-F | sed 's/../&:/g; s/:$//')
+          if [ -z "$certificate" ]; then
+            echo "::error::apksigner printed no signing certificate."
+            exit 1
+          fi
           checksum=$(sha256sum "dist/kooks-${VERSION}.apk" | cut -d ' ' -f 1)
           cat > dist/release-notes.md <<EOF
           Kooks ${VERSION} for Android phones (Android 7 or newer), built from ${GITHUB_SHA::7}.
