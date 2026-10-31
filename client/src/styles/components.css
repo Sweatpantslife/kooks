@@ -2109,3 +2109,28 @@ a.plan-title:hover {
   flex-direction: column;
   gap: 8px;
 }
+
+/* Lists of people, invites, devices and passkeys: an icon, what it is, and
+   its buttons, which move under the text on a narrow screen. */
+.entries {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.entries > li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding-block: 12px;
+}
+.entries > li + li {
+  border-block-start: 1px solid var(--line);
+}
+.entries > li > div {
+  flex: 1 1 12rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}

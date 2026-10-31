@@ -3,12 +3,26 @@ import { useEffect, useRef } from "preact/hooks";
 import { CircleAlert, Leaf } from "lucide";
 import { route } from "./lib/router.js";
 import { dateLabel, monday, weekdayLabel } from "./lib/format.js";
-import { status, loadError, refresh, record } from "./lib/store.js";
+import {
+  appLink,
+  invitation,
+  loadError,
+  record,
+  refresh,
+  status,
+} from "./lib/store.js";
 import { Shell } from "./ui/shell.jsx";
 import { Toasts } from "./ui/toast.jsx";
 import { Empty, PageHeader } from "./ui/page.jsx";
 import { SignIn } from "./pages/signin.jsx";
-import { Account, Backup, Household, Look } from "./pages/household.jsx";
+import { ApproveApp, JoinInvite, Welcome } from "./pages/welcome.jsx";
+import {
+  Account,
+  Backup,
+  Household,
+  Look,
+  Members,
+} from "./pages/household.jsx";
 import { People, PersonForm } from "./pages/people.jsx";
 import { PriceForm, Prices } from "./pages/prices.jsx";
 import { AtHome, Groceries, PutAway, ShopFor } from "./pages/groceries.jsx";
@@ -54,6 +68,7 @@ const LIBRARY = {
 };
 
 const HOUSEHOLD = {
+  members: ["Members", Members],
   people: ["People at the table", People],
   prices: ["Prices and budget", Prices],
   look: ["Look and units", Look],
@@ -285,8 +300,14 @@ function Unavailable() {
 export function App() {
   return (
     <>
-      {status.value === "ready" ? (
+      {appLink.value ? (
+        <ApproveApp />
+      ) : invitation.value && status.value !== "loading" ? (
+        <JoinInvite />
+      ) : status.value === "ready" ? (
         <Kitchen />
+      ) : status.value === "welcome" ? (
+        <Welcome />
       ) : status.value === "signin" ? (
         <SignIn />
       ) : status.value === "error" ? (

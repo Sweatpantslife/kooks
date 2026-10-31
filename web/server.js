@@ -1,13 +1,13 @@
 import http from "node:http";
 import { isIPv4, isIPv6 } from "node:net";
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { promisify } from "node:util";
 import { brotliCompress, constants, gzip } from "node:zlib";
 import { fileURLToPath } from "node:url";
-import { resolve, extname, sep } from "node:path";
+import { dirname, join, resolve, extname, sep } from "node:path";
 import { ZodError } from "zod";
 import { Store, KooksError } from "../mcp/store.js";
 import { createTools } from "../mcp/tools.js";
@@ -18,10 +18,11 @@ import { shoppingItems } from "../mcp/shopping.js";
 import { embedOrigins } from "../shared/links.js";
 import {
   AuthError,
+  HOME,
   createAuth,
+  deviceLabel,
   normalizeEmail,
   parseMembers,
-  wrongCode,
 } from "./auth.js";
 import { createMailer, isEmail } from "./mail.js";
 import { askInput, createAssistant } from "./assistant.js";
@@ -107,6 +108,7 @@ const MINUTE = 60000;
 // A tab that is this many actions behind gets everything again instead of
 // the changed records.
 const maxChangedActions = 200;
+const randomToken = () => randomBytes(32).toString("base64url");
 const isLoopback = (host) => ["127.0.0.1", "localhost", "::1"].includes(host);
 // The phone app is this app inside Capacitor, whose pages come from these
 // origins: capacitor://localhost on iOS and https://localhost on Android.
@@ -236,15 +238,20 @@ function disposition(data, download) {
 }
 
 // Sign-in is on whenever the kitchen is reachable beyond this computer, or
-// when household addresses are configured on purpose. Members prove an
-// address with an emailed link and then add passkeys for one-tap sign-in.
-// Beyond this computer the address members open must be configured: links,
+// when an owner or members are configured on purpose. People prove an
+// address with an emailed link and then add passkeys for one-tap sign-in;
+// each household they belong to is a kitchen of its own. Beyond this
+// computer the address people open must be configured: links, invites,
 // passkeys and the accepted Host all follow it, never the request.
 export function createWebServer({
   store,
   host = "127.0.0.1",
   publicOrigin = "",
+  // Addresses that share the first household on a server that has none yet.
   members = [],
+  // The first household's owner; see createAuth.
+  owner = "",
+  openSignup = false,
   mailer = null,
   authOptions = {},
   clientRoot = builtClient,
@@ -254,12 +261,13 @@ export function createWebServer({
   const external = publicOrigin ? parseOrigin(publicOrigin) : null;
   // Kooks speaks plain HTTP, so an HTTPS origin means a proxy in front.
   const proxied = external?.protocol === "https:";
-  const household = members instanceof Set ? members : new Set(members);
-  const signIn = household.size > 0 || !isLoopback(host) || Boolean(external);
-  if (signIn && !household.size)
-    throw new Error(
-      "Sharing Kooks beyond this computer needs KOOKS_HOUSEHOLD_EMAILS: the addresses allowed to sign in.",
-    );
+  const seeded = [...members];
+  const signIn =
+    seeded.length > 0 ||
+    Boolean(owner) ||
+    openSignup ||
+    !isLoopback(host) ||
+    Boolean(external);
   if (signIn && !mailer)
     throw new Error(
       "Sign-in links need KOOKS_SMTP_HOST (with KOOKS_SMTP_USER, KOOKS_SMTP_PASSWORD and KOOKS_MAIL_FROM), or KOOKS_MAIL_OUTBOX during development.",
@@ -271,31 +279,54 @@ export function createWebServer({
   const auth = signIn
     ? createAuth({
         path: store.path,
-        members: household,
+        members: seeded,
+        owner,
+        openSignup,
         mailer,
         ...authOptions,
       })
     : null;
-  const tools = new Map(
-    createTools(store, toolOptions).map((t) => [t.name, t]),
-  );
-  // The assistant is there when the host gives the kitchen a Claude API key.
-  const assistant =
-    assistantOptions.apiKey || assistantOptions.client
-      ? createAssistant({ store, tools, ...assistantOptions })
-      : null;
+  if (auth && !auth.accounts() && !openSignup) {
+    auth.close();
+    throw new Error(
+      "Sharing Kooks needs a first person to sign in: set KOOKS_OWNER_EMAIL to their email address.",
+    );
+  }
+  // Each household's cookbook is a database of its own: the first one is the
+  // server's database, and households started later sit beside it.
+  const opened = new Map();
+  function openKitchen(id, kitchenStore) {
+    const tools = new Map(
+      createTools(kitchenStore, toolOptions).map((t) => [t.name, t]),
+    );
+    // The assistant is there when the host gives the server a Claude API
+    // key; each kitchen keeps its own daily allowance.
+    const assistant =
+      assistantOptions.apiKey || assistantOptions.client
+        ? createAssistant({ store: kitchenStore, tools, ...assistantOptions })
+        : null;
+    const kitchen = { id, store: kitchenStore, tools, assistant };
+    opened.set(id, kitchen);
+    return kitchen;
+  }
+  const home = openKitchen(HOME, store);
+  const kitchenPath = (id) =>
+    store.path === ":memory:"
+      ? ":memory:"
+      : join(dirname(store.path), "households", `${id}.sqlite`);
+  function kitchenOf(id) {
+    if (!auth) return home;
+    if (opened.has(id)) return opened.get(id);
+    if (!/^[a-f0-9]{16}$/.test(id ?? ""))
+      throw new KooksError("NOT_FOUND", "That household is not here.");
+    return openKitchen(id, new Store(kitchenPath(id)));
+  }
   const asking = new Set();
   const clientDir = resolve(clientRoot) + sep;
   const limits = new Map();
-  // Wrong sign-in codes per address, for the day: exact for the household's
-  // addresses, and for any other address in a map that keeps the latest
-  // 10,000, so strangers get the same answer without the map growing
-  // without end.
-  const missed = { members: new Map(), others: new Map() };
-  const othersKept = 10000;
   // Revisions are this server start plus the action sequence, so a tab that
   // was open before a restart, or against another database, reloads fully.
-  const started = randomUUID().slice(0, 8);
+  const serverStart = randomUUID().slice(0, 8);
   // Video players load only from the embed origins the shared module
   // produces, and only once the person presses play; the book reader frames
   // PDFs from this origin, which asset responses allow in turn.
@@ -390,9 +421,14 @@ export function createWebServer({
       );
     return session;
   }
-  function signedIn(req, res, email, method) {
+  // A browser signed in: whatever session it had ends, and the new one is
+  // its cookie.
+  function signedIn(req, res, email, method, household = null) {
     auth.endSession(sessionToken(req));
-    const token = auth.createSession(email, method);
+    const token = auth.createSession(email, method, {
+      label: deviceLabel(req.headers["user-agent"]),
+      household,
+    });
     res.setHeader("Set-Cookie", cookieFor(token, auth.sessionLifetime / 1000));
     send(res, 200, { ok: true, account: { email, method } });
   }
@@ -401,6 +437,13 @@ export function createWebServer({
       error: "SIGN_IN",
       message: "Sign in to open the kitchen.",
     });
+  // Sign-in and invite emails share one hourly budget, so nobody can use the
+  // server to flood inboxes; what is held back is logged.
+  const mailBudgetSpent = () => {
+    if (!limited("mail", 100, 60 * MINUTE)) return false;
+    console.error("Kooks held back an email: 100 went out in the last hour.");
+    return true;
+  };
   async function authRoute(req, res, url) {
     const route = `${req.method} ${url.pathname.slice("/api/auth/".length)}`;
     const origin = external?.origin ?? url.origin;
@@ -414,94 +457,31 @@ export function createWebServer({
           429,
         );
     };
-    // The phone app signs in with a code; links and passkeys are the
-    // browser's, and are never offered across origins, whatever the request
-    // carries.
-    if (fromApp(req) && /^POST (link|passkey\/)/.test(route))
+    const app = fromApp(req);
+    // The phone app asks for links and waits for them; opening links,
+    // invites and passkeys are the browser's, and are never offered across
+    // origins, whatever the request carries.
+    if (app && /^POST (link\/confirm|passkey\/|invite\/)/.test(route))
       return send(res, 403, {
         message: "Open Kooks directly to make changes.",
       });
-    if (route === "POST code") {
-      const email = normalizeEmail((await input()).email);
-      if (!isEmail(email))
-        throw new AuthError("INVALID_INPUT", "Enter a valid email address.");
-      throttle(`link:${address}`, 10, 10 * MINUTE);
-      throttle(`link:${email}`, 5, 15 * MINUTE);
-      // As for links: one answer for everyone, then the member's email.
-      send(res, 200, { ok: true });
-      if (!auth.isMember(email)) return;
-      if (limited("mail", 100, 60 * MINUTE))
-        return console.error(
-          "Kooks held back a sign-in email: 100 went out in the last hour.",
-        );
-      return void auth
-        .requestCode({ email })
-        .catch((error) =>
-          console.error(
-            `Kooks could not prepare a sign-in code: ${error.message}`,
-          ),
-        );
-    }
-    if (route === "POST code/confirm") {
-      throttle(`confirm:${address}`, 20, 10 * MINUTE);
-      const { email, code } = await input();
-      // Each code takes five guesses; across new codes, and from anywhere,
-      // an address takes twenty wrong guesses a day, and a right one starts
-      // the count again.
-      const key = normalizeEmail(email);
-      // What is not an address is never counted, so it cannot fill the map.
-      if (!isEmail(key)) throw wrongCode();
-      const counts = auth.isMember(key) ? missed.members : missed.others;
-      const t = Date.now();
-      const wrong = counts.get(key);
-      if (wrong?.until > t && wrong.count >= 20)
-        throw new AuthError(
-          "RATE_LIMITED",
-          "Too many wrong codes today. Wait until tomorrow, or sign in with a link in a browser.",
-          429,
-        );
-      let confirmed;
-      try {
-        confirmed = auth.confirmCode({ email, code });
-      } catch (error) {
-        // Set afresh, so the map's order is the order of the latest guesses.
-        counts.delete(key);
-        counts.set(
-          key,
-          wrong?.until > t
-            ? { ...wrong, count: wrong.count + 1 }
-            : { count: 1, until: t + 24 * 60 * MINUTE },
-        );
-        if (counts === missed.others && counts.size > othersKept)
-          counts.delete(counts.keys().next().value);
-        throw error;
-      }
-      counts.delete(key);
-      // The device keeps the token and sends it; it is never a cookie.
-      return send(res, 200, {
-        ok: true,
-        token: auth.createSession(confirmed, "code"),
-        account: { email: confirmed, method: "code" },
-      });
-    }
     if (route === "POST link") {
-      const email = normalizeEmail((await input()).email);
+      const request = await input();
+      const email = normalizeEmail(request.email);
       if (!isEmail(email))
         throw new AuthError("INVALID_INPUT", "Enter a valid email address.");
       throttle(`link:${address}`, 10, 10 * MINUTE);
       throttle(`link:${email}`, 5, 15 * MINUTE);
-      // Every address gets the same answer at once; only then does a
-      // member's link go out, so neither the reply nor its timing tells who
-      // belongs. Strangers cannot spend the hourly email budget either:
-      // spending it on them would lock members out of links.
-      send(res, 200, { ok: true });
-      if (!auth.isMember(email)) return;
-      if (limited("mail", 100, 60 * MINUTE))
-        return console.error(
-          "Kooks held back a sign-in email: 100 went out in the last hour.",
-        );
+      // The phone app waits with a secret of its own for the link to be
+      // confirmed. Everyone gets one, and the same answer at once; only then
+      // does a member's link go out, so neither the reply nor its timing
+      // tells who has an account. Strangers cannot spend the hourly email
+      // budget either: spending it on them would lock members out.
+      const wait = app || request.app === true ? randomToken() : null;
+      send(res, 200, wait ? { ok: true, wait } : { ok: true });
+      if (!auth.canSignIn(email) || mailBudgetSpent()) return;
       return void auth
-        .requestLink({ email, origin })
+        .requestLink({ email, origin, wait })
         .catch((error) =>
           console.error(
             `Kooks could not prepare a sign-in link: ${error.message}`,
@@ -510,8 +490,32 @@ export function createWebServer({
     }
     if (route === "POST link/confirm") {
       throttle(`confirm:${address}`, 20, 10 * MINUTE);
-      const email = auth.confirmLink((await input()).token);
-      return signedIn(req, res, email, "email");
+      const { token, approve } = await input();
+      const link = auth.confirmLink(token, { approve: approve === true });
+      // A link the phone app is waiting for signs the app in, not this
+      // browser, and only once the person here says so.
+      if (link.app)
+        return send(res, 200, {
+          ok: true,
+          app: true,
+          email: link.email,
+          approved: Boolean(link.approved),
+        });
+      return signedIn(req, res, link.email, "email");
+    }
+    if (route === "POST link/wait") {
+      // About one question every few seconds while a link is on its way.
+      throttle(`wait:${address}`, 400, 10 * MINUTE);
+      const email = auth.waited((await input()).wait);
+      if (!email) return send(res, 200, { ok: true, waiting: true });
+      // The device keeps the token and sends it; it is never a cookie.
+      return send(res, 200, {
+        ok: true,
+        token: auth.createSession(email, "email", {
+          label: deviceLabel(req.headers["user-agent"], true),
+        }),
+        account: { email, method: "email" },
+      });
     }
     if (route === "POST passkey/options") {
       throttle(`passkey:${address}`, 60, 10 * MINUTE);
@@ -526,6 +530,21 @@ export function createWebServer({
       });
       return signedIn(req, res, email, "passkey");
     }
+    // An invite link names the household before anyone acts on it, and
+    // accepting it signs in the address it was sent to.
+    if (route === "POST invite/open") {
+      throttle(`confirm:${address}`, 20, 10 * MINUTE);
+      const invite = auth.openInvite((await input()).token);
+      const session = authenticated(req, res);
+      return send(res, 200, {
+        invite: { ...invite, signed_in_as: session?.email ?? null },
+      });
+    }
+    if (route === "POST invite/accept") {
+      throttle(`confirm:${address}`, 20, 10 * MINUTE);
+      const { email, household } = auth.acceptInvite((await input()).token);
+      return signedIn(req, res, email, "invite", household);
+    }
     if (route === "POST signout") {
       auth.endSession(sessionToken(req));
       if (!bearer(req)) res.setHeader("Set-Cookie", cookieFor("", 0));
@@ -533,6 +552,8 @@ export function createWebServer({
     }
     const session = authenticated(req, res);
     if (!session) return askToSignIn(res);
+    if (route === "GET me")
+      return send(res, 200, { account: auth.accountView(session) });
     if (route === "POST passkey/register/options")
       return send(res, 200, {
         options: auth.registrationOptions({ email: session.email, origin }),
@@ -547,6 +568,84 @@ export function createWebServer({
       return send(res, 200, { passkeys: auth.passkeys(session.email) });
     if (route === "POST passkey/remove") {
       auth.removePasskey(session.email, (await input()).id);
+      return send(res, 200, { ok: true });
+    }
+    if (route === "GET sessions")
+      return send(res, 200, {
+        sessions: auth
+          .sessions(session.email)
+          .map((s) => ({ ...s, current: s.id === session.id })),
+      });
+    if (route === "POST session/end") {
+      const { id } = await input();
+      if (id === session.id)
+        throw new AuthError(
+          "INVALID_INPUT",
+          "To sign out of this device, use Sign out.",
+        );
+      auth.endSessionById(session.email, id);
+      return send(res, 200, { ok: true });
+    }
+    if (route === "POST sessions/end-others")
+      return send(res, 200, {
+        ok: true,
+        ended: auth.endOtherSessions(session.email, session.id),
+      });
+    if (route === "POST household/create") {
+      throttle(`household:${session.email}`, 5, 24 * 60 * MINUTE);
+      const id = auth.createHousehold(session, (await input()).name);
+      return send(res, 200, { ok: true, household: id });
+    }
+    if (route === "POST household/switch") {
+      auth.switchHousehold(session, (await input()).id);
+      return send(res, 200, { ok: true });
+    }
+    if (route === "POST household/join") {
+      const id = auth.joinInvited(session, (await input()).id);
+      return send(res, 200, { ok: true, household: id });
+    }
+    if (route === "POST household/decline") {
+      auth.declineInvite(session, (await input()).id);
+      return send(res, 200, { ok: true });
+    }
+    if (!session.household)
+      return send(res, 403, {
+        error: "NO_HOUSEHOLD",
+        message: "Start a household or join one first.",
+      });
+    if (route === "GET household/members")
+      return send(res, 200, auth.members(session));
+    if (route === "POST household/rename") {
+      auth.renameHousehold(session, (await input()).name);
+      return send(res, 200, { ok: true });
+    }
+    if (route === "POST household/invite") {
+      const { email } = await input();
+      if (limited(`invite:${session.email}`, 20, 24 * 60 * MINUTE))
+        throw new AuthError(
+          "RATE_LIMITED",
+          "That’s a lot of invites for one day. Try again tomorrow.",
+          429,
+        );
+      if (mailBudgetSpent())
+        throw new AuthError(
+          "RATE_LIMITED",
+          "Kooks has sent a lot of email this hour. Try again in a while.",
+          429,
+        );
+      await auth.invite(session, { email, origin });
+      return send(res, 200, { ok: true });
+    }
+    if (route === "POST household/invite/withdraw") {
+      auth.withdrawInvite(session, (await input()).id);
+      return send(res, 200, { ok: true });
+    }
+    if (route === "POST household/remove") {
+      auth.removeMember(session, (await input()).email);
+      return send(res, 200, { ok: true });
+    }
+    if (route === "POST household/leave") {
+      auth.leave(session);
       return send(res, 200, { ok: true });
     }
     return send(res, 404, { message: "Not found." });
@@ -610,12 +709,40 @@ export function createWebServer({
       const session = auth ? authenticated(req, res) : null;
       if (auth && url.pathname.startsWith("/api/") && !session)
         return askToSignIn(res);
+      const account = session ? auth.accountView(session) : null;
+      // Someone signed in to no household yet has an account and nothing
+      // else: the app offers to start one, or to take an invite.
+      if (
+        url.pathname === "/api/state" &&
+        req.method === "GET" &&
+        session &&
+        !session.household
+      )
+        return send(res, 200, {
+          revision: null,
+          sharing: true,
+          assistant: false,
+          account,
+          records: {},
+        });
+      if (url.pathname.startsWith("/api/") && session && !session.household)
+        return send(res, 403, {
+          error: "NO_HOUSEHOLD",
+          message: "Start a household or join one first.",
+        });
+      const kitchen = kitchenOf(session?.household ?? HOME);
+      const { store, tools, assistant } = kitchen;
       if (url.pathname === "/api/state" && req.method === "GET") {
         const state = store.read(() => {
           const sequence = store.sequence();
+          // Revisions name this server start and the household, so a tab
+          // that was open before a restart, or in another household, reloads
+          // fully.
+          const started = `${serverStart}.${kitchen.id}`;
           const revision = `${started}-${sequence}`;
           const known = url.searchParams.get("revision") ?? "";
-          if (known === revision) return { unchanged: true, revision };
+          if (known === revision)
+            return { unchanged: true, revision, ...(account && { account }) };
           const view = (k, r) => {
             if (k === "batch") return batchView(r);
             if (k === "shopping") return { ...r, items: shoppingItems(r.data) };
@@ -625,9 +752,7 @@ export function createWebServer({
             revision,
             sharing: Boolean(auth),
             assistant: Boolean(assistant),
-            account: session
-              ? { email: session.email, method: session.method }
-              : null,
+            account,
           };
           // A tab that polled recently gets only the records changed since,
           // each as its current view or null once archived.
@@ -717,7 +842,7 @@ export function createWebServer({
           });
         if (
           limited(`ask:${who}`, 30, 60 * MINUTE) ||
-          limited("ask:kitchen", 300, 24 * 60 * MINUTE)
+          limited(`ask:${kitchen.id}`, 300, 24 * 60 * MINUTE)
         )
           return send(res, 429, {
             error: "RATE_LIMITED",
@@ -890,11 +1015,15 @@ export function createWebServer({
   // slow household connection may take a few minutes to send.
   server.requestTimeout = 300000;
   server.auth = auth;
-  server.assistant = assistant;
-  // How many addresses have wrong codes counted, for the tests.
-  server.wrongCodes = () => ({
-    members: missed.members.size,
-    others: missed.others.size,
+  server.assistant = home.assistant;
+  // The households opened since the start close with the server; the first
+  // one's store belongs to whoever made the server.
+  server.on("close", () => {
+    for (const kitchen of opened.values())
+      if (kitchen !== home) {
+        kitchen.assistant?.close();
+        kitchen.store.close();
+      }
   });
   return server;
 }
@@ -910,9 +1039,20 @@ if (
   try {
     if (process.env.KOOKS_ACCESS_TOKEN || process.env.KOOKS_ACCESS_TOKEN_FILE)
       throw new Error(
-        "KOOKS_ACCESS_TOKEN is no longer used. Household members now sign in with passkeys and emailed links: set KOOKS_HOUSEHOLD_EMAILS and KOOKS_SMTP_HOST instead (see docs/hosting.md).",
+        "KOOKS_ACCESS_TOKEN is no longer used. People now have accounts and sign in with passkeys and emailed links: remove it, and set KOOKS_OWNER_EMAIL and KOOKS_SMTP_HOST instead (see docs/hosting.md).",
       );
+    // KOOKS_HOUSEHOLD_EMAILS, from before accounts, seeds the first
+    // household once; after that, households grow by invitation.
     const members = parseMembers(process.env.KOOKS_HOUSEHOLD_EMAILS);
+    const [owner = "", ...extra] = parseMembers(
+      process.env.KOOKS_OWNER_EMAIL,
+      "KOOKS_OWNER_EMAIL",
+    );
+    if (extra.length)
+      throw new Error("KOOKS_OWNER_EMAIL takes one email address.");
+    const openSignup = /^(1|true|yes|on)$/i.test(
+      process.env.KOOKS_OPEN_SIGNUP ?? "",
+    );
     const mailer = createMailer({
       smtp: {
         host: process.env.KOOKS_SMTP_HOST,
@@ -936,6 +1076,8 @@ if (
       host,
       publicOrigin: process.env.KOOKS_PUBLIC_ORIGIN ?? "",
       members,
+      owner,
+      openSignup,
       mailer,
       assistantOptions: {
         apiKey: process.env.KOOKS_ANTHROPIC_API_KEY,
@@ -955,7 +1097,7 @@ if (
       console.log(`Kooks is ready at http://${host}:${port}`);
       if (server.auth)
         console.log(
-          `Sign-in is on for ${members.length} household address${members.length === 1 ? "" : "es"}; sign-in links go ${mailer.description}.`,
+          `Sign-in is on: ${server.auth.accounts()} account${server.auth.accounts() === 1 ? "" : "s"}, ${openSignup ? "and anyone may make one" : "and new people join by invitation"}; sign-in links go ${mailer.description}.`,
         );
       if (server.assistant)
         console.log(

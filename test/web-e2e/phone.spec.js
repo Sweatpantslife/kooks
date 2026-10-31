@@ -6,14 +6,15 @@ import { pagePolicy } from "../../client/page-policy.js";
 
 // The phone app's screens, tried in a browser: `kooks.phone` makes the page
 // sign in the way the phone app does, with the kitchen's address, an emailed
-// code and a device token, against the server with sign-in on.
+// link confirmed elsewhere and a device token, against the server with
+// sign-in on.
 const kitchen = "http://localhost:4319";
 const outbox = process.env.KOOKS_E2E_OUTBOX;
 const mails = () => (existsSync(outbox) ? readdirSync(outbox).sort() : []);
-const latestCode = () =>
+const latestLink = () =>
   readFileSync(join(outbox, mails().at(-1)), "utf8").match(
-    /Your Kooks code: (\d{6})/,
-  )[1];
+    /http:\/\/localhost:4319\/#\/signin\/[A-Za-z0-9_-]+/,
+  )[0];
 
 test.beforeEach(async ({ page }) => {
   page.on("pageerror", (error) => {
@@ -26,14 +27,22 @@ const title = (page) => page.getByRole("heading", { level: 1 });
 const stored = (page, key) =>
   page.evaluate((name) => localStorage.getItem(name), key);
 
-async function emailCode(page, email) {
+async function emailLink(page, email) {
   const before = mails().length;
   await page.getByLabel("Email address").fill(email);
-  await page.getByRole("button", { name: "Email me a code" }).click();
+  await page.getByRole("button", { name: "Email me a sign-in link" }).click();
   await expect(title(page)).toHaveText("Check your inbox.");
   await expect(title(page)).toBeFocused();
   await expect.poll(() => mails().length).toBe(before + 1);
-  return latestCode();
+  return latestLink();
+}
+// The person confirms the link somewhere else, as a browser would.
+async function confirmElsewhere(request, link) {
+  const response = await request.post(`${kitchen}/api/auth/link/confirm`, {
+    headers: { Origin: kitchen },
+    data: { token: link.split("/").at(-1), approve: true },
+  });
+  expect(response.ok(), await response.text()).toBe(true);
 }
 
 async function openThisPhone(page) {
@@ -42,10 +51,11 @@ async function openThisPhone(page) {
   await expect(page.getByRole("heading", { name: "This phone" })).toBeVisible();
 }
 
-test("on a phone, a member finds the kitchen, signs in with an emailed code, and signs out", async ({
+test("on a phone, a member finds the kitchen, signs in with an emailed link confirmed in a browser, and signs out", async ({
   page,
   context,
   request,
+  browser,
 }) => {
   await page.goto(`${kitchen}/`);
   await expect(title(page)).toHaveText("Where is your kitchen?");
@@ -63,17 +73,26 @@ test("on a phone, a member finds the kitchen, signs in with an emailed code, and
   await page.getByLabel("Kitchen address").fill(kitchen);
   await page.getByRole("button", { name: "Continue" }).click();
   await expect(title(page)).toHaveText("Welcome to your kitchen.");
-  await expect(page.getByText(`sign in to ${kitchen}`)).toBeVisible();
+  await expect(page.getByText(`sign this app in to ${kitchen}`)).toBeVisible();
   expect(await scan(page, "Phone sign-in, email")).toEqual([]);
 
-  const code = await emailCode(page, "baker@example.test");
-  expect(await scan(page, "Phone sign-in, code")).toEqual([]);
-  const wrong = code.replace(/.$/, (digit) => String((Number(digit) + 1) % 10));
-  await page.getByLabel("Code").fill(wrong);
-  await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page.getByRole("alert")).toContainText("That code is not right");
-  await page.getByLabel("Code").fill(code);
-  await page.getByRole("button", { name: "Sign in" }).click();
+  const link = await emailLink(page, "baker@example.test");
+  await expect(page.getByText("Waiting for the link…")).toBeVisible();
+  expect(await scan(page, "Phone sign-in, waiting")).toEqual([]);
+  // The link opens in a browser, which asks before it signs the app in and
+  // is not signed in itself.
+  const elsewhere = await browser.newContext();
+  const other = await elsewhere.newPage();
+  await other.goto(link);
+  await expect(title(other)).toHaveText("Sign in the Kooks app?");
+  await expect(other.getByText("baker@example.test")).toBeVisible();
+  expect(await scan(other, "Sign in the app?")).toEqual([]);
+  await other.getByRole("button", { name: "Sign in the app" }).click();
+  await expect(title(other)).toHaveText("The app is signing in.");
+  expect(
+    (await elsewhere.cookies()).filter((c) => c.name === "kooks_session"),
+  ).toEqual([]);
+  await elsewhere.close();
   await expect(title(page)).toHaveText("This week");
   await expect(page.getByRole("status")).toContainText(
     "Welcome to your kitchen.",
@@ -114,10 +133,7 @@ test("on a phone, a member finds the kitchen, signs in with an emailed code, and
   expect(after.status()).toBe(401);
 
   // Signing out to use another kitchen asks where the kitchen is again.
-  await page
-    .getByLabel("Code")
-    .fill(await emailCode(page, "baker@example.test"));
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await confirmElsewhere(request, await emailLink(page, "baker@example.test"));
   await expect(title(page)).toHaveText("This week");
   await openThisPhone(page);
   await page
@@ -128,12 +144,11 @@ test("on a phone, a member finds the kitchen, signs in with an emailed code, and
 });
 
 // Signed in on the phone, as the test above does it.
-async function signIn(page, email) {
+async function signIn(page, request, email) {
   await page.goto(`${kitchen}/`);
   await page.getByLabel("Kitchen address").fill(kitchen);
   await page.getByRole("button", { name: "Continue" }).click();
-  await page.getByLabel("Code").fill(await emailCode(page, email));
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await confirmElsewhere(request, await emailLink(page, email));
   await expect(title(page)).toHaveText("This week");
 }
 
@@ -161,7 +176,7 @@ test("out of the kitchen's reach, a phone shows its copy, keeps the ticks made a
   page,
   request,
 }) => {
-  await signIn(page, "cook@example.test");
+  await signIn(page, request, "cook@example.test");
   const grocery = `limes ${Date.now()}`;
   await page.getByRole("link", { name: "Groceries" }).first().click();
   const add = page.getByRole("textbox", { name: "Add to the list" });

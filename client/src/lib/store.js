@@ -8,11 +8,18 @@ import { forgetWaiting } from "./outbox.js";
 // The kitchen as this tab last saw it: every record by kind, in the server's
 // id order. Pages read it through `records()`; nothing else holds a copy.
 export const db = signal({});
-// "loading" until the first answer, then "ready", "signin" or "error".
+// "loading" until the first answer, then "ready", "signin" or "error", or
+// "welcome" for someone signed in to no household yet.
 export const status = signal("loading");
 export const loadError = signal("");
-// Who is signed in, or null on a server without sign-in.
+// Who is signed in, or null on a server without sign-in: their address,
+// the household this device is in, all of theirs, and invites waiting.
 export const account = signal(null);
+// An emailed link the phone app asked for, opened here: it signs the app
+// in once the person here confirms.
+export const appLink = signal(null);
+// An invite link opened here, with what it is for.
+export const invitation = signal(null);
 // True when the server is shared beyond this computer (sign-in is on).
 export const sharing = signal(false);
 // Whether the kitchen has the assistant: its host gave it an API key.
@@ -109,6 +116,21 @@ async function load() {
   }
   heard = Date.now();
   if (value.signedOut) return signedOut();
+  // Signed in, to no household yet: nothing of a kitchen to keep.
+  if (value.account && !value.account.household) {
+    revision = "";
+    void dropCopies();
+    batch(() => {
+      db.value = {};
+      account.value = value.account;
+      sharing.value = true;
+      assistant.value = false;
+      offline.value = null;
+      status.value = "welcome";
+    });
+    return;
+  }
+  if (value.unchanged && value.account) account.value = value.account;
   if (!value.unchanged) {
     batch(() => {
       db.value = value.changes
@@ -207,7 +229,13 @@ export async function signedIn(message) {
 export async function confirmLink(token, leaveTo) {
   leaveTo();
   try {
-    await api.auth("link/confirm", { token });
+    const result = await api.auth("link/confirm", { token });
+    // A link the phone app asked for waits for this person to say so.
+    if (result.app) {
+      appLink.value = { token, email: result.email, approved: false };
+      if (status.value === "loading") await refresh();
+      return;
+    }
     await signedIn("You’re signed in.");
   } catch (error) {
     await refresh();
@@ -216,4 +244,49 @@ export async function confirmLink(token, leaveTo) {
     if (status.value === "signin") signInError.value = error.message;
     else toast(error.message, { error: true });
   }
+}
+
+// Confirm that the phone app waiting for this link may sign in.
+export async function approveAppLink() {
+  const link = appLink.value;
+  await api.auth("link/confirm", { token: link.token, approve: true });
+  appLink.value = { ...link, approved: true };
+}
+
+// An invite opens #/join/<token>. Like a sign-in link, the token leaves the
+// address at once; the page then says what the invite is for.
+export async function openInvite(token, leaveTo) {
+  leaveTo();
+  try {
+    const { invite } = await api.auth("invite/open", { token });
+    invitation.value = { token, ...invite };
+  } catch (error) {
+    invitation.value = { token, error: error.message };
+  }
+  if (status.value === "loading") await refresh();
+}
+
+// Accepting the invite signs this browser in as the address it was sent
+// to, inside that household.
+export async function acceptInvite() {
+  const { token, household } = invitation.value;
+  await api.auth("invite/accept", { token });
+  invitation.value = null;
+  await signedIn(`Welcome to ${household}.`);
+}
+
+// Moving between households, or into a new one: the tab forgets the kitchen
+// it showed and loads the one it is in now.
+export async function enterHousehold(path, input, message) {
+  const result = await api.auth(path, input);
+  revision = "";
+  await dropCopies();
+  forgetWaiting();
+  batch(() => {
+    db.value = {};
+    status.value = "loading";
+  });
+  await refresh();
+  if (message) toast(message);
+  return result;
 }

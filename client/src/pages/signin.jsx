@@ -14,7 +14,7 @@ import { Icon } from "../ui/icon.jsx";
 
 export const SignIn = () => (phone ? <PhoneSignIn /> : <BrowserSignIn />);
 
-function Frame({ children }) {
+export function Frame({ children }) {
   return (
     <main id="main" class="signin" tabIndex={-1}>
       <div class="signin-card">
@@ -106,9 +106,9 @@ function BrowserSignIn() {
               device within 15 minutes; it works once.
             </p>
             <p class="muted small">
-              Nothing there after a few minutes? Look in spam, or ask whoever
-              runs this kitchen to check that your address is on the list and
-              that its mail is going out.
+              Nothing there after a few minutes? Look in spam. Links go only to
+              people with an account: if you don’t have one yet, ask someone in
+              your household to invite you.
             </p>
           </div>
           <button
@@ -174,14 +174,16 @@ function BrowserSignIn() {
 }
 
 // The phone app comes without a kitchen: it asks where the household runs
-// Kooks, then for a member's email, then for the code that arrives there.
-// Links and passkeys belong to the kitchen's own address, which the app is
-// not.
+// Kooks, then for the person's email, and waits while they open the link
+// that arrives, on this phone or any other device, and confirm. Passkeys
+// belong to the kitchen's own address, which the app is not.
+const WAIT_EVERY = 3000;
+const WAIT_FOR = 15 * 60 * 1000;
 function PhoneSignIn() {
   const [step, setStep] = useState(kitchen.value ? "email" : "kitchen");
   const [address, setAddress] = useState(kitchen.value);
   const [email, setEmail] = useState("");
-  const [code, setCode] = useState("");
+  const [wait, setWait] = useState(null);
   const [busy, setBusy] = useState(false);
   const heading = useRef(null);
   const error = signInError.value;
@@ -194,6 +196,40 @@ function PhoneSignIn() {
     document.title = "Sign in · Kooks";
     heading.current?.focus();
   }, [at]);
+
+  // While a link is on its way, ask every few seconds, and at once on coming
+  // back to the app from the mail app or the browser.
+  useEffect(() => {
+    if (at !== "waiting" || !wait) return;
+    let stopped = false;
+    const until = Date.now() + WAIT_FOR;
+    async function check() {
+      if (stopped) return;
+      if (Date.now() > until) {
+        stopped = true;
+        fail("That link has expired. Send a new one.");
+        setWait(null);
+        return;
+      }
+      try {
+        const answer = await auth("link/wait", { wait });
+        if (stopped || !answer.token) return;
+        stopped = true;
+        keepToken(answer.token);
+        await signedIn("Welcome to your kitchen.");
+      } catch {
+        // Out of reach for a moment: the next check tries again.
+      }
+    }
+    const timer = setInterval(check, WAIT_EVERY);
+    const back = () => document.visibilityState === "visible" && check();
+    document.addEventListener("visibilitychange", back);
+    return () => {
+      stopped = true;
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", back);
+    };
+  }, [at, wait]);
 
   const go = (next) => {
     fail("");
@@ -239,18 +275,10 @@ function PhoneSignIn() {
     setAddress(origin);
     go("email");
   });
-  const sendCode = work(async () => {
-    await auth("code", { email: email.trim() });
-    setCode("");
-    go("code");
-  });
-  const confirm = work(async () => {
-    const { token } = await auth("code/confirm", {
-      email: email.trim(),
-      code,
-    });
-    keepToken(token);
-    await signedIn("Welcome to your kitchen.");
+  const sendLink = work(async () => {
+    const answer = await auth("link", { email: email.trim(), app: true });
+    setWait(answer.wait);
+    go("waiting");
   });
 
   const alert = (
@@ -307,12 +335,12 @@ function PhoneSignIn() {
         <div class="stack">
           {title("Welcome to your kitchen.")}
           <p class="muted">
-            We’ll email you a code to sign in to{" "}
+            We’ll email you a link to sign this app in to{" "}
             <strong>{kitchen.value}</strong>.
           </p>
         </div>
         {alert}
-        <form class="stack" onSubmit={sendCode}>
+        <form class="stack" onSubmit={sendLink}>
           <div class="field">
             <label for="signin-email">Email address</label>
             <input
@@ -332,7 +360,7 @@ function PhoneSignIn() {
             disabled={busy}
           >
             <Icon icon={Mail} />
-            Email me a code
+            Email me a sign-in link
           </button>
         </form>
         <button
@@ -349,40 +377,27 @@ function PhoneSignIn() {
       <div class="stack">
         {title("Check your inbox.")}
         <p class="muted">
-          We sent a six-digit code to <strong>{email.trim()}</strong>. It works
-          once, for 10 minutes.
+          We sent a link to <strong>{email.trim()}</strong>. Open it on this
+          phone or any other device and confirm; the app signs in by itself. It
+          works once, for 15 minutes.
+        </p>
+        <p class="muted small" aria-live="polite">
+          {wait ? "Waiting for the link…" : ""}
+        </p>
+        <p class="muted small">
+          Links go only to people with an account: if you don’t have one yet,
+          ask someone in your household to invite you.
         </p>
       </div>
       {alert}
-      <form class="stack" onSubmit={confirm}>
-        <div class="field">
-          <label for="signin-code">Code</label>
-          <input
-            id="signin-code"
-            class="input input-code"
-            required
-            inputMode="numeric"
-            autocomplete="one-time-code"
-            pattern="[0-9 ]*"
-            maxLength={7}
-            placeholder="123456"
-            value={code}
-            onInput={(event) => setCode(event.currentTarget.value)}
-          />
-        </div>
-        <button type="submit" class="btn btn-primary btn-block" disabled={busy}>
-          <Icon icon={KeyRound} />
-          Sign in
-        </button>
-      </form>
       <div class="row">
         <button
           type="button"
           class="btn btn-quiet"
           disabled={busy}
-          onClick={sendCode}
+          onClick={sendLink}
         >
-          Send a new code
+          Send a new link
         </button>
         <button type="button" class="btn btn-quiet" onClick={() => go("email")}>
           Use a different address

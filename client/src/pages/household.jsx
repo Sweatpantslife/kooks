@@ -1,20 +1,33 @@
 import { useEffect, useState } from "preact/hooks";
 import {
   ArrowLeft,
+  ArrowLeftRight,
+  DoorOpen,
   Download,
+  House,
   KeyRound,
+  Laptop,
   LogOut,
+  Mail,
   Monitor,
   Moon,
   Palette,
   Sun,
   Trash2,
+  UserMinus,
   Users,
   Wallet,
 } from "lucide";
 import { auth } from "../lib/api.js";
 import * as passkeys from "../lib/passkeys.js";
-import { account, records, sharing, signOut } from "../lib/store.js";
+import {
+  account,
+  enterHousehold,
+  records,
+  refresh,
+  sharing,
+  signOut,
+} from "../lib/store.js";
 import { theme } from "../lib/theme.js";
 import { UNITS, units } from "../lib/units.js";
 import { budgetFor, currency, money } from "../lib/money.js";
@@ -26,6 +39,7 @@ import { dateLabel, localDay, monday, plural } from "../lib/format.js";
 import { Empty, PageHeader } from "../ui/page.jsx";
 import { Icon } from "../ui/icon.jsx";
 import { FileLink } from "../ui/asset.jsx";
+import { StartHousehold, WaitingInvites } from "./welcome.jsx";
 
 export const toHousehold = (
   <a class="back" href="#/household">
@@ -138,9 +152,9 @@ function Passkeys({ email }) {
       {list === null ? (
         <p class="muted">Loading passkeys…</p>
       ) : list.length ? (
-        <ul class="stack" role="list">
+        <ul class="entries" role="list">
           {list.map((p) => (
-            <li key={p.id} class="row">
+            <li key={p.id}>
               <Icon icon={KeyRound} />
               <div>
                 <strong>{p.name}</strong>
@@ -196,6 +210,91 @@ function Passkeys({ email }) {
   );
 }
 
+// Every phone and browser signed in to this account. Each stays signed in
+// for as long as it is used at least every six months; any of them can be
+// signed out from here, as when a phone is lost.
+function Devices() {
+  const [list, setList] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const load = () =>
+    auth("sessions")
+      .then(({ sessions }) => setList(sessions))
+      .catch((error) => toast(error.message, { error: true }));
+  useEffect(() => void load(), []);
+  const run = (work, done) => async () => {
+    setBusy(true);
+    try {
+      await work();
+      toast(done);
+      await load();
+    } catch (error) {
+      toast(error.message, { error: true });
+    } finally {
+      setBusy(false);
+    }
+  };
+  const others = (list ?? []).filter((s) => !s.current).length;
+  return (
+    <section class="card" aria-labelledby="devices">
+      <h2 id="devices">Signed-in devices</h2>
+      <p class="muted small">
+        Kooks keeps you signed in on each device as long as you use it at least
+        every six months. Sign out any you no longer use.
+      </p>
+      {list === null ? (
+        <p class="muted">Loading devices…</p>
+      ) : (
+        <ul class="entries" role="list">
+          {list.map((d) => (
+            <li key={d.id}>
+              <Icon icon={Laptop} />
+              <div>
+                <strong>{d.label}</strong>
+                <p class="muted small">
+                  {d.current
+                    ? "This device"
+                    : `Last used ${dateLabel(localDay(d.used_at ?? d.created_at))}`}
+                  {` · Signed in ${dateLabel(localDay(d.created_at))}`}
+                </p>
+              </div>
+              {!d.current && (
+                <button
+                  type="button"
+                  class="btn btn-quiet btn-danger"
+                  disabled={busy}
+                  aria-label={`Sign out ${d.label}`}
+                  onClick={run(
+                    () => auth("session/end", { id: d.id }),
+                    `${d.label} is signed out.`,
+                  )}
+                >
+                  <Icon icon={LogOut} />
+                  Sign out
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {others > 1 && (
+        <div class="row">
+          <button
+            type="button"
+            class="btn"
+            disabled={busy}
+            onClick={run(
+              () => auth("sessions/end-others", {}),
+              "Every other device is signed out.",
+            )}
+          >
+            Sign out everywhere else
+          </button>
+        </div>
+      )}
+    </section>
+  );
+}
+
 // On a phone: who it is signed in as, and to which kitchen. Passkeys
 // belong to the kitchen's own address, so they are for browsers.
 function ThisPhone({ email }) {
@@ -215,7 +314,7 @@ function ThisPhone({ email }) {
         <strong>{kitchen.value}</strong>.
       </p>
       <p class="muted small">
-        On this phone you sign in with a code from your email. Passkeys are for
+        On this phone you sign in with a link from your email. Passkeys are for
         browsers, at the kitchen’s own address.
       </p>
       <div class="row">
@@ -248,15 +347,286 @@ export function Account() {
       {toHousehold}
       <PageHeader title="Sign-in" />
       {email && phone ? (
-        <ThisPhone email={email} />
+        <>
+          <ThisPhone email={email} />
+          <Devices />
+        </>
       ) : email ? (
-        <Passkeys email={email} />
+        <>
+          <Passkeys email={email} />
+          <Devices />
+        </>
       ) : (
         <Empty icon={KeyRound} title="Nobody signs in here">
           This kitchen runs for this computer only. Whoever runs Kooks can share
           it with the household by turning on sign-in.
         </Empty>
       )}
+    </div>
+  );
+}
+
+// Who shares this kitchen: the household's name, its members, invites on
+// their way, and the other households this person belongs to.
+export function Members() {
+  const mine = account.value?.household;
+  const [list, setList] = useState(null);
+  const [email, setEmail] = useState("");
+  const [name, setName] = useState(mine?.name ?? "");
+  const [busy, setBusy] = useState(false);
+  const load = () =>
+    auth("household/members")
+      .then(setList)
+      .catch((error) => toast(error.message, { error: true }));
+  useEffect(() => {
+    if (mine) void load();
+  }, [mine?.id]);
+  const run = (work, done) => async (event) => {
+    event?.preventDefault();
+    setBusy(true);
+    try {
+      await work();
+      if (done) toast(done);
+      await load();
+    } catch (error) {
+      toast(error.message, { error: true });
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (!mine)
+    return (
+      <div class="stack-lg page-narrow">
+        {toHousehold}
+        <PageHeader title="Members" />
+        <Empty icon={Users} title="Nobody signs in here">
+          This kitchen runs for this computer only. Whoever runs Kooks can share
+          it with the household by turning on sign-in.
+        </Empty>
+      </div>
+    );
+  const owner = mine.role === "owner";
+  const others = (account.value?.households ?? []).filter(
+    (h) => h.id !== mine.id,
+  );
+  const invite = run(async () => {
+    await auth("household/invite", { email: email.trim() });
+    setEmail("");
+  }, `Invite sent to ${email.trim()}.`);
+  const rename = run(async () => {
+    await auth("household/rename", { name: name.trim() });
+    await refresh();
+  }, "Household renamed.");
+  async function leave() {
+    if (
+      !confirm(
+        `Leave ${mine.name}? You won’t see its recipes, week or groceries until someone invites you again.`,
+      )
+    )
+      return;
+    setBusy(true);
+    try {
+      await enterHousehold("household/leave", {}, `You left ${mine.name}.`);
+      navigate("week", { replace: true });
+    } catch (error) {
+      toast(error.message, { error: true });
+      setBusy(false);
+    }
+  }
+  const switchTo = (h) => async () => {
+    setBusy(true);
+    try {
+      await enterHousehold(
+        "household/switch",
+        { id: h.id },
+        `You’re in ${h.name}.`,
+      );
+      navigate("week", { replace: true });
+    } catch (error) {
+      toast(error.message, { error: true });
+      setBusy(false);
+    }
+  };
+  return (
+    <div class="stack-lg page-narrow">
+      {toHousehold}
+      <PageHeader title="Members" />
+      <section class="card" aria-labelledby="who">
+        <h2 id="who">Who cooks in {mine.name}</h2>
+        {list === null ? (
+          <p class="muted">Loading members…</p>
+        ) : (
+          <ul class="entries" role="list">
+            {list.members.map((m) => (
+              <li key={m.email}>
+                <Icon icon={Users} />
+                <div>
+                  <strong>{m.email}</strong>
+                  <p class="muted small">
+                    {m.role === "owner" ? "Owner" : "Member"}
+                    {m.email === account.value.email && " · You"}
+                    {` · Joined ${dateLabel(localDay(m.joined_at))}`}
+                  </p>
+                </div>
+                {owner && m.email !== account.value.email && (
+                  <button
+                    type="button"
+                    class="btn btn-quiet btn-danger"
+                    disabled={busy}
+                    aria-label={`Remove ${m.email} from the household`}
+                    onClick={(event) =>
+                      confirm(
+                        `Remove ${m.email} from ${mine.name}? They lose the kitchen at once; their recipes and notes stay.`,
+                      ) &&
+                      run(
+                        () => auth("household/remove", { email: m.email }),
+                        `${m.email} is no longer in the household.`,
+                      )(event)
+                    }
+                  >
+                    <Icon icon={UserMinus} />
+                    Remove
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+      <section class="card" aria-labelledby="invite">
+        <h2 id="invite">Invite someone</h2>
+        <p class="muted small">
+          They get an email with a link that works once, for a week. Opening it
+          signs them in and into {mine.name}; no password, nothing to install.
+        </p>
+        <form class="stack" onSubmit={invite}>
+          <div class="field">
+            <label for="invite-email">Their email address</label>
+            <input
+              id="invite-email"
+              class="input"
+              type="email"
+              required
+              autocomplete="off"
+              placeholder="them@example.com"
+              value={email}
+              onInput={(event) => setEmail(event.currentTarget.value)}
+            />
+          </div>
+          <div class="row">
+            <button type="submit" class="btn btn-primary" disabled={busy}>
+              <Icon icon={Mail} />
+              Send an invite
+            </button>
+          </div>
+        </form>
+        {list?.invites.length > 0 && (
+          <>
+            <h3>Waiting to join</h3>
+            <ul class="entries" role="list">
+              {list.invites.map((i) => (
+                <li key={i.id}>
+                  <Icon icon={Mail} />
+                  <div>
+                    <strong>{i.email}</strong>
+                    <p class="muted small">
+                      Invited by {i.invited_by} · Until{" "}
+                      {dateLabel(localDay(i.expires_at))}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    class="btn btn-quiet"
+                    disabled={busy}
+                    aria-label={`Withdraw the invite to ${i.email}`}
+                    onClick={run(
+                      () => auth("household/invite/withdraw", { id: i.id }),
+                      "Invite withdrawn.",
+                    )}
+                  >
+                    Withdraw
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+      </section>
+      <section class="card" aria-labelledby="name">
+        <h2 id="name">Name</h2>
+        <form class="row" onSubmit={rename}>
+          <div class="field">
+            <label for="rename-household" class="sr-only">
+              Household name
+            </label>
+            <input
+              id="rename-household"
+              class="input"
+              required
+              maxLength={60}
+              value={name}
+              onInput={(event) => setName(event.currentTarget.value)}
+            />
+          </div>
+          <button type="submit" class="btn" disabled={busy}>
+            Rename
+          </button>
+        </form>
+      </section>
+      <section class="card" aria-labelledby="kitchens">
+        <h2 id="kitchens">Your other kitchens</h2>
+        <WaitingInvites />
+        {others.length ? (
+          <ul class="entries" role="list">
+            {others.map((h) => (
+              <li key={h.id}>
+                <Icon icon={House} />
+                <div>
+                  <strong>{h.name}</strong>
+                  <p class="muted small">{plural(h.members, "member")}</p>
+                </div>
+                <button
+                  type="button"
+                  class="btn"
+                  disabled={busy}
+                  onClick={switchTo(h)}
+                >
+                  <Icon icon={ArrowLeftRight} />
+                  Switch
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p class="muted small">
+            You can belong to more than one household, such as your own and your
+            parents’. Each has its own recipes, week and groceries.
+          </p>
+        )}
+        <details>
+          <summary>Start another household</summary>
+          <StartHousehold label="Start it" />
+        </details>
+      </section>
+      <section class="card" aria-labelledby="leave">
+        <h2 id="leave">Leave</h2>
+        <p class="muted small">
+          {mine.members > 1
+            ? `You stop seeing ${mine.name}; what you added stays for the others.${owner ? " Whoever has been in it longest becomes its owner." : ""}`
+            : "You’re the only member, so you can’t leave: nobody could open this kitchen again. Invite someone first."}
+        </p>
+        <div class="row">
+          <button
+            type="button"
+            class="btn btn-danger"
+            disabled={busy || mine.members <= 1}
+            onClick={leave}
+          >
+            <Icon icon={DoorOpen} />
+            Leave {mine.name}
+          </button>
+        </div>
+      </section>
     </div>
   );
 }
@@ -299,7 +669,7 @@ function Kitchen() {
       <h2 id="kitchen">This kitchen</h2>
       <p class="muted">
         {sharing.value
-          ? "A shared household server: everyone who signs in sees the same recipes, plans and cooking."
+          ? "A shared household server: everyone in this household sees the same recipes, plans and cooking. Other households on it have kitchens of their own."
           : "On this computer only. Whoever runs Kooks can share it with the household by turning on sign-in."}
       </p>
       <p class="muted small">
@@ -314,6 +684,7 @@ function Kitchen() {
 
 export function Household() {
   const email = account.value?.email;
+  const mine = account.value?.household;
   const people = records("member");
   const prices = records("price").filter(
     (p) => p.data.currency === currency.value,
@@ -322,6 +693,13 @@ export function Household() {
   const look = THEMES.find((t) => t.value === theme.value).label;
   const amounts = UNITS.find((u) => u.value === units.value).label;
   const sections = [
+    mine && {
+      href: "#/household/members",
+      icon: House,
+      tone: "tomato",
+      title: "Members",
+      text: `${plural(mine.members, "member")} · Invite someone`,
+    },
     {
       href: "#/household/people",
       icon: Users,
@@ -368,7 +746,10 @@ export function Household() {
   ].filter(Boolean);
   return (
     <div class="stack-lg">
-      <PageHeader eyebrow="Settings for this kitchen" title="Household" />
+      <PageHeader
+        eyebrow="Settings for this kitchen"
+        title={mine?.name ?? "Household"}
+      />
       <ul class="ways" role="list">
         {sections.map((s) => (
           <li key={s.href}>
