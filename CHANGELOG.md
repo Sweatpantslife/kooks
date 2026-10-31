@@ -4,6 +4,10 @@ What changed in Kooks and how each change was verified, newest first. Kooks has 
 
 ## Unreleased
 
+### Native Android and iOS builds in CI
+
+A new workflow compiles the phone app's native projects whenever `client/`, `shared/`, the native projects or their build inputs change: the Android debug APK on Ubuntu (JDK 21, SDK Platform 36), kept as an artifact for seven days, and the unsigned iOS simulator app on macOS 26 with Xcode 26.6. The Android job also fails when `cap sync` changes a tracked file under `android/` or `ios/`. On its first run both builds succeeded (a 4 MB APK; `BUILD SUCCEEDED` for iOS) and the sync left no change. Neither app was signed, launched or run on a device.
+
 ### Accounts and households instead of one address list
 
 People now have accounts, named by their email address, and an account belongs to one or more households. Each household is a kitchen with its own cookbook: the first one is the server's database, so an existing kitchen keeps every record, and households started later get a SQLite file each in `households/` beside it. Households grow by invitation: any member invites an address from **Household › Members**, the invite is emailed, works once for seven days, and opening it shows the household and who asked; joining signs that browser in as the invited address and makes the account if there was none. Someone already signed in sees invites to their address in the app too. Owners remove members (out at their next request, still signed in to their other households); anyone leaves except a household's last member, and a leaving owner hands over to the longest-standing member. Anyone with an account can start another household and switch between theirs; someone signed in to no household gets a welcome page to start one or take an invite.
