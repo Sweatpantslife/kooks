@@ -112,9 +112,9 @@ const randomToken = () => randomBytes(32).toString("base64url");
 const isLoopback = (host) => ["127.0.0.1", "localhost", "::1"].includes(host);
 // The phone app is this app inside Capacitor, whose pages come from these
 // origins: capacitor://localhost on iOS and https://localhost on Android.
-// It signs in with an emailed code and sends a device token with every
-// request, never a cookie, so its requests are allowed across origins only
-// to the API and only with that token.
+// It signs in with an emailed link it waits for and sends a device token
+// with every request, never a cookie, so its requests are allowed across
+// origins only to the API and only with that token.
 const appOrigins = new Set(["capacitor://localhost", "https://localhost"]);
 const bearer = (req) =>
   String(req.headers.authorization ?? "").match(/^Bearer ([a-f0-9]{64})$/)?.[1];

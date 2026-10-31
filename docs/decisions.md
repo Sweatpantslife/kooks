@@ -25,7 +25,7 @@ Reconciled October 9, 2026 against the source. See [the developer handoff](hando
 ## Open decisions and unfinished delivery
 
 - Decide which changes besides grocery ticks a phone keeps without a connection, and how each meets changes made meanwhile.
-- Decide how members join beyond the configured address list (invitations from inside the app), whether taste profiles should link to sign-in identities, and hosting for more than one household on a server.
+- Decide how a member's account links to their person at the table (taste profile), and how history names who made a change. Joining by invitation and several households on one server were settled on October 31, 2026 (above).
 - Confirm the first phone release scope.
 - Decide whether the assistant should answer from the phone without a connection (it does not), and whether a household wants a monthly limit as well as the daily token allowance.
 - Validate actual device timer behavior, incoming sharing, interface/recipe languages, right-to-left needs, regional units, accessibility, and import quality.
