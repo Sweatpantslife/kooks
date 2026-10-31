@@ -34,7 +34,7 @@ npm run cap:ios
 npm run cap:android
 ```
 
-`npm run cap:sync` builds the app in `client/` and copies it into both projects. On a phone it signs in to the household's kitchen with an emailed code, rings cooking timers as notifications, hands books and backups to the share sheet, and offers to bring in the recipes the previous phone app kept. Native compilation requires Xcode or the Android toolchain, and native execution and physical-device notification behavior still need verification. See [native setup and limits](docs/native-app.md).
+`npm run cap:sync` builds the app in `client/` and copies it into both projects. On a phone it signs in to the household's kitchen with an emailed link confirmed on any device, rings cooking timers as notifications, hands books and backups to the share sheet, and offers to bring in the recipes the previous phone app kept. Native compilation requires Xcode or the Android toolchain, and native execution and physical-device notification behavior still need verification. See [native setup and limits](docs/native-app.md).
 
 ## Agent integration
 
@@ -44,7 +44,7 @@ Connect an MCP client to `node /absolute/path/to/kooks/mcp/index.js`; adapt [the
 
 The local server stores its cookbook in `.data/kooks.sqlite`; `KOOKS_DB_PATH` selects another location. Keep personal recipes, photos, exports, credentials, and logs outside version control. `.gitignore` excludes local data, configuration, backups, signing material, dependencies, and generated build outputs.
 
-The browser server binds to loopback by default and asks nobody to sign in. Sharing it beyond this computer turns sign-in on: the people listed in `KOOKS_HOUSEHOLD_EMAILS` prove their address with a one-time emailed link and then add passkeys for one-tap sign-in. See [household setup](docs/household-features.md) and [hosting](docs/hosting.md); [.env.example](.env.example) lists every setting the servers read, with its default. Publishing this source repository does not deploy a running service.
+The browser server binds to loopback by default and asks nobody to sign in. Sharing it beyond this computer turns sign-in on: people have accounts, belong to households that each keep their own cookbook, and join by emailed invitation; they sign in with a one-time emailed link or a passkey. `KOOKS_OWNER_EMAIL` names the first person. See [household setup](docs/household-features.md) and [hosting](docs/hosting.md); [.env.example](.env.example) lists every setting the servers read, with its default. Publishing this source repository does not deploy a running service.
 
 Nothing goes to a model provider unless the host sets `KOOKS_ANTHROPIC_API_KEY`. Then Ask Kooks sends each question, and the records it reads to answer it, to Anthropic; [SECURITY.md](SECURITY.md) lists what it reads and its limits.
 

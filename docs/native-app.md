@@ -41,9 +41,9 @@ For a physical iPhone, select your Apple development team in Xcode's Signing & C
 
 ## Signing in
 
-The first screen asks where the kitchen is: the address the household opens Kooks at, such as `kooks.example.com`. The app checks that it answers like a Kooks kitchen with sign-in on, then asks for the member's email address and emails a six-digit code, which the member types in. The app keeps the kitchen's address and a device token in its web storage and sends the token with every request; [the hosting guide](hosting.md) describes the server's side. The kitchen must be reachable over https: Android refuses plain-http traffic, and so does the page's own policy. **Household › This phone** signs out, or signs out and forgets the kitchen to use another one.
+The first screen asks where the kitchen is: the address the household opens Kooks at, such as `kooks.example.com`. The app checks that it answers like a Kooks kitchen with sign-in on, then asks for the member's email address and emails a sign-in link. The member opens it on the phone or any other device and confirms that the app may sign in; the app, asking every few seconds, then signs in by itself. The app keeps the kitchen's address and a device token in its web storage and sends the token with every request; [the hosting guide](hosting.md) describes the server's side. The kitchen must be reachable over https: Android refuses plain-http traffic, and so does the page's own policy. **Household › This phone** signs out, or signs out and forgets the kitchen to use another one.
 
-Sign-in links and passkeys stay browser-only: an emailed link would open in the browser, not in the app, and a passkey belongs to the kitchen's own web address.
+Passkeys stay browser-only, since a passkey belongs to the kitchen's own web address, and so does opening a link: it opens in the browser, which signs the app in rather than itself.
 
 ## What the phone adds
 

@@ -1,10 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
-import {
-  createHash,
-  randomBytes,
-  randomInt,
-  timingSafeEqual,
-} from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { KooksError } from "../mcp/store.js";
 import { isEmail } from "./mail.js";
 import {
@@ -15,12 +10,21 @@ import {
   verifyRegistration,
 } from "./webauthn.js";
 
-// Who may enter the kitchen and how: the household's email addresses are the
-// membership list, a one-time emailed link proves an address, and a passkey
-// makes every later sign-in one tap. The phone app, which a link cannot
-// reach and a passkey cannot serve, proves an address with an emailed code
-// instead and keeps a device token. Sessions, links, codes and passkeys live
-// in auth_* tables beside the cookbook; only hashes of tokens are stored.
+// Who may enter which kitchen, and how. People have accounts, named by their
+// email address; an account belongs to any number of households, and each
+// household is a kitchen with its own cookbook. A household is started by
+// one of its members and grows by invitation: an emailed invite proves the
+// address it went to, so opening it signs that person in and lets them in.
+//
+// Signing in is a one-time emailed link or a passkey, nothing else. The
+// phone app cannot open a link or hold a passkey for the kitchen's address,
+// so it asks for a link and waits: the member opens the link on any device,
+// confirms that the app may sign in, and the app picks up its own session.
+//
+// Sessions last as long as they are used: each day of use extends one to
+// 180 days from then, and members see and end their signed-in devices.
+// Everything lives in auth_* tables beside the first household's cookbook;
+// only hashes of tokens are stored.
 
 export class AuthError extends KooksError {
   constructor(code, message, status = 400) {
@@ -30,47 +34,102 @@ export class AuthError extends KooksError {
 }
 const MINUTE = 60000,
   DAY = 24 * 60 * MINUTE;
+// The household whose cookbook is the server's own database: every kitchen
+// from before accounts, and the first one on a new server.
+export const HOME = "home";
 const hash = (token) => createHash("sha256").update(token).digest("hex");
+const secret = () => toBase64Url(randomBytes(32));
+const isSecret = (value) =>
+  typeof value === "string" && /^[A-Za-z0-9_-]{43}$/.test(value);
 export const normalizeEmail = (value) =>
   String(value ?? "")
     .trim()
     .toLowerCase();
-export function parseMembers(text) {
+// A list of addresses, as the KOOKS_HOUSEHOLD_EMAILS of earlier versions held
+// them.
+export function parseMembers(text, name = "KOOKS_HOUSEHOLD_EMAILS") {
   const members = [];
   for (const raw of String(text ?? "").split(/[\s,;]+/)) {
     const email = normalizeEmail(raw);
     if (!email) continue;
     if (!isEmail(email))
       throw new Error(
-        `KOOKS_HOUSEHOLD_EMAILS holds something that is not an email address: ${raw}`,
+        `${name} holds something that is not an email address: ${raw}`,
       );
     if (!members.includes(email)) members.push(email);
   }
   return members;
 }
-const cleanName = (value) =>
+export const cleanName = (value, length = 60) =>
   String(value ?? "")
     .replace(/\p{C}/gu, " ")
     .replace(/\s+/g, " ")
     .trim()
-    .slice(0, 60);
-export const wrongCode = () =>
-  new AuthError(
-    "CODE_INVALID",
-    "That code is not right, or it has expired. Check it, or ask for a new one.",
+    .slice(0, length);
+// What a signed-in device is called in the member's list, from its browser.
+export function deviceLabel(userAgent, app = false) {
+  const ua = String(userAgent ?? "");
+  const device = /iPhone/.test(ua)
+    ? "iPhone"
+    : /iPad/.test(ua)
+      ? "iPad"
+      : /Android/.test(ua)
+        ? "Android"
+        : /Macintosh|Mac OS X/.test(ua)
+          ? "Mac"
+          : /Windows/.test(ua)
+            ? "Windows"
+            : /CrOS/.test(ua)
+              ? "Chromebook"
+              : /Linux/.test(ua)
+                ? "Linux"
+                : "";
+  if (app) return device ? `Kooks app on ${device}` : "Kooks app";
+  const browser = /Edg\//.test(ua)
+    ? "Edge"
+    : /Firefox\//.test(ua)
+      ? "Firefox"
+      : /Chrome\//.test(ua)
+        ? "Chrome"
+        : /Safari\//.test(ua)
+          ? "Safari"
+          : "";
+  return ([browser, device].filter(Boolean).join(" on ") || "A browser").slice(
+    0,
+    60,
   );
+}
 const tooSlow = () =>
   new AuthError("PASSKEY_EXPIRED", "That took a little too long. Try again.");
+const linkInvalid = () =>
+  new AuthError(
+    "LINK_INVALID",
+    "This sign-in link has expired or was already used. Request a new one.",
+  );
+const inviteInvalid = () =>
+  new AuthError(
+    "INVITE_INVALID",
+    "This invite has expired, was withdrawn, or was already used. Ask for a new one.",
+  );
+const notMember = () =>
+  new AuthError("NOT_A_MEMBER", "You’re not a member of that household.", 403);
 
 export function createAuth({
   path = ":memory:",
-  members,
   mailer,
   now = () => Date.now(),
+  // Addresses that share the first household when the server has none yet:
+  // the household list of earlier versions.
+  members = [],
+  // The first household's owner, who also gets an account whenever theirs is
+  // missing, so a server can always be entered.
+  owner = "",
+  // Whether anyone may make an account with an emailed link, or only people
+  // a member invited.
+  openSignup = false,
   linkLifetime = 15 * MINUTE,
-  codeLifetime = 10 * MINUTE,
-  codeAttempts = 5,
-  sessionLifetime = 30 * DAY,
+  inviteLifetime = 7 * DAY,
+  sessionLifetime = 180 * DAY,
   challengeLifetime = 10 * MINUTE,
 }) {
   const db = new DatabaseSync(path);
@@ -96,41 +155,146 @@ export function createAuth({
       token_hash TEXT PRIMARY KEY, email TEXT NOT NULL,
       created_at TEXT NOT NULL, expires_at INTEGER NOT NULL, used_at TEXT
     );
-    CREATE TABLE IF NOT EXISTS auth_codes (
-      email TEXT PRIMARY KEY, salt TEXT NOT NULL, code_hash TEXT NOT NULL,
-      created_at TEXT NOT NULL, expires_at INTEGER NOT NULL,
-      attempts INTEGER NOT NULL
+    CREATE TABLE IF NOT EXISTS auth_households (
+      id TEXT PRIMARY KEY, name TEXT NOT NULL, created_at TEXT NOT NULL,
+      created_by TEXT
     );
+    CREATE TABLE IF NOT EXISTS auth_members (
+      email TEXT NOT NULL, household TEXT NOT NULL, role TEXT NOT NULL,
+      joined_at TEXT NOT NULL, PRIMARY KEY (email, household)
+    );
+    CREATE INDEX IF NOT EXISTS auth_members_household
+      ON auth_members(household);
+    CREATE TABLE IF NOT EXISTS auth_invites (
+      id TEXT PRIMARY KEY, token_hash TEXT NOT NULL UNIQUE,
+      household TEXT NOT NULL, email TEXT NOT NULL, invited_by TEXT NOT NULL,
+      created_at TEXT NOT NULL, expires_at INTEGER NOT NULL,
+      UNIQUE (household, email)
+    );
+    CREATE TABLE IF NOT EXISTS auth_waits (
+      wait_hash TEXT PRIMARY KEY, email TEXT NOT NULL,
+      created_at TEXT NOT NULL, expires_at INTEGER NOT NULL,
+      approved_at TEXT
+    );
+    -- The phone app's emailed codes, from before it waited for a link.
+    DROP TABLE IF EXISTS auth_codes;
   `);
+  const columns = (table) =>
+    new Set(
+      db
+        .prepare(`PRAGMA table_info(${table})`)
+        .all()
+        .map((c) => c.name),
+    );
+  const addColumns = (table, wanted) => {
+    const have = columns(table);
+    for (const [name, type] of wanted)
+      if (!have.has(name)) db.exec(`ALTER TABLE ${table} ADD ${name} ${type}`);
+  };
+  addColumns("auth_sessions", [
+    ["id", "TEXT"],
+    ["household", "TEXT"],
+    ["label", "TEXT"],
+    ["used_at", "TEXT"],
+  ]);
+  addColumns("auth_links", [["wait_hash", "TEXT"]]);
+  db.exec(
+    "UPDATE auth_sessions SET id = lower(hex(randomblob(8))) WHERE id IS NULL",
+  );
+
   const statements = new Map();
   const q = (sql) => {
     if (!statements.has(sql)) statements.set(sql, db.prepare(sql));
     return statements.get(sql);
   };
-  // A Set may be shared with the caller, so the household can change live.
-  const allowed = members instanceof Set ? members : new Set(members);
-  const challenges = new Map();
+  const transaction = (work) => {
+    db.exec("BEGIN IMMEDIATE");
+    try {
+      const result = work();
+      db.exec("COMMIT");
+      return result;
+    } catch (error) {
+      db.exec("ROLLBACK");
+      throw error;
+    }
+  };
   const iso = (ms) => new Date(ms).toISOString();
+  const challenges = new Map();
   function prune() {
     const t = now();
     q("DELETE FROM auth_sessions WHERE expires_at < ?").run(t);
     q("DELETE FROM auth_links WHERE expires_at < ?").run(t);
-    q("DELETE FROM auth_codes WHERE expires_at < ?").run(t);
+    q("DELETE FROM auth_invites WHERE expires_at < ?").run(t);
+    q("DELETE FROM auth_waits WHERE expires_at < ?").run(t);
     for (const [key, pending] of challenges)
       if (pending.expires < t) challenges.delete(key);
   }
-  function account(email) {
-    let row = q("SELECT email, handle FROM auth_accounts WHERE email = ?").get(
-      email,
-    );
+  const accountOf = (email) =>
+    q("SELECT email, handle FROM auth_accounts WHERE email = ?").get(email);
+  function ensureAccount(email) {
+    let row = accountOf(email);
     if (!row) {
-      row = { email, handle: toBase64Url(randomBytes(32)) };
+      row = { email, handle: secret() };
       q(
         "INSERT INTO auth_accounts(email, handle, created_at) VALUES (?, ?, ?)",
       ).run(email, row.handle, iso(now()));
     }
     return row;
   }
+  const membership = (email, household) =>
+    q("SELECT role FROM auth_members WHERE email = ? AND household = ?").get(
+      email,
+      household,
+    );
+  const join = (email, household, role = "member") =>
+    q(
+      "INSERT OR IGNORE INTO auth_members(email, household, role, joined_at) VALUES (?, ?, ?, ?)",
+    ).run(email, household, role, iso(now()));
+  const householdsOf = (email) =>
+    q(
+      `SELECT h.id, h.name, m.role,
+        (SELECT count(*) FROM auth_members o WHERE o.household = h.id) AS members
+       FROM auth_members m JOIN auth_households h ON h.id = m.household
+       WHERE m.email = ? ORDER BY m.joined_at, m.rowid`,
+    ).all(email);
+  const householdRow = (id) =>
+    q("SELECT id, name FROM auth_households WHERE id = ?").get(id);
+
+  // Earlier versions had one household, the server's own database, and a
+  // list of addresses that could enter it. The first start with accounts
+  // makes that the first household, with those addresses as its members and
+  // the owner first among them; accounts of addresses no longer on the list
+  // had already lost their way in, and go with their passkeys and sessions.
+  const seed = [normalizeEmail(owner), ...members.map(normalizeEmail)].filter(
+    (email, i, all) => email && all.indexOf(email) === i,
+  );
+  transaction(() => {
+    const started = q("SELECT count(*) AS n FROM auth_households").get().n > 0;
+    if (!started && seed.length) {
+      q(
+        "INSERT INTO auth_households(id, name, created_at, created_by) VALUES (?, ?, ?, ?)",
+      ).run(HOME, "Our kitchen", iso(now()), seed[0]);
+      seed.forEach((email, i) => {
+        ensureAccount(email);
+        join(email, HOME, i === 0 ? "owner" : "member");
+      });
+      const keep = `(${seed.map(() => "?").join(", ")})`;
+      for (const table of ["auth_accounts", "auth_passkeys", "auth_sessions"])
+        q(`DELETE FROM ${table} WHERE email NOT IN ${keep}`).run(...seed);
+    }
+    // The owner can always get in: their account comes back if it went,
+    // and a first household nobody belongs to becomes theirs again.
+    const ownerEmail = normalizeEmail(owner);
+    if (started && ownerEmail) {
+      ensureAccount(ownerEmail);
+      if (
+        householdRow(HOME) &&
+        !q("SELECT 1 FROM auth_members WHERE household = ?").get(HOME)
+      )
+        join(ownerEmail, HOME, "owner");
+    }
+  });
+
   const siteOf = (value) => {
     const url = new URL(value);
     return { origin: url.origin, rpId: url.hostname.replace(/^\[|\]$/g, "") };
@@ -155,27 +319,77 @@ export function createAuth({
       throw tooSlow();
     return { ...pending, challenge: data.challenge };
   }
+  const minutes = (ms) => Math.round(ms / MINUTE);
+  const days = (ms) => Math.round(ms / DAY);
+
+  function requireMember(email, household) {
+    const row = membership(email, household);
+    if (!row) throw notMember();
+    return row;
+  }
+  // A household with nobody left in it can never be entered again, so its
+  // last member stays.
+  function leaveAllowed(household) {
+    if (
+      q("SELECT count(*) AS n FROM auth_members WHERE household = ?").get(
+        household,
+      ).n <= 1
+    )
+      throw new AuthError(
+        "LAST_MEMBER",
+        "You’re the only member of this household, so it can’t be left: nobody could open it again. Invite someone first.",
+        409,
+      );
+  }
+  // An owner who goes hands the household to whoever has been in it longest.
+  function handOver(household) {
+    if (
+      !q(
+        "SELECT 1 FROM auth_members WHERE household = ? AND role = 'owner'",
+      ).get(household)
+    )
+      q(
+        `UPDATE auth_members SET role = 'owner' WHERE rowid = (
+           SELECT rowid FROM auth_members WHERE household = ?
+           ORDER BY joined_at, rowid LIMIT 1)`,
+      ).run(household);
+  }
 
   return {
     sessionLifetime,
-    isMember: (email) => allowed.has(normalizeEmail(email)),
+    openSignup,
+    // Whether an emailed link may sign this address in: it has an account,
+    // or anyone may make one.
+    canSignIn: (email) =>
+      openSignup || Boolean(accountOf(normalizeEmail(email))),
+    accounts: () => q("SELECT count(*) AS n FROM auth_accounts").get().n,
     // Resolves to whether a link was sent; strangers get nothing, silently.
     // The caller has already answered, the same way for every address, so a
-    // mail failure goes to the log rather than to whoever asked.
-    async requestLink({ email, origin }) {
+    // mail failure goes to the log rather than to whoever asked. A link the
+    // phone app asked for carries the hash of the secret the app waits with.
+    async requestLink({ email, origin, wait = null }) {
       prune();
       const address = normalizeEmail(email);
-      if (!allowed.has(address)) return false;
-      const token = toBase64Url(randomBytes(32));
+      if (!openSignup && !accountOf(address)) return false;
+      const token = secret();
+      const waitHash = isSecret(wait) ? hash(wait) : null;
       q(
-        "INSERT INTO auth_links(token_hash, email, created_at, expires_at) VALUES (?, ?, ?, ?)",
-      ).run(hash(token), address, iso(now()), now() + linkLifetime);
-      const minutes = Math.round(linkLifetime / MINUTE);
+        "INSERT INTO auth_links(token_hash, email, created_at, expires_at, wait_hash) VALUES (?, ?, ?, ?, ?)",
+      ).run(hash(token), address, iso(now()), now() + linkLifetime, waitHash);
+      if (waitHash)
+        q(
+          "INSERT OR REPLACE INTO auth_waits(wait_hash, email, created_at, expires_at) VALUES (?, ?, ?, ?)",
+        ).run(waitHash, address, iso(now()), now() + linkLifetime);
+      const link = `${siteOf(origin).origin}/#/signin/${token}`;
       try {
         await mailer.send({
           to: address,
-          subject: "Your Kooks sign-in link",
-          text: `Open this link to get into your kitchen:\n\n${siteOf(origin).origin}/#/signin/${token}\n\nIt works once, for the next ${minutes} minutes, on the device where you open it.\nIf you did not ask for it, you can ignore this email.\n`,
+          subject: waitHash
+            ? "Sign in to the Kooks app"
+            : "Your Kooks sign-in link",
+          text: waitHash
+            ? `Open this link to sign in to the Kooks app:\n\n${link}\n\nOpen it on any phone or computer; the page asks you to confirm, and the app then signs in by itself. It works once, for the next ${minutes(linkLifetime)} minutes.\nIf you did not just ask for this in the Kooks app, ignore this email and do not confirm.\n`
+            : `Open this link to get into your kitchen:\n\n${link}\n\nIt works once, for the next ${minutes(linkLifetime)} minutes, on the device where you open it.\nIf you did not ask for it, you can ignore this email.\n`,
         });
       } catch (error) {
         q("DELETE FROM auth_links WHERE token_hash = ?").run(hash(token));
@@ -184,120 +398,367 @@ export function createAuth({
       }
       return true;
     },
-    confirmLink(token) {
+    // Opening a link signs that browser in. A link the phone app asked for
+    // signs nobody in until the person who opened it confirms, and then
+    // signs in the app.
+    confirmLink(token, { approve = false } = {}) {
       prune();
-      const invalid = () =>
-        new AuthError(
-          "LINK_INVALID",
-          "This sign-in link has expired or was already used. Request a new one.",
-        );
-      if (typeof token !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(token))
-        throw invalid();
+      if (!isSecret(token)) throw linkInvalid();
       const row = q(
-        "SELECT email, used_at FROM auth_links WHERE token_hash = ? AND expires_at >= ?",
+        "SELECT email, used_at, wait_hash FROM auth_links WHERE token_hash = ? AND expires_at >= ?",
       ).get(hash(token), now());
-      if (!row || row.used_at || !allowed.has(row.email)) throw invalid();
+      if (!row || row.used_at || !(openSignup || accountOf(row.email)))
+        throw linkInvalid();
+      if (row.wait_hash && !approve) return { email: row.email, app: true };
       q("UPDATE auth_links SET used_at = ? WHERE token_hash = ?").run(
         iso(now()),
         hash(token),
       );
-      return row.email;
-    },
-    // One code per address at a time, six digits, for a few minutes and a
-    // few tries: a new request replaces the last code, a wrong guess spends
-    // a try, and the last wrong guess spends the code.
-    async requestCode({ email }) {
-      prune();
-      const address = normalizeEmail(email);
-      if (!allowed.has(address)) return false;
-      const code = String(randomInt(0, 1000000)).padStart(6, "0");
-      const salt = toBase64Url(randomBytes(16));
-      q(
-        "INSERT OR REPLACE INTO auth_codes(email, salt, code_hash, created_at, expires_at, attempts) VALUES (?, ?, ?, ?, ?, 0)",
-      ).run(
-        address,
-        salt,
-        hash(`${salt}:${code}`),
-        iso(now()),
-        now() + codeLifetime,
-      );
-      const minutes = Math.round(codeLifetime / MINUTE);
-      try {
-        await mailer.send({
-          to: address,
-          subject: `Your Kooks code: ${code}`,
-          text: `Enter this code in the Kooks app to get into your kitchen:\n\n${code}\n\nIt works once, for the next ${minutes} minutes. Kooks will never ask you for this code: type it only into the Kooks app.\nIf you did not ask for it, you can ignore this email.\n`,
-        });
-      } catch (error) {
-        q("DELETE FROM auth_codes WHERE email = ? AND salt = ?").run(
-          address,
-          salt,
-        );
-        console.error(`Kooks could not email a sign-in code: ${error.message}`);
-        return false;
+      ensureAccount(row.email);
+      if (row.wait_hash) {
+        const { changes } = q(
+          "UPDATE auth_waits SET approved_at = ? WHERE wait_hash = ? AND approved_at IS NULL",
+        ).run(iso(now()), row.wait_hash);
+        if (!changes) throw linkInvalid();
+        return { email: row.email, app: true, approved: true };
       }
-      return true;
+      return { email: row.email, app: false };
     },
-    confirmCode({ email, code }) {
+    // What the waiting phone app hears: nothing yet, or, once, the address
+    // its link was confirmed for.
+    waited(wait) {
       prune();
-      const address = normalizeEmail(email);
+      if (!isSecret(wait)) return null;
       const row = q(
-        "SELECT salt, code_hash, attempts FROM auth_codes WHERE email = ? AND expires_at >= ?",
-      ).get(address, now());
-      if (!row || !allowed.has(address)) throw wrongCode();
-      const given = String(code ?? "").replace(/\s/g, "");
-      const right =
-        /^\d{6}$/.test(given) &&
-        timingSafeEqual(
-          Buffer.from(hash(`${row.salt}:${given}`)),
-          Buffer.from(row.code_hash),
-        );
-      if (right || row.attempts + 1 >= codeAttempts)
-        q("DELETE FROM auth_codes WHERE email = ?").run(address);
-      else
-        q("UPDATE auth_codes SET attempts = attempts + 1 WHERE email = ?").run(
-          address,
-        );
-      if (!right) throw wrongCode();
-      return address;
+        "SELECT email, approved_at FROM auth_waits WHERE wait_hash = ?",
+      ).get(hash(wait));
+      if (!row?.approved_at) return null;
+      q("DELETE FROM auth_waits WHERE wait_hash = ?").run(hash(wait));
+      return accountOf(row.email) ? row.email : null;
     },
-    createSession(email, method) {
+    createSession(email, method, { label = "", household = null } = {}) {
       const token = randomBytes(32).toString("hex"),
         t = now();
-      account(email);
+      ensureAccount(email);
+      const current =
+        household && membership(email, household)
+          ? household
+          : (householdsOf(email)[0]?.id ?? null);
       q(
-        "INSERT INTO auth_sessions(token_hash, email, method, created_at, renewed_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)",
-      ).run(hash(token), email, method, iso(t), t, t + sessionLifetime);
+        "INSERT INTO auth_sessions(token_hash, id, email, method, household, label, created_at, used_at, renewed_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      ).run(
+        hash(token),
+        randomBytes(8).toString("hex"),
+        email,
+        method,
+        current,
+        cleanName(label) || "A device",
+        iso(t),
+        iso(t),
+        t,
+        t + sessionLifetime,
+      );
       q("UPDATE auth_accounts SET signed_in_at = ? WHERE email = ?").run(
         iso(t),
         email,
       );
       return token;
     },
-    // A session slides: use within 30 days keeps it, and a day of use
-    // extends it. Leaving the household ends it at the next request.
+    // A session slides: use within its lifetime keeps it, and a day of use
+    // extends it. Its household is checked on every request, so a member who
+    // leaves or is removed is out at once; they stay signed in, in another
+    // household of theirs or none.
     session(token) {
       if (typeof token !== "string" || !/^[a-f0-9]{64}$/.test(token))
         return null;
+      const key = hash(token);
       const row = q(
-        "SELECT email, method, renewed_at, expires_at FROM auth_sessions WHERE token_hash = ?",
-      ).get(hash(token));
+        "SELECT id, email, method, household, renewed_at, expires_at FROM auth_sessions WHERE token_hash = ?",
+      ).get(key);
       if (!row) return null;
       const t = now();
-      if (row.expires_at < t || !allowed.has(row.email)) {
-        q("DELETE FROM auth_sessions WHERE token_hash = ?").run(hash(token));
+      if (row.expires_at < t || !accountOf(row.email)) {
+        q("DELETE FROM auth_sessions WHERE token_hash = ?").run(key);
         return null;
+      }
+      let household = row.household;
+      if (!household || !membership(row.email, household)) {
+        household = householdsOf(row.email)[0]?.id ?? null;
+        q("UPDATE auth_sessions SET household = ? WHERE token_hash = ?").run(
+          household,
+          key,
+        );
       }
       const renewed = t - row.renewed_at > DAY;
       if (renewed)
         q(
-          "UPDATE auth_sessions SET renewed_at = ?, expires_at = ? WHERE token_hash = ?",
-        ).run(t, t + sessionLifetime, hash(token));
-      return { email: row.email, method: row.method, renewed };
+          "UPDATE auth_sessions SET renewed_at = ?, expires_at = ?, used_at = ? WHERE token_hash = ?",
+        ).run(t, t + sessionLifetime, iso(t), key);
+      return {
+        id: row.id,
+        email: row.email,
+        method: row.method,
+        household,
+        renewed,
+      };
     },
     endSession(token) {
       if (typeof token === "string")
         q("DELETE FROM auth_sessions WHERE token_hash = ?").run(hash(token));
+    },
+    // Where this account is signed in, newest use first.
+    sessions: (email) =>
+      q(
+        "SELECT id, method, label, created_at, used_at FROM auth_sessions WHERE email = ? AND expires_at >= ? ORDER BY used_at DESC, id",
+      ).all(email, now()),
+    endSessionById(email, id) {
+      const { changes } = q(
+        "DELETE FROM auth_sessions WHERE email = ? AND id = ?",
+      ).run(email, String(id ?? ""));
+      if (!changes)
+        throw new AuthError(
+          "NOT_FOUND",
+          "That device is already signed out.",
+          404,
+        );
+    },
+    endOtherSessions(email, keepId) {
+      return q("DELETE FROM auth_sessions WHERE email = ? AND id != ?").run(
+        email,
+        String(keepId ?? ""),
+      ).changes;
+    },
+    // The account as the app shows it: its households, the one this session
+    // is in, and invites waiting for it.
+    accountView(session) {
+      const households = householdsOf(session.email);
+      return {
+        email: session.email,
+        method: session.method,
+        household: households.find((h) => h.id === session.household) ?? null,
+        households,
+        invites: q(
+          `SELECT i.id, h.name AS household, i.invited_by
+           FROM auth_invites i JOIN auth_households h ON h.id = i.household
+           WHERE i.email = ? AND i.expires_at >= ?
+             AND NOT EXISTS (SELECT 1 FROM auth_members m
+               WHERE m.email = i.email AND m.household = i.household)
+           ORDER BY i.created_at`,
+        ).all(session.email, now()),
+      };
+    },
+    // A new household, with its starter as owner, entered at once.
+    createHousehold(session, name) {
+      const title = cleanName(name);
+      if (!title)
+        throw new AuthError("INVALID_INPUT", "Give the household a name.");
+      if (householdsOf(session.email).length >= 10)
+        throw new AuthError(
+          "TOO_MANY",
+          "You belong to ten households already.",
+          409,
+        );
+      const id = randomBytes(8).toString("hex");
+      transaction(() => {
+        q(
+          "INSERT INTO auth_households(id, name, created_at, created_by) VALUES (?, ?, ?, ?)",
+        ).run(id, title, iso(now()), session.email);
+        join(session.email, id, "owner");
+        q("UPDATE auth_sessions SET household = ? WHERE id = ?").run(
+          id,
+          session.id,
+        );
+      });
+      return id;
+    },
+    switchHousehold(session, id) {
+      requireMember(session.email, String(id ?? ""));
+      q("UPDATE auth_sessions SET household = ? WHERE id = ?").run(
+        id,
+        session.id,
+      );
+    },
+    renameHousehold(session, name) {
+      const title = cleanName(name);
+      if (!title)
+        throw new AuthError("INVALID_INPUT", "Give the household a name.");
+      requireMember(session.email, session.household);
+      q("UPDATE auth_households SET name = ? WHERE id = ?").run(
+        title,
+        session.household,
+      );
+    },
+    // Who is in the household, and who has been asked to join it.
+    members(session) {
+      requireMember(session.email, session.household);
+      return {
+        members: q(
+          "SELECT email, role, joined_at FROM auth_members WHERE household = ? ORDER BY joined_at, rowid",
+        ).all(session.household),
+        invites: q(
+          "SELECT id, email, invited_by, created_at, expires_at FROM auth_invites WHERE household = ? AND expires_at >= ? ORDER BY created_at",
+        )
+          .all(session.household, now())
+          .map((i) => ({ ...i, expires_at: iso(i.expires_at) })),
+      };
+    },
+    // Any member may invite. The invite goes by email, works once, for a
+    // week, and asking again replaces it. Resolves to whether it was sent.
+    async invite(session, { email, origin }) {
+      prune();
+      const address = normalizeEmail(email);
+      if (!isEmail(address))
+        throw new AuthError("INVALID_INPUT", "Enter a valid email address.");
+      requireMember(session.email, session.household);
+      if (membership(address, session.household))
+        throw new AuthError(
+          "ALREADY_MEMBER",
+          `${address} is already in this household.`,
+          409,
+        );
+      if (
+        q(
+          "SELECT count(*) AS n FROM auth_invites WHERE household = ? AND email != ?",
+        ).get(session.household, address).n >= 20
+      )
+        throw new AuthError(
+          "TOO_MANY",
+          "Twenty invites are waiting already. Withdraw some first.",
+          409,
+        );
+      const token = secret();
+      const id = randomBytes(8).toString("hex");
+      q("DELETE FROM auth_invites WHERE household = ? AND email = ?").run(
+        session.household,
+        address,
+      );
+      q(
+        "INSERT INTO auth_invites(id, token_hash, household, email, invited_by, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      ).run(
+        id,
+        hash(token),
+        session.household,
+        address,
+        session.email,
+        iso(now()),
+        now() + inviteLifetime,
+      );
+      const household = householdRow(session.household).name;
+      try {
+        await mailer.send({
+          to: address,
+          subject: `Join ${household} on Kooks`,
+          text: `${session.email} invited you to ${household}, their kitchen on Kooks: recipes, the week's meals and the grocery list, shared.\n\nOpen this link to join:\n\n${siteOf(origin).origin}/#/join/${token}\n\nIt works once, for the next ${days(inviteLifetime)} days. Opening it signs you in as ${address}, so keep it to yourself.\nIf you don't know ${session.email}, you can ignore this email.\n`,
+        });
+      } catch (error) {
+        q("DELETE FROM auth_invites WHERE id = ?").run(id);
+        console.error(`Kooks could not email an invite: ${error.message}`);
+        throw new AuthError(
+          "MAIL_FAILED",
+          "The invite could not be emailed. Try again in a while.",
+          502,
+        );
+      }
+      return true;
+    },
+    withdrawInvite(session, id) {
+      requireMember(session.email, session.household);
+      const { changes } = q(
+        "DELETE FROM auth_invites WHERE household = ? AND id = ?",
+      ).run(session.household, String(id ?? ""));
+      if (!changes)
+        throw new AuthError(
+          "NOT_FOUND",
+          "That invite was already used or withdrawn.",
+          404,
+        );
+    },
+    // What an invite link is for, before anyone acts on it.
+    openInvite(token) {
+      prune();
+      if (!isSecret(token)) throw inviteInvalid();
+      const row = q(
+        `SELECT i.email, i.invited_by, h.name AS household
+         FROM auth_invites i JOIN auth_households h ON h.id = i.household
+         WHERE i.token_hash = ? AND i.expires_at >= ?`,
+      ).get(hash(token), now());
+      if (!row) throw inviteInvalid();
+      return row;
+    },
+    // Accepting an invite link: the address it was sent to joins, with an
+    // account if it had none. Returns that address and the household.
+    acceptInvite(token) {
+      prune();
+      if (!isSecret(token)) throw inviteInvalid();
+      return transaction(() => {
+        const row = q(
+          "SELECT id, email, household FROM auth_invites WHERE token_hash = ? AND expires_at >= ?",
+        ).get(hash(token), now());
+        if (!row || !householdRow(row.household)) throw inviteInvalid();
+        q("DELETE FROM auth_invites WHERE id = ?").run(row.id);
+        ensureAccount(row.email);
+        join(row.email, row.household);
+        return { email: row.email, household: row.household };
+      });
+    },
+    // A signed-in person takes an invite to their own address from inside
+    // the app, by its id.
+    joinInvited(session, id) {
+      return transaction(() => {
+        const row = q(
+          "SELECT id, household FROM auth_invites WHERE id = ? AND email = ? AND expires_at >= ?",
+        ).get(String(id ?? ""), session.email, now());
+        if (!row || !householdRow(row.household)) throw inviteInvalid();
+        q("DELETE FROM auth_invites WHERE id = ?").run(row.id);
+        join(session.email, row.household);
+        q("UPDATE auth_sessions SET household = ? WHERE id = ?").run(
+          row.household,
+          session.id,
+        );
+        return row.household;
+      });
+    },
+    declineInvite(session, id) {
+      q("DELETE FROM auth_invites WHERE id = ? AND email = ?").run(
+        String(id ?? ""),
+        session.email,
+      );
+    },
+    leave(session) {
+      requireMember(session.email, session.household);
+      transaction(() => {
+        leaveAllowed(session.household);
+        q("DELETE FROM auth_members WHERE email = ? AND household = ?").run(
+          session.email,
+          session.household,
+        );
+        handOver(session.household);
+      });
+    },
+    // Owners may take someone out of the household; that person's devices
+    // lose it at their next request.
+    removeMember(session, email) {
+      const address = normalizeEmail(email);
+      if (requireMember(session.email, session.household).role !== "owner")
+        throw new AuthError(
+          "NOT_OWNER",
+          "Only the household's owner can remove people.",
+          403,
+        );
+      if (address === session.email)
+        throw new AuthError(
+          "INVALID_INPUT",
+          "To leave the household yourself, use Leave.",
+        );
+      const { changes } = q(
+        "DELETE FROM auth_members WHERE email = ? AND household = ?",
+      ).run(address, session.household);
+      if (!changes)
+        throw new AuthError(
+          "NOT_FOUND",
+          `${address} is not in this household.`,
+          404,
+        );
     },
     passkeys,
     registrationOptions({ email, origin }) {
@@ -312,7 +773,11 @@ export function createAuth({
       });
       return {
         rp: { id: site.rpId, name: "Kooks" },
-        user: { id: account(email).handle, name: email, displayName: email },
+        user: {
+          id: ensureAccount(email).handle,
+          name: email,
+          displayName: email,
+        },
         challenge,
         pubKeyCredParams: [-8, -7, -257].map((alg) => ({
           type: "public-key",
@@ -386,7 +851,8 @@ export function createAuth({
       const row = q("SELECT * FROM auth_passkeys WHERE id = ?").get(
         String(credential.id),
       );
-      if (!row || !allowed.has(row.email))
+      const owner = row && accountOf(row.email);
+      if (!owner)
         throw new AuthError(
           "PASSKEY_UNKNOWN",
           "This passkey is not registered with this kitchen. Sign in with an email link, then add it.",
@@ -400,14 +866,7 @@ export function createAuth({
         publicKey: { alg: row.algorithm, jwk: JSON.parse(row.public_key) },
         signCount: row.sign_count,
       });
-      const owner = q("SELECT handle FROM auth_accounts WHERE email = ?").get(
-        row.email,
-      );
-      if (
-        result.userHandle &&
-        owner &&
-        toBase64Url(result.userHandle) !== owner.handle
-      )
+      if (result.userHandle && toBase64Url(result.userHandle) !== owner.handle)
         throw new AuthError(
           "PASSKEY_INVALID",
           "This passkey belongs to a different account.",

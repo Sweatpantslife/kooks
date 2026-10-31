@@ -1,6 +1,6 @@
 # Kooks information architecture and experience design
 
-Adopted October 30, 2026, when the redesigned app replaced the previous browser app. This document is the design authority for the app in `client/` (Preact, built by Vite and served by `web/server.js` at `/`). The phone app is this client packaged with Capacitor, so everything here holds on phones too; it signs in with an emailed code rather than a link or a passkey, and Household shows **This phone** with its sign-out ([native setup and limits](native-app.md)).
+Adopted October 30, 2026, when the redesigned app replaced the previous browser app. This document is the design authority for the app in `client/` (Preact, built by Vite and served by `web/server.js` at `/`). The phone app is this client packaged with Capacitor, so everything here holds on phones too; it signs in with an emailed link confirmed on any device rather than a passkey, and Household shows **This phone** with its sign-out ([native setup and limits](native-app.md)).
 
 ## Principles
 
@@ -13,12 +13,12 @@ Adopted October 30, 2026, when the redesigned app replaced the previous browser 
 
 ## Navigation
 
-| Destination   | Icon                            | Holds                                                                                     |
-| ------------- | ------------------------------- | ----------------------------------------------------------------------------------------- |
-| **Week**      | calendar-days                   | This week's days with their plans, leftovers set aside and the week's cost; other weeks   |
-| **Recipes**   | book-open                       | The cookbook: recipes, meals, ideas to try, techniques and books, with search and filters |
-| **Groceries** | shopping-basket                 | To buy (by aisle, with the basket), shopping for the week, At home (pantry and leftovers) |
-| **Household** | house, or the member's initials | People at the table, prices and budget, look and units, sign-in, backup                   |
+| Destination   | Icon                            | Holds                                                                                                    |
+| ------------- | ------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| **Week**      | calendar-days                   | This week's days with their plans, leftovers set aside and the week's cost; other weeks                  |
+| **Recipes**   | book-open                       | The cookbook: recipes, meals, ideas to try, techniques and books, with search and filters                |
+| **Groceries** | shopping-basket                 | To buy (by aisle, with the basket), shopping for the week, At home (pantry and leftovers)                |
+| **Household** | house, or the member's initials | Members and invites, people at the table, prices and budget, look and units, sign-in and devices, backup |
 
 - At 840 px and wider a rail on the inline-start side carries the brand, the three tabs and Household at its foot. Below 840 px a top bar carries the brand and Household, and the three tabs sit at the bottom. Never both.
 - The current tab and the Household link carry `aria-current="page"`.

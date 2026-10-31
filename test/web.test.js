@@ -2,10 +2,14 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 import net from "node:net";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { Store } from "../mcp/store.js";
 import { createWebServer } from "../web/server.js";
+import { createAuth } from "../web/auth.js";
 import { embedOrigins } from "../shared/links.js";
 import { createAuthenticator } from "./helpers/authenticator.js";
 import { fakeBuild } from "./helpers/build.js";
@@ -225,7 +229,7 @@ test("HTTPS hosting signs members in with emailed links and passkeys behind its 
   });
   assert.match(
     login.cookie,
-    /^kooks_session=[a-f0-9]{64}; HttpOnly; SameSite=Strict; Path=\/; Max-Age=2592000; Secure$/,
+    /^kooks_session=[a-f0-9]{64}; HttpOnly; SameSite=Strict; Path=\/; Max-Age=15552000; Secure$/,
   );
   const cookie = sessionCookie(login);
   // A link works once.
@@ -241,7 +245,14 @@ test("HTTPS hosting signs members in with emailed links and passkeys behind its 
     await get("/api/state", { Host: "kooks.example", Cookie: cookie })
   ).json();
   assert.equal(state.sharing, true);
-  assert.deepEqual(state.account, { email: member, method: "email" });
+  assert.equal(state.account.email, member);
+  assert.equal(state.account.method, "email");
+  assert.deepEqual(state.account.household, {
+    id: "home",
+    name: "Our kitchen",
+    role: "owner",
+    members: 1,
+  });
   const saved = await post(
     "/api/tools/recipe_save",
     {
@@ -390,11 +401,11 @@ test("hosted and shared modes refuse insecure origins and missing household conf
           publicOrigin: "https://kooks.example",
           mailer: box,
         }),
-      /KOOKS_HOUSEHOLD_EMAILS/,
+      /KOOKS_OWNER_EMAIL/,
     );
     assert.throws(
       () => createWebServer({ store, host: "0.0.0.0", mailer: box }),
-      /KOOKS_HOUSEHOLD_EMAILS/,
+      /KOOKS_PUBLIC_ORIGIN/,
     );
     assert.throws(
       () => createWebServer({ store, host: "0.0.0.0", members: [member] }),
@@ -462,7 +473,7 @@ test("home-network sharing takes sign-in links and the accepted host from its co
   );
   assert.equal(login.status, 200);
   // Plain HTTP cannot carry a Secure cookie.
-  assert.match(login.cookie, /SameSite=Strict; Path=\/; Max-Age=2592000$/);
+  assert.match(login.cookie, /SameSite=Strict; Path=\/; Max-Age=15552000$/);
   assert.equal(
     (
       await get("/api/state", {
@@ -537,10 +548,9 @@ test("a loopback server behind a local HTTPS proxy accepts its configured origin
 
 test("household addresses turn sign-in on, links expire, sessions slide and leaving ends access", async (t) => {
   const box = mailbox();
-  const household = new Set([member, "second@example.test"]);
   let clock = Date.now();
   const { origin, get, post } = await setup(t, {
-    members: household,
+    members: [member, "second@example.test"],
     mailer: box,
     authOptions: { now: () => clock, linkLifetime: 1000 },
     clientRoot: fakeBuild(t),
@@ -566,7 +576,7 @@ test("household addresses turn sign-in on, links expire, sessions slide and leav
     token: tokenIn(box.sent[1]),
   });
   assert.equal(login.status, 200);
-  assert.match(login.cookie, /SameSite=Strict; Path=\/; Max-Age=2592000$/);
+  assert.match(login.cookie, /SameSite=Strict; Path=\/; Max-Age=15552000$/);
   const cookie = sessionCookie(login);
   assert.equal((await get("/api/state", { Cookie: cookie })).status, 200);
   // Use within a day keeps the session quiet; later use extends it.
@@ -574,8 +584,9 @@ test("household addresses turn sign-in on, links expire, sessions slide and leav
   const renewed = await get("/api/state", { Cookie: cookie });
   assert.equal(renewed.status, 200);
   assert.equal(sessionCookie(renewed), cookie);
-  assert.match(renewed.cookie, /Max-Age=2592000/);
-  clock += 31 * DAY;
+  assert.match(renewed.cookie, /Max-Age=15552000/);
+  // Half a year without use ends it.
+  clock += 181 * DAY;
   assert.equal((await get("/api/state", { Cookie: cookie })).status, 401);
   assert.equal((await post("/api/auth/link", { email: member })).status, 200);
   const fresh = sessionCookie(
@@ -652,16 +663,45 @@ test("household addresses turn sign-in on, links expire, sessions slide and leav
   );
   logged.mock.restore();
   box.broken = false;
-  // Leaving the household ends the session on its next request.
-  household.delete(member);
-  assert.equal((await get("/api/state", { Cookie: fresh })).status, 401);
-  assert.equal((await post("/api/auth/link", { email: member })).status, 200);
-  assert.equal(box.sent.length, 3);
+  // Someone taken out of the household is out of its kitchen at their next
+  // request, and stays signed in to no household.
+  assert.equal(
+    (await post("/api/auth/link", { email: "second@example.test" })).status,
+    200,
+  );
+  const second = sessionCookie(
+    await post("/api/auth/link/confirm", { token: tokenIn(box.sent.at(-1)) }),
+  );
+  assert.equal((await get("/api/state", { Cookie: second })).status, 200);
+  const notOwner = await post(
+    "/api/auth/household/remove",
+    { email: member },
+    { Cookie: second },
+  );
+  assert.equal(notOwner.status, 403);
+  assert.equal(
+    (
+      await post(
+        "/api/auth/household/remove",
+        { email: "second@example.test" },
+        { Cookie: fresh },
+      )
+    ).status,
+    200,
+  );
+  const outside = await (await get("/api/state", { Cookie: second })).json();
+  assert.equal(outside.account.household, null);
+  assert.deepEqual(outside.records, {});
+  const refused = await post(
+    "/api/tools/recipe_save",
+    { request_id: "outsider", recipe: { title: "Stray soup" } },
+    { Cookie: second },
+  );
+  assert.equal(refused.status, 403);
+  assert.equal((await refused.json()).error, "NO_HOUSEHOLD");
 });
 
-const codeIn = (message) => message.text.match(/\b(\d{6})\b/)[1];
-
-test("the phone app signs in with an emailed code and sends a device token, across origins to the API only", async (t) => {
+test("the phone app waits for a confirmed email link and sends a device token, across origins to the API only", async (t) => {
   const box = mailbox();
   let clock = Date.now();
   const { call, get, post } = await setup(t, {
@@ -709,15 +749,17 @@ test("the phone app signs in with an emailed code and sends a device token, acro
     "capacitor://localhost",
   );
   assert.equal((await locked.json()).error, "SIGN_IN");
-  // Links and passkeys are the browser's, whatever token comes with them.
+  // Opening links, invites and passkeys are the browser's, whatever token
+  // comes with them.
   const madeUp = { ...app, Authorization: `Bearer ${"0".repeat(64)}` };
   for (const path of [
-    "link",
     "link/confirm",
     "passkey/options",
     "passkey/signin",
     "passkey/register/options",
     "passkey/register",
+    "invite/open",
+    "invite/accept",
   ])
     for (const headers of [app, madeUp]) {
       const refused = await post(
@@ -730,40 +772,77 @@ test("the phone app signs in with an emailed code and sends a device token, acro
     }
   assert.equal(box.sent.length, 0);
 
-  assert.equal(
-    (await post("/api/auth/code", { email: "stranger@example.test" }, app))
-      .status,
-    200,
+  // The app asks for a link and waits with a secret of its own; a stranger
+  // gets a secret too, and nothing ever comes of it.
+  const waitFor = (wait) => post("/api/auth/link/wait", { wait }, app);
+  const asking = await post(
+    "/api/auth/link",
+    { email: "stranger@example.test" },
+    app,
   );
+  assert.equal(asking.status, 200);
+  const strangerWait = (await asking.json()).wait;
+  assert.match(strangerWait, /^[A-Za-z0-9_-]{43}$/);
   assert.equal(box.sent.length, 0);
-  assert.equal(
-    (await post("/api/auth/code", { email: member }, app)).status,
-    200,
+  const asked2 = await post("/api/auth/link", { email: member }, app);
+  assert.equal(asked2.status, 200);
+  const { wait } = await asked2.json();
+  assert.equal(box.sent.length, 1);
+  assert.equal(box.sent[0].subject, "Sign in to the Kooks app");
+  assert.match(box.sent[0].text, /https:\/\/kooks\.example\/#\/signin\//);
+  assert.deepEqual(await (await waitFor(wait)).json(), {
+    ok: true,
+    waiting: true,
+  });
+  // Opening the link signs nobody in until the person there confirms.
+  const link = tokenIn(box.sent[0]);
+  const opened = await post("/api/auth/link/confirm", { token: link }, browser);
+  assert.equal(opened.status, 200);
+  assert.equal(opened.cookie, null);
+  assert.deepEqual(await opened.json(), {
+    ok: true,
+    app: true,
+    email: member,
+    approved: false,
+  });
+  assert.equal((await (await waitFor(wait)).json()).waiting, true);
+  const approved = await post(
+    "/api/auth/link/confirm",
+    { token: link, approve: true },
+    browser,
   );
-  assert.match(box.sent[0].subject, /^Your Kooks code: \d{6}$/);
-  const code = codeIn(box.sent[0]);
-  const wrong = String((Number(code) + 1) % 1000000).padStart(6, "0");
-  const confirm = (guess, from = {}) =>
-    post(
-      "/api/auth/code/confirm",
-      { email: member, code: guess },
-      { ...app, ...from },
-    );
-  const missed = await confirm(wrong);
-  assert.equal(missed.status, 400);
-  assert.equal((await missed.json()).error, "CODE_INVALID");
-  const signed = await confirm(`${code.slice(0, 3)} ${code.slice(3)}`);
+  assert.equal(approved.status, 200);
+  assert.equal(approved.cookie, null, "the browser is not signed in");
+  assert.equal((await approved.json()).approved, true);
+  assert.equal(
+    (
+      await post(
+        "/api/auth/link/confirm",
+        { token: link, approve: true },
+        browser,
+      )
+    ).status,
+    400,
+    "a link works once",
+  );
+  const signed = await waitFor(wait);
   assert.equal(signed.status, 200);
   assert.equal(signed.cookie, null, "the device keeps a token, not a cookie");
   const { token, account } = await signed.json();
   assert.match(token, /^[a-f0-9]{64}$/);
-  assert.deepEqual(account, { email: member, method: "code" });
-  assert.equal((await confirm(code)).status, 400, "a code works once");
+  assert.deepEqual(account, { email: member, method: "email" });
+  assert.equal(
+    (await (await waitFor(wait)).json()).waiting,
+    true,
+    "the session is handed over once",
+  );
+  assert.equal((await (await waitFor(strangerWait)).json()).waiting, true);
+  assert.equal((await (await waitFor("nonsense")).json()).waiting, true);
 
   const device = { ...app, Authorization: `Bearer ${token}` };
   const state = await get("/api/state", device);
   assert.equal(state.status, 200);
-  assert.deepEqual((await state.json()).account, account);
+  assert.equal((await state.json()).account.email, member);
   assert.equal(
     (
       await post(
@@ -792,24 +871,27 @@ test("the phone app signs in with an emailed code and sends a device token, acro
   );
   assert.equal((await get("/api/state", { ...app, ...cookie })).status, 401);
 
-  // Five wrong guesses spend a code, and codes expire.
-  await post("/api/auth/code", { email: member }, app);
-  const second = codeIn(box.sent[1]);
-  for (let i = 0; i < 5; i++)
-    assert.equal((await confirm("000000")).status, 400);
-  assert.equal((await confirm(second)).status, 400);
-  await post("/api/auth/code", { email: member }, app);
-  clock += 10 * 60 * 1000 + 1;
-  assert.equal((await confirm(codeIn(box.sent[2]))).status, 400);
-  // However many codes are asked for, and from wherever, an address takes
-  // twenty wrong guesses a day; eight so far, since the right one.
-  const from = (i) => ({ "X-Forwarded-For": `198.51.100.${i}` });
-  for (let i = 0; i < 12; i++)
-    assert.equal((await confirm("000000", from(i))).status, 400);
-  await post("/api/auth/code", { email: member }, app);
-  const capped = await confirm(codeIn(box.sent[3]), from(99));
-  assert.equal(capped.status, 429);
-  assert.equal((await capped.json()).error, "RATE_LIMITED");
+  // The devices list names the app, and a link not confirmed in time is
+  // spent.
+  const devices = await (await get("/api/auth/sessions", device)).json();
+  assert.equal(devices.sessions.length, 1);
+  assert.equal(devices.sessions[0].label, "Kooks app");
+  assert.equal(devices.sessions[0].current, true);
+  const late = (
+    await (await post("/api/auth/link", { email: member }, app)).json()
+  ).wait;
+  clock += 15 * 60 * 1000 + 1;
+  assert.equal(
+    (
+      await post(
+        "/api/auth/link/confirm",
+        { token: tokenIn(box.sent[1]), approve: true },
+        browser,
+      )
+    ).status,
+    400,
+  );
+  assert.equal((await (await waitFor(late)).json()).waiting, true);
 
   const out = await post("/api/auth/signout", {}, device);
   assert.equal(out.status, 200);
@@ -817,36 +899,376 @@ test("the phone app signs in with an emailed code and sends a device token, acro
   assert.equal((await get("/api/state", device)).status, 401);
 });
 
-test("wrong codes count per address, strangers' alike, and what is not an address is never kept", async (t) => {
-  const { server, post } = await setup(t, {
-    host: "0.0.0.0",
-    publicOrigin: "https://kooks.example",
-    members: [member],
-    mailer: mailbox(),
+test("households keep their own cookbooks and grow by emailed invitation", async (t) => {
+  const box = mailbox();
+  let clock = Date.now();
+  const { get, post } = await setup(t, {
+    owner: member,
+    mailer: box,
+    authOptions: { now: () => clock },
   });
-  const app = { Host: "kooks.example", Origin: "capacitor://localhost" };
-  const guess = (email, i) =>
-    post(
-      "/api/auth/code/confirm",
-      { email, code: "000000" },
-      { ...app, "X-Forwarded-For": `198.51.100.${i}` },
-    );
-  for (const [i, email] of [
-    "x".repeat(60000),
-    `${"x".repeat(300)}@example.test`,
-    "not an address",
-    42,
-  ].entries()) {
-    const refused = await guess(email, i);
-    assert.equal(refused.status, 400);
-    assert.equal((await refused.json()).error, "CODE_INVALID");
+  const signIn = async (email) => {
+    await post("/api/auth/link", { email });
+    return {
+      Cookie: sessionCookie(
+        await post("/api/auth/link/confirm", {
+          token: tokenIn(box.sent.at(-1)),
+        }),
+      ),
+    };
+  };
+  const owner = await signIn(member);
+  const state = async (who) => (await get("/api/state", who)).json();
+  const first = await state(owner);
+  assert.equal(first.account.household.id, "home");
+  assert.equal(first.account.household.role, "owner");
+  await post(
+    "/api/tools/recipe_save",
+    { request_id: "home-1", recipe: { title: "Home soup" } },
+    owner,
+  );
+
+  // Nobody else may sign in: a stranger's link request gets the same answer
+  // and no email.
+  const before = box.sent.length;
+  assert.equal(
+    (await post("/api/auth/link", { email: "sam@example.test" })).status,
+    200,
+  );
+  assert.equal(box.sent.length, before);
+
+  // An invite goes by email, names the household, and signs the invited
+  // address in when accepted, with an account made for it.
+  assert.equal(
+    (
+      await post(
+        "/api/auth/household/invite",
+        { email: "not an address" },
+        owner,
+      )
+    ).status,
+    400,
+  );
+  const invited = await post(
+    "/api/auth/household/invite",
+    { email: " Sam@Example.test " },
+    owner,
+  );
+  assert.equal(invited.status, 200);
+  const mail = box.sent.at(-1);
+  assert.equal(mail.to, "sam@example.test");
+  assert.equal(mail.subject, "Join Our kitchen on Kooks");
+  const inviteToken = mail.text.match(/#\/join\/([A-Za-z0-9_-]{43})/)[1];
+  const { members, invites } = await (
+    await get("/api/auth/household/members", owner)
+  ).json();
+  assert.deepEqual(
+    members.map((m) => [m.email, m.role]),
+    [[member, "owner"]],
+  );
+  assert.deepEqual(
+    invites.map((i) => [i.email, i.invited_by]),
+    [["sam@example.test", member]],
+  );
+  const open = await (
+    await post("/api/auth/invite/open", { token: inviteToken })
+  ).json();
+  assert.deepEqual(open.invite, {
+    email: "sam@example.test",
+    invited_by: member,
+    household: "Our kitchen",
+    signed_in_as: null,
+  });
+  const accepted = await post("/api/auth/invite/accept", {
+    token: inviteToken,
+  });
+  assert.equal(accepted.status, 200);
+  assert.equal((await accepted.json()).account.email, "sam@example.test");
+  const sam = { Cookie: sessionCookie(accepted) };
+  const samState = await state(sam);
+  assert.equal(samState.account.household.id, "home");
+  assert.equal(samState.account.household.role, "member");
+  assert.equal(samState.records.recipe[0].data.title, "Home soup");
+  assert.equal(
+    (await post("/api/auth/invite/accept", { token: inviteToken })).status,
+    400,
+    "an invite works once",
+  );
+  // Sam has an account now, so links reach them.
+  await post("/api/auth/link", { email: "sam@example.test" });
+  assert.equal(box.sent.at(-1).to, "sam@example.test");
+  assert.equal(
+    (
+      await post(
+        "/api/auth/household/invite",
+        { email: "sam@example.test" },
+        owner,
+      )
+    ).status,
+    409,
+  );
+
+  // Sam starts a kitchen of their own: an empty cookbook, apart from the
+  // first, with a revision of its own.
+  const made = await post(
+    "/api/auth/household/create",
+    { name: "  Sam's   flat " },
+    sam,
+  );
+  assert.equal(made.status, 200);
+  const flat = (await made.json()).household;
+  assert.match(flat, /^[a-f0-9]{16}$/);
+  const own = await state(sam);
+  assert.equal(own.account.household.name, "Sam's flat");
+  assert.equal(own.account.household.role, "owner");
+  assert.deepEqual(own.records.recipe, []);
+  assert.notEqual(own.revision.split("-")[0], samState.revision.split("-")[0]);
+  await post(
+    "/api/tools/recipe_save",
+    { request_id: "flat-1", recipe: { title: "Flat noodles" } },
+    sam,
+  );
+  assert.deepEqual(
+    (await state(owner)).records.recipe.map((r) => r.data.title),
+    ["Home soup"],
+  );
+  // The owner of the first kitchen is not in Sam's, and cannot switch to it.
+  assert.equal(
+    (await post("/api/auth/household/switch", { id: flat }, owner)).status,
+    403,
+  );
+  // Sam invites the owner, who takes the invite from inside the app.
+  await post("/api/auth/household/invite", { email: member }, sam);
+  const waiting = (await state(owner)).account.invites;
+  assert.deepEqual(
+    waiting.map((i) => [i.household, i.invited_by]),
+    [["Sam's flat", "sam@example.test"]],
+  );
+  assert.equal(
+    (await post("/api/auth/household/join", { id: waiting[0].id }, owner))
+      .status,
+    200,
+  );
+  const both = await state(owner);
+  assert.equal(both.account.household.id, flat);
+  assert.deepEqual(
+    both.account.households.map((h) => h.id),
+    ["home", flat],
+  );
+  assert.deepEqual(
+    both.records.recipe.map((r) => r.data.title),
+    ["Flat noodles"],
+  );
+  assert.equal(
+    (await post("/api/auth/household/switch", { id: "home" }, owner)).status,
+    200,
+  );
+  assert.equal((await state(owner)).account.household.id, "home");
+
+  // Withdrawn and expired invites are spent.
+  await post(
+    "/api/auth/household/invite",
+    { email: "kim@example.test" },
+    owner,
+  );
+  const kimToken = box.sent.at(-1).text.match(/#\/join\/([\w-]{43})/)[1];
+  const pending = (
+    await (await get("/api/auth/household/members", owner)).json()
+  ).invites;
+  assert.equal(
+    (
+      await post(
+        "/api/auth/household/invite/withdraw",
+        { id: pending[0].id },
+        owner,
+      )
+    ).status,
+    200,
+  );
+  assert.equal(
+    (await post("/api/auth/invite/open", { token: kimToken })).status,
+    400,
+  );
+  await post(
+    "/api/auth/household/invite",
+    { email: "kim@example.test" },
+    owner,
+  );
+  const late = box.sent.at(-1).text.match(/#\/join\/([\w-]{43})/)[1];
+  clock += 7 * DAY + 1;
+  const expired = await post("/api/auth/invite/accept", { token: late });
+  assert.equal(expired.status, 400);
+  assert.equal((await expired.json()).error, "INVITE_INVALID");
+
+  // The last member cannot leave; an owner who leaves hands over.
+  await post("/api/auth/household/switch", { id: flat }, sam);
+  const ownerOut = await post("/api/auth/household/leave", {}, sam);
+  assert.equal(ownerOut.status, 200);
+  assert.equal((await state(sam)).account.household.id, "home");
+  await post("/api/auth/household/switch", { id: flat }, owner);
+  assert.equal((await state(owner)).account.household.role, "owner");
+  const last = await post("/api/auth/household/leave", {}, owner);
+  assert.equal(last.status, 409);
+  assert.equal((await last.json()).error, "LAST_MEMBER");
+});
+
+test("members see their signed-in devices and sign the others out", async (t) => {
+  const box = mailbox();
+  const { get, post } = await setup(t, { owner: member, mailer: box });
+  const signIn = async (agent) => {
+    await post("/api/auth/link", { email: member });
+    return {
+      "User-Agent": agent,
+      Cookie: sessionCookie(
+        await post(
+          "/api/auth/link/confirm",
+          { token: tokenIn(box.sent.at(-1)) },
+          { "User-Agent": agent },
+        ),
+      ),
+    };
+  };
+  const mac = await signIn(
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15",
+  );
+  const phone = await signIn(
+    "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Mobile Safari/537.36",
+  );
+  const third = await signIn("curl/8");
+  const { sessions } = await (await get("/api/auth/sessions", mac)).json();
+  assert.deepEqual(sessions.map((s) => s.label).sort(), [
+    "A browser",
+    "Chrome on Android",
+    "Safari on Mac",
+  ]);
+  assert.equal(sessions.filter((s) => s.current).length, 1);
+  const phoneId = sessions.find((s) => s.label === "Chrome on Android").id;
+  const self = sessions.find((s) => s.current).id;
+  assert.equal(
+    (await post("/api/auth/session/end", { id: self }, mac)).status,
+    400,
+  );
+  assert.equal(
+    (await post("/api/auth/session/end", { id: phoneId }, mac)).status,
+    200,
+  );
+  assert.equal((await get("/api/state", phone)).status, 401);
+  assert.equal((await get("/api/state", third)).status, 200);
+  const ended = await (
+    await post("/api/auth/sessions/end-others", {}, mac)
+  ).json();
+  assert.equal(ended.ended, 1);
+  assert.equal((await get("/api/state", third)).status, 401);
+  assert.equal((await get("/api/state", mac)).status, 200);
+});
+
+test("an open server lets anyone make an account, which starts with no household", async (t) => {
+  const box = mailbox();
+  const { get, post } = await setup(t, { openSignup: true, mailer: box });
+  await post("/api/auth/link", { email: "new@example.test" });
+  assert.equal(box.sent.length, 1);
+  const cookie = {
+    Cookie: sessionCookie(
+      await post("/api/auth/link/confirm", { token: tokenIn(box.sent[0]) }),
+    ),
+  };
+  const state = await (await get("/api/state", cookie)).json();
+  assert.equal(state.account.email, "new@example.test");
+  assert.equal(state.account.household, null);
+  assert.equal((await get("/api/auth/household/members", cookie)).status, 403);
+  assert.equal(
+    (await post("/api/auth/household/create", { name: " " }, cookie)).status,
+    400,
+  );
+  assert.equal(
+    (await post("/api/auth/household/create", { name: "Ours" }, cookie)).status,
+    200,
+  );
+  assert.equal(
+    (await (await get("/api/state", cookie)).json()).account.household.name,
+    "Ours",
+  );
+});
+
+test("the household list of earlier versions becomes the first household, once", (t) => {
+  const folder = mkdtempSync(join(tmpdir(), "kooks-accounts-"));
+  t.after(() => rmSync(folder, { recursive: true, force: true }));
+  const path = join(folder, "kooks.sqlite");
+  // A database as earlier versions left it: accounts, a passkey and a
+  // session for a member still on the list and one who was taken off, and
+  // the phone's codes.
+  const old = new DatabaseSync(path);
+  old.exec(`
+    CREATE TABLE auth_accounts (email TEXT PRIMARY KEY, handle TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL, signed_in_at TEXT);
+    CREATE TABLE auth_passkeys (id TEXT PRIMARY KEY, email TEXT NOT NULL, name TEXT NOT NULL, algorithm INTEGER NOT NULL, public_key TEXT NOT NULL, sign_count INTEGER NOT NULL, transports TEXT NOT NULL, backed_up INTEGER NOT NULL, created_at TEXT NOT NULL, used_at TEXT);
+    CREATE TABLE auth_sessions (token_hash TEXT PRIMARY KEY, email TEXT NOT NULL, method TEXT NOT NULL, created_at TEXT NOT NULL, renewed_at INTEGER NOT NULL, expires_at INTEGER NOT NULL);
+    CREATE TABLE auth_codes (email TEXT PRIMARY KEY, salt TEXT NOT NULL, code_hash TEXT NOT NULL, created_at TEXT NOT NULL, expires_at INTEGER NOT NULL, attempts INTEGER NOT NULL);
+  `);
+  const now = Date.now();
+  for (const email of [member, "gone@example.test"]) {
+    old
+      .prepare("INSERT INTO auth_accounts VALUES (?, ?, ?, NULL)")
+      .run(email, `handle-${email}`, new Date(now).toISOString());
+    old
+      .prepare(
+        "INSERT INTO auth_passkeys VALUES (?, ?, 'Phone', -7, '{}', 0, '[]', 0, ?, NULL)",
+      )
+      .run(`key-${email}`, email, new Date(now).toISOString());
   }
-  assert.deepEqual(server.wrongCodes(), { members: 0, others: 0 });
-  // A stranger gets the same answers a member would.
-  for (let i = 0; i < 20; i++)
-    assert.equal((await guess("stranger@example.test", 10 + i)).status, 400);
-  assert.equal((await guess("stranger@example.test", 99)).status, 429);
-  assert.deepEqual(server.wrongCodes(), { members: 0, others: 1 });
+  const token = "a".repeat(64);
+  old
+    .prepare("INSERT INTO auth_sessions VALUES (?, ?, 'code', ?, ?, ?)")
+    .run(
+      createHash("sha256").update(token).digest("hex"),
+      member,
+      new Date(now).toISOString(),
+      now,
+      now + 10 * DAY,
+    );
+  old.close();
+
+  const auth = createAuth({
+    path,
+    mailer: mailbox(),
+    owner: "owner@example.test",
+    members: [member, "baker@example.test"],
+  });
+  // The phone of a member who stays keeps its session, now in the first
+  // household; whoever was off the list goes with their passkey.
+  const session = auth.session(token);
+  assert.equal(session.email, member);
+  assert.equal(session.household, "home");
+  const view = auth.accountView(session);
+  assert.equal(view.household.name, "Our kitchen");
+  assert.equal(view.household.members, 3);
+  assert.equal(auth.passkeys(member).length, 1);
+  assert.equal(auth.passkeys("gone@example.test").length, 0);
+  assert.equal(auth.canSignIn("gone@example.test"), false);
+  assert.deepEqual(
+    auth.members(session).members.map((m) => [m.email, m.role]),
+    [
+      ["owner@example.test", "owner"],
+      [member, "member"],
+      ["baker@example.test", "member"],
+    ],
+  );
+  auth.close();
+  const tables = new DatabaseSync(path)
+    .prepare("SELECT name FROM sqlite_master WHERE name = 'auth_codes'")
+    .all();
+  assert.deepEqual(tables, []);
+  // Later starts leave the households as they are, whatever the old list
+  // says; an owner whose account went gets it back.
+  const again = createAuth({
+    path,
+    mailer: mailbox(),
+    owner: "new-owner@example.test",
+    members: ["someone@example.test"],
+  });
+  assert.equal(again.canSignIn("someone@example.test"), false);
+  assert.equal(again.canSignIn("new-owner@example.test"), true);
+  assert.equal(again.members(session).members.length, 3);
+  again.close();
 });
 
 test("a kitchen at https://localhost is a browser's, not the phone app's", async (t) => {

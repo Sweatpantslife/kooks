@@ -207,7 +207,7 @@ test("a member signs in by email link, adds a passkey, signs out and returns wit
   await addPasskey(page, "taster@example.test");
   await expectAccessible(page, "Household, signed in");
 
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await page.getByRole("button", { name: "Sign out", exact: true }).click();
   await expect(title(page)).toHaveText("Welcome to your kitchen.");
   await expect(page.getByRole("status")).toContainText("Signed out.");
   await expect(page).toHaveURL(/#\/week$/);
@@ -230,7 +230,7 @@ test("a browser that suggests the saved passkey signs the member in without a ta
   await page.goto(signedIn);
   await signInByLink(page, "taster@example.test");
   await addPasskey(page, "taster@example.test");
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await page.getByRole("button", { name: "Sign out", exact: true }).click();
   // The sign-in page asks quietly; the device answers with its passkey.
   await expect(page.getByRole("status")).toContainText("Welcome back.");
   await expect(title(page)).toHaveText("This week");
@@ -238,7 +238,7 @@ test("a browser that suggests the saved passkey signs the member in without a ta
   await openSignIn(page);
   await page.getByRole("button", { name: /^Remove passkey / }).click();
   await expect(page.getByText("No passkeys yet.")).toBeVisible();
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await page.getByRole("button", { name: "Sign out", exact: true }).click();
   await expect(title(page)).toHaveText("Welcome to your kitchen.");
   await expect(page.getByRole("alert")).toContainText(
     "not registered with this kitchen",
@@ -270,4 +270,74 @@ test("a used or unknown sign-in link explains itself on the sign-in page", async
   await expect(page.getByRole("alert")).toHaveText(
     "This sign-in link has expired or was already used. Request a new one.",
   );
+});
+
+const latestInvite = () =>
+  readFileSync(join(outbox, mails().at(-1)), "utf8").match(
+    /http:\/\/localhost:4319\/#\/join\/[A-Za-z0-9_-]+/,
+  )[0];
+
+test("a member invites someone new, who joins by the emailed link, and someone taken out starts a kitchen of their own", async ({
+  page,
+  browser,
+}) => {
+  const newcomer = `newcomer-${Date.now()}@example.test`;
+  await page.goto(signedIn);
+  await signInByLink(page, "cook@example.test");
+  await page.getByRole("link", { name: "Household" }).click();
+  await expect(title(page)).toHaveText("Our kitchen");
+  await page.getByRole("link", { name: /^Members/ }).click();
+  await expect(title(page)).toHaveText("Members");
+  await expect(page.getByText("cook@example.test")).toBeVisible();
+  await page.getByLabel("Their email address").fill(newcomer);
+  const before = mails().length;
+  await page.getByRole("button", { name: "Send an invite" }).click();
+  await expect(page.getByRole("status")).toContainText(
+    `Invite sent to ${newcomer}.`,
+  );
+  await expect(
+    page.getByRole("button", { name: `Withdraw the invite to ${newcomer}` }),
+  ).toBeVisible();
+  await expectAccessible(page, "Household › Members");
+  await expect.poll(() => mails().length).toBe(before + 1);
+  const invite = latestInvite();
+
+  // The invite opens in another browser: it names the household and who
+  // asked, and joining signs that browser in.
+  const theirs = await browser.newContext();
+  const them = await theirs.newPage();
+  them.on("pageerror", (error) => {
+    throw error;
+  });
+  await them.goto(invite);
+  await expect(title(them)).toHaveText("Join Our kitchen");
+  await expect(them.getByText("cook@example.test invited")).toBeVisible();
+  await expectAccessible(them, "Join a household");
+  await them.getByRole("button", { name: `Join as ${newcomer}` }).click();
+  await expect(title(them)).toHaveText("This week");
+  await expect(them.getByRole("status")).toContainText(
+    "Welcome to Our kitchen.",
+  );
+  await them.goto(invite);
+  await expect(title(them)).toHaveText("This invite can’t be used");
+
+  // The owner takes them out again; at their next look they are signed in
+  // to no household, and start one.
+  await page.reload();
+  page.once("dialog", (dialog) => dialog.accept());
+  await page
+    .getByRole("button", { name: `Remove ${newcomer} from the household` })
+    .click();
+  await expect(page.getByRole("status")).toContainText(
+    `${newcomer} is no longer in the household.`,
+  );
+  await them.goto(signedIn);
+  await expect(title(them)).toHaveText("Welcome to Kooks.");
+  await expectAccessible(them, "Welcome, no household");
+  await them.getByLabel("Household name").fill("Newcomer’s flat");
+  await them.getByRole("button", { name: "Start your kitchen" }).click();
+  await expect(title(them)).toHaveText("This week");
+  await them.getByRole("link", { name: "Household" }).click();
+  await expect(title(them)).toHaveText("Newcomer’s flat");
+  await theirs.close();
 });

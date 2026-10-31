@@ -1,7 +1,8 @@
 import { signal } from "@preact/signals";
 
 // Routes live in the hash, so the app works from any address and the server
-// never sees them: #/week, #/recipes, #/recipes/<id>, #/signin/<token>.
+// never sees them: #/week, #/recipes, #/recipes/<id>, #/signin/<token>,
+// #/join/<token>.
 const read = () =>
   location.hash
     .replace(/^#\/?/, "")
@@ -150,7 +151,10 @@ export function startRouter() {
     const parts = read();
     const to = moved(parts);
     if (to) navigate(to, { replace: true });
-    else if ((parts[0] === "signin" || parts[0] === "cook") && !parts[1])
+    else if (
+      (parts[0] === "signin" || parts[0] === "join" || parts[0] === "cook") &&
+      !parts[1]
+    )
       navigate("week", { replace: true });
     else route.value = parts;
   };
