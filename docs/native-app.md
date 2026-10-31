@@ -13,7 +13,7 @@ npm run cap:sync       # Build client/dist and copy it into both native projects
 
 The Capacitor packages are development dependencies: Vite bundles them into the app and the native projects read them from `node_modules`, so build from a full `npm ci`. `npm ci --omit=dev`, which the server's Docker image uses, leaves them out. In a browser the plugins never load.
 
-To try the phone's screens without a phone, run a kitchen with sign-in on, open it in a browser and set `localStorage["kooks.phone"] = "1"` in the developer tools: the page then signs in the phone's way, with the kitchen's address, an emailed code and a device token, and hands files over as downloads.
+To try the phone's screens without a phone, run a kitchen with sign-in on, open it in a browser and set `localStorage["kooks.phone"] = "1"` in the developer tools: the page then signs in the phone's way, with the kitchen's address, an emailed link opened and confirmed in another tab or on another device, and a device token, and hands files over as downloads.
 
 ```sh
 npm run native:doctor  # Check the local native build tools

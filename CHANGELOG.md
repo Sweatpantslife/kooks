@@ -4,6 +4,10 @@ What changed in Kooks and how each change was verified, newest first. Kooks has 
 
 ## Unreleased
 
+### Docs describe sign-in as links and passkeys
+
+`docs/handoff.md` and `docs/native-app.md` still said the phone app signs in with an emailed six-digit code, and so did a comment in `web/server.js`; since the accounts change it waits for an emailed link confirmed on any device. The handoff's item 3 now lists what household identity still lacks (linking accounts to people at the table, and who made each change) instead of the invitations, households and devices list that are done, and the open decisions in `docs/decisions.md` drop the ones the accounts change settled. `npm run format:check` and `npm run lint` pass; nothing else changed.
+
 ### Accounts and households instead of one address list
 
 People now have accounts, named by their email address, and an account belongs to one or more households. Each household is a kitchen with its own cookbook: the first one is the server's database, so an existing kitchen keeps every record, and households started later get a SQLite file each in `households/` beside it. Households grow by invitation: any member invites an address from **Household › Members**, the invite is emailed, works once for seven days, and opening it shows the household and who asked; joining signs that browser in as the invited address and makes the account if there was none. Someone already signed in sees invites to their address in the app too. Owners remove members (out at their next request, still signed in to their other households); anyone leaves except a household's last member, and a leaving owner hands over to the longest-standing member. Anyone with an account can start another household and switch between theirs; someone signed in to no household gets a welcome page to start one or take an invite.
