@@ -29,7 +29,7 @@ export const digest = (value) =>
 
 // Schema 2 keeps asset bytes in the blobs table. Records, listings, polling,
 // history and undo only ever see asset metadata.
-const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 2;
 // Undo needs the before and after copies of every record an action changed.
 // Kooks keeps them this long; older actions keep only their history line.
 export const UNDO_DAYS = 90;

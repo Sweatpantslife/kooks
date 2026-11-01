@@ -35,5 +35,22 @@ export const weekLabel = (start) =>
 export const plural = (n, word, words = `${word}s`) =>
   `${n} ${n === 1 ? word : words}`;
 
+// A file's size, as people read it.
+export const sizeLabel = (bytes) =>
+  bytes >= 1024 * 1024 * 1024
+    ? `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`
+    : bytes >= 1024 * 1024
+      ? `${(bytes / 1024 / 1024).toFixed(1)} MB`
+      : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+
+// A moment, such as when a backup was taken: "Oct 31, 9:59 PM".
+export const momentLabel = (iso) =>
+  new Date(iso).toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+
 export const weekdayLabel = (day) =>
   at(day).toLocaleDateString(undefined, { weekday: "long" });

@@ -60,6 +60,8 @@ export default defineConfig({
         PORT: "4318",
         KOOKS_HOST: "127.0.0.1",
         KOOKS_DB_PATH: process.env.KOOKS_E2E_DB,
+        // Copies go to backups/ beside the run's database.
+        KOOKS_BACKUPS: "on",
       },
       reuseExistingServer: !process.env.CI,
     },

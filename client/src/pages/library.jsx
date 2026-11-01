@@ -17,6 +17,7 @@ import { editedSteps, stepsText } from "../../../shared/ingredients.js";
 import { formatLinkLines, parseLinkLines } from "../../../shared/links.js";
 import { change, record } from "../lib/store.js";
 import { leave } from "../lib/router.js";
+import { sizeLabel } from "../lib/format.js";
 import { uploadBook, uploadPhoto } from "../lib/files.js";
 import { hrefOf } from "../lib/kitchen.js";
 import { Empty, PageHeader } from "../ui/page.jsx";
@@ -273,10 +274,6 @@ const FILE_LABELS = {
   "application/pdf": "PDF",
   "application/epub+zip": "EPUB",
 };
-const size = (bytes) =>
-  bytes >= 1024 * 1024
-    ? `${(bytes / 1024 / 1024).toFixed(1)} MB`
-    : `${Math.max(1, Math.round(bytes / 1024))} KB`;
 
 function Bookmarks({ book }) {
   const d = book.data;
@@ -417,7 +414,7 @@ export function BookPage({ id }) {
                 >
                   <Icon icon={Download} />
                   Download {kind}
-                  {file.byte_length ? `, ${size(file.byte_length)}` : ""}
+                  {file.byte_length ? `, ${sizeLabel(file.byte_length)}` : ""}
                 </FileLink>
               </>
             ) : (

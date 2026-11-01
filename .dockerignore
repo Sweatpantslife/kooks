@@ -9,6 +9,7 @@
 !web/**
 !ocr/
 !ocr/**
+!scripts/backup.mjs
 !client/
 !client/**
 client/dist/

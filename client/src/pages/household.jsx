@@ -19,7 +19,7 @@ import {
   Users,
   Wallet,
 } from "lucide";
-import { auth } from "../lib/api.js";
+import { auth, backups } from "../lib/api.js";
 import * as passkeys from "../lib/passkeys.js";
 import {
   account,
@@ -38,7 +38,14 @@ import { names } from "../lib/people.js";
 import { toast } from "../lib/toast.js";
 import { kitchen, phone, setKitchen } from "../lib/device.js";
 import { navigate } from "../lib/router.js";
-import { dateLabel, localDay, monday, plural } from "../lib/format.js";
+import {
+  dateLabel,
+  localDay,
+  momentLabel,
+  monday,
+  plural,
+  sizeLabel,
+} from "../lib/format.js";
 import { Empty, PageHeader } from "../ui/page.jsx";
 import { Icon } from "../ui/icon.jsx";
 import { FileLink } from "../ui/asset.jsx";
@@ -658,7 +665,86 @@ export function Members() {
   );
 }
 
+// The server's automatic backups, read once per visit. A failure to read
+// them is not worth a message: the page works without.
+function useBackups() {
+  const [status, setStatus] = useState(null);
+  useEffect(() => {
+    let live = true;
+    backups()
+      .then((value) => live && setStatus(value))
+      .catch(() => {});
+    return () => (live = false);
+  }, []);
+  return status;
+}
+// Whether whoever runs the server should look at its backups.
+const backupsNeedALook = (status) =>
+  Boolean(status?.operator && status.on && (status.late || status.failure));
+
+function AutomaticCopies({ status }) {
+  if (!status || (!status.on && !status.operator)) return null;
+  if (!status.operator)
+    return (
+      <section class="card" aria-labelledby="automatic">
+        <h2 id="automatic">Automatic copies</h2>
+        <p class="muted">
+          The server also keeps copies of every household on it, for whoever
+          runs it to put back if something goes wrong.
+        </p>
+      </section>
+    );
+  if (!status.on)
+    return (
+      <section class="card" aria-labelledby="automatic">
+        <h2 id="automatic">Automatic copies</h2>
+        <p>
+          Automatic copies are off on this server. Set KOOKS_BACKUPS=on where
+          Kooks runs to have it copy every household once a day.
+        </p>
+      </section>
+    );
+  const last = status.copies[0];
+  const every =
+    status.every_hours === 24
+      ? "once a day"
+      : `every ${plural(status.every_hours, "hour")}`;
+  return (
+    <section class="card" aria-labelledby="automatic">
+      <h2 id="automatic">Automatic copies</h2>
+      {status.failure && (
+        <p class="form-error" role="alert">
+          The last automatic copy failed ({momentLabel(status.failure.at)}):{" "}
+          {status.failure.error.replace(/([^.!?])$/, "$1.")} Kooks tries again
+          every hour.
+        </p>
+      )}
+      {status.late && !status.failure && (
+        <p class="form-error" role="alert">
+          {last
+            ? `No automatic copy since ${momentLabel(last.taken_at)}. Check the server’s log.`
+            : "No automatic copy has been taken yet. Check the server’s log."}
+        </p>
+      )}
+      <p>
+        {`Kooks copies every household on this server ${every} and keeps one for each of the last ${plural(status.keep_daily, "day")}${status.keep_weekly ? ` and ${plural(status.keep_weekly, "week")}` : ""}.`}
+      </p>
+      <p class="muted">
+        {last
+          ? `Last copy ${momentLabel(last.taken_at)}, ${sizeLabel(last.bytes)}. ${plural(status.copies.length, "copy", "copies")} kept in ${status.dir}.`
+          : "The first copy is taken a minute after Kooks starts."}
+      </p>
+      <p class="muted small">
+        These copies are on the same disk as the kitchen. To be safe if the
+        server itself is lost, download a backup above now and then and keep it
+        somewhere else.
+      </p>
+    </section>
+  );
+}
+
 export function Backup() {
+  const status = useBackups();
   return (
     <div class="stack-lg page-narrow">
       {toHousehold}
@@ -686,6 +772,7 @@ export function Backup() {
           script.
         </p>
       </section>
+      <AutomaticCopies status={status} />
     </div>
   );
 }
@@ -710,6 +797,7 @@ function Kitchen() {
 }
 
 export function Household() {
+  const backupStatus = useBackups();
   const email = account.value?.email;
   const mine = account.value?.household;
   const people = records("member");
@@ -775,7 +863,9 @@ export function Household() {
       icon: Download,
       tone: "stone",
       title: "Backup",
-      text: "Download everything this kitchen keeps.",
+      text: backupsNeedALook(backupStatus)
+        ? "Automatic copies need a look"
+        : "Download everything this kitchen keeps.",
     },
   ].filter(Boolean);
   return (
