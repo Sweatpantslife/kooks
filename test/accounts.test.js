@@ -5,6 +5,7 @@ import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { DatabaseSync } from "node:sqlite";
 import { createAuth } from "../web/auth.js";
 
 const script = fileURLToPath(
@@ -147,4 +148,114 @@ test("the accounts script refuses a wrong database path or a wrong command", (t)
     ["owner", "ben@example.com", "--household"],
   ])
     assert.equal(run(...args).status, 2, args.join(" "));
+});
+
+test("the accounts script deletes an old address's account and everything that signs it in", async (t) => {
+  const { path, run } = kitchen(t);
+  let auth = createAuth({ path, mailer: quiet });
+  const benToken = auth.createSession("ben@example.com", "link");
+  const ben = auth.session(benToken);
+  const ada = auth.session(auth.createSession("ada@example.com", "link"));
+  const origin = "https://kooks.example.com";
+  await auth.invite(ben, { email: "dee@example.com", origin });
+  await auth.invite(ada, { email: "cy@example.com", origin });
+  // Cy starts a household of their own, as whoever holds a lost mailbox can.
+  const takeover = auth.createHousehold(
+    auth.session(auth.createSession("cy@example.com", "link")),
+    "Takeover",
+  );
+  auth.close();
+
+  const gone = run("remove", "Ben@example.com");
+  assert.equal(gone.status, 0, gone.stderr);
+  assert.equal(
+    gone.stdout.trim(),
+    "ben@example.com has no account any more. It was in Our kitchen; 0 passkeys, 1 signed-in device and 1 invitation went with it. Its devices are signed out at their next request.",
+  );
+  // A household only Cy is in stops it, unless it may be left empty.
+  const alone = run("remove", "cy@example.com");
+  assert.equal(alone.status, 1);
+  assert.match(
+    alone.stderr,
+    new RegExp(
+      `only member of Takeover \\(${takeover}\\), so nobody could open it again\\. Make another address an owner of it first .*, or add --leave-empty`,
+    ),
+  );
+  const emptied = run("remove", "cy@example.com", "--leave-empty");
+  assert.equal(emptied.status, 0, emptied.stderr);
+  assert.deepEqual(emptied.stdout.trim().split("\n"), [
+    "cy@example.com has no account any more. It was in Takeover; 0 passkeys, 2 signed-in devices and 1 invitation went with it. Its devices are signed out at their next request.",
+    `Takeover (${takeover}) has nobody in it now. \`node scripts/accounts.mjs owner <address> --household ${takeover}\` gives it an owner again.`,
+  ]);
+  // Nothing is left that signs either in, or names them.
+  assert.equal(run("link", "ben@example.com").status, 1);
+  auth = createAuth({ path, mailer: quiet });
+  t.after(() => auth.close());
+  assert.equal(auth.session(benToken), null);
+  assert.deepEqual(
+    auth.roster().households.map((h) => h.members.map((m) => m.email)),
+    [["ada@example.com"], ["ada@example.com"], []],
+  );
+  assert.deepEqual(auth.roster().unhoused, []);
+  assert.equal(auth.members(ada).invites.length, 0);
+  assert.equal(run("remove", "ben@example.com").status, 1);
+  assert.equal(run("link", "ada@example.com", "--leave-empty").status, 2);
+
+  // KOOKS_OWNER_EMAIL would come back at the next start.
+  const kept = run("remove", "ada@example.com");
+  assert.equal(kept.status, 1);
+  assert.match(kept.stderr, /is KOOKS_OWNER_EMAIL/);
+  // Without it, as in a one-off container, the script says it can't tell.
+  const blind = spawnSync(
+    process.execPath,
+    [script, "remove", "dee@example.com"],
+    {
+      encoding: "utf8",
+      env: { PATH: process.env.PATH, KOOKS_DB_PATH: path },
+    },
+  );
+  assert.match(blind.stderr, /^KOOKS_OWNER_EMAIL isn't set here/);
+  assert.match(blind.stderr, /dee@example\.com has no account\./);
+});
+
+test("deleting an account keeps a household's last owner, and its last member unless told", (t) => {
+  const { path, cabin } = kitchen(t);
+  const auth = createAuth({ path, mailer: quiet });
+  t.after(() => auth.close());
+  // Ada owns Our kitchen, where Ben is a member, and is alone in Cabin.
+  for (const leaveEmpty of [false, true])
+    assert.throws(() => auth.deleteAccount("ada@example.com", { leaveEmpty }), {
+      code: "LAST_OWNER",
+      message: /only owner of Our kitchen \(home\)/,
+    });
+  auth.grantOwner("ben@example.com");
+  assert.throws(() => auth.deleteAccount("ada@example.com"), {
+    code: "LAST_MEMBER",
+    message: new RegExp(`only member of Cabin \\(${cabin}\\)`),
+  });
+  assert.deepEqual(
+    auth.deleteAccount("ada@example.com", { leaveEmpty: true }).households,
+    [
+      { id: "home", name: "Our kitchen", empty: false },
+      { id: cabin, name: "Cabin", empty: true },
+    ],
+  );
+  // The household left empty can be given an owner again.
+  auth.grantOwner("dee@example.com", cabin);
+  assert.deepEqual(
+    auth.roster().households.map((h) => h.members.map((m) => m.email)),
+    [["ben@example.com"], ["dee@example.com"]],
+  );
+  // No table keeps the address, not even as who made a household.
+  const db = new DatabaseSync(path, { readOnly: true });
+  t.after(() => db.close());
+  for (const { name } of db
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
+    .all())
+    assert.doesNotMatch(
+      JSON.stringify(db.prepare(`SELECT * FROM ${name}`).all()),
+      /ada@example\.com/,
+      name,
+    );
+  assert.throws(() => auth.deleteAccount("nobody"), { code: "INVALID_INPUT" });
 });

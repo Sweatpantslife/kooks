@@ -1009,6 +1009,65 @@ export function createAuth({
         return { email: address, household, name: row.name, was, created };
       });
     },
+    // Deletes an address's account with its passkeys, sessions, links,
+    // invitations and memberships, for an address whose mailbox may now be
+    // someone else's: a removed member keeps an account, and can still sign
+    // in and start a household. A household's last owner stays, and so does
+    // its last member unless leaveEmpty says to leave it with nobody in it,
+    // as for a household someone else started with that address; grantOwner
+    // gives such a household an owner again.
+    deleteAccount(email, { leaveEmpty = false } = {}) {
+      const address = normalizeEmail(email);
+      if (!isEmail(address))
+        throw new AuthError("INVALID_INPUT", "Enter a valid email address.");
+      return transaction(() => {
+        if (!accountOf(address))
+          throw new AuthError("NOT_FOUND", `${address} has no account.`, 404);
+        const households = q(
+          `SELECT h.id, h.name, m.role FROM auth_members m
+           JOIN auth_households h ON h.id = m.household
+           WHERE m.email = ? ORDER BY m.joined_at, m.rowid`,
+        ).all(address);
+        const left = households.map((h) => {
+          const others = q(
+            `SELECT count(*) AS n, count(*) FILTER (WHERE role = 'owner') AS owners
+             FROM auth_members WHERE household = ? AND email != ?`,
+          ).get(h.id, address);
+          if (!others.n && !leaveEmpty)
+            throw new AuthError(
+              "LAST_MEMBER",
+              `${address} is the only member of ${h.name} (${h.id}), so nobody could open it again.`,
+              409,
+            );
+          if (others.n && h.role === "owner" && !others.owners)
+            throw new AuthError(
+              "LAST_OWNER",
+              `${address} is the only owner of ${h.name} (${h.id}). Make another member an owner first, or, if the others came with ${address}, remove them first.`,
+              409,
+            );
+          return { id: h.id, name: h.name, empty: !others.n };
+        });
+        const drop = (sql) => q(sql).run(address).changes;
+        const removed = {
+          email: address,
+          households: left,
+          passkeys: drop("DELETE FROM auth_passkeys WHERE email = ?"),
+          sessions: drop("DELETE FROM auth_sessions WHERE email = ?"),
+          // Invitations to the address, and the ones it sent.
+          invites: q(
+            "DELETE FROM auth_invites WHERE email = ? OR invited_by = ?",
+          ).run(address, address).changes,
+        };
+        drop("DELETE FROM auth_links WHERE email = ?");
+        drop("DELETE FROM auth_waits WHERE email = ?");
+        drop("DELETE FROM auth_members WHERE email = ?");
+        drop(
+          "UPDATE auth_households SET created_by = NULL WHERE created_by = ?",
+        );
+        drop("DELETE FROM auth_accounts WHERE email = ?");
+        return removed;
+      });
+    },
     close: () => db.close(),
   };
 }
