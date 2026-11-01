@@ -37,11 +37,11 @@ Native requirements follow [Capacitor's environment guide](https://capacitorjs.c
 - iOS: macOS, Xcode 26 or newer, its iOS SDK and a simulator runtime. Select Xcode's Command Line Tools in Xcode Settings → Locations. Dependencies use Swift Package Manager; CocoaPods is not needed. Deployment target: iOS 15.
 - Android: Android Studio 2025.2.1 or newer, JDK 21 or newer, Android SDK Platform 36 and build tools. Set `JAVA_HOME` and `ANDROID_HOME`, or configure the SDK through Android Studio. Minimum Android API: 24; compile/target API: 36.
 
-The identifier is `app.kooks.household` on both platforms. No signing credentials are stored here: the Android release key lives in the repository's Actions secrets and with its owner, and an iPhone build signs with the developer's own Apple team. [Releases](#releases) describes how a version reaches the phones.
+The identifier is `app.kooks.household` on both platforms. No signing credentials are stored here: the Android release key and the iPhone's App Store Connect keys live in the repository's Actions secrets and with their owner, and a developer's own iPhone build signs with their own Apple team. [Releases](#releases) describes how a version reaches the phones.
 
 ## Releases
 
-Kooks is not listed in the App Store or Google Play. Android releases are published on the repository's [Releases page](https://github.com/Sweatpantslife/kooks/releases) as pre-releases, each with a signed APK to install on a phone; see [Install on Android](#install-on-android). The repository is public, so anyone can download that APK, but it only works with an account on a kitchen, and kitchens take members by invitation.
+Kooks is not listed in the App Store or Google Play. Android releases are published on the repository's [Releases page](https://github.com/Sweatpantslife/kooks/releases) as pre-releases, each with a signed APK to install on a phone; see [Install on Android](#install-on-android). The repository is public, so anyone can download that APK, but it only works with an account on a kitchen, and kitchens take members by invitation. iPhone releases go to TestFlight, where only the people the owner adds can install them; see [iPhone](#iphone).
 
 ### Version and build numbers
 
@@ -74,10 +74,14 @@ Keep the folder, or at least `kooks-release.p12` and its password, in a password
 ### Making a release
 
 1. On a branch, raise the version: `npm version minor --no-git-tag-version` (or `patch`). This changes `package.json`, `package-lock.json` and both native projects. In `CHANGELOG.md`, turn **Unreleased** into a heading with the version and date and start a new, empty **Unreleased** above it. Merge the pull request.
-2. In the repository's **Actions** tab, open **Phone release** and choose **Run workflow** on `main`. The workflow (`.github/workflows/phone-release.yml`) builds the app, signs the APK with the release key, checks the signature, the version and build number and that the APK is not debuggable, and publishes the pre-release `v<version>` with `kooks-<version>.apk`, its SHA-256 and the signing certificate's fingerprint. It refuses a version that is already released and runs only on `main`.
+2. In the repository's **Actions** tab, open **Phone release** and choose **Run workflow** on `main`, for **both** phones (or only `android` or `iphone`). The workflow (`.github/workflows/phone-release.yml`) runs only on `main` and does two things side by side:
+   - **Android:** builds the app, signs the APK with the release key, checks the signature, the version and build number and that the APK is not debuggable, and publishes the pre-release `v<version>` with `kooks-<version>.apk`, its SHA-256 and the signing certificate's fingerprint. It refuses a version that is already released.
+   - **iPhone:** archives the app, signs it for the App Store, checks the version and build number and the signature, and uploads it to TestFlight ([iPhone](#iphone)). App Store Connect refuses a build number it already has. Until TestFlight is set up, this half warns and does nothing.
 3. Install it on each phone and go through the [device check](#device-check) for what the release changed.
 
-A pull request that changes the Android build or the workflow runs the same build, signed with a throwaway key made for that run, and publishes nothing; the release key never reaches a pull request. `npm run build:android` still makes the debug APK, which installs beside nothing: a debug build and a release build of the same app are signed differently, so one must be uninstalled before the other goes on.
+If only one half fails, fix the cause, raise the patch version, and release again; or, when the fix needs no new code (a secret, say), run the workflow again for that phone alone.
+
+A pull request that changes a release build or the workflow runs both builds without the keys and publishes nothing: Android signs with a throwaway key made for that run, and the iPhone build is an unsigned archive for a device. The release keys never reach a pull request. `npm run build:android` still makes the debug APK, which installs beside nothing: a debug build and a release build of the same app are signed differently, so one must be uninstalled before the other goes on.
 
 ### Install on Android
 
@@ -95,10 +99,34 @@ Google is moving Android towards installing only apps from registered developers
 
 ### iPhone
 
-An iPhone runs only apps signed by an Apple developer team. There are two routes:
+An iPhone runs only apps signed by an Apple developer team. Kooks reaches the household's iPhones through **TestFlight**, with the Apple Developer Program ($99 a year): each release is uploaded to App Store Connect, and the TestFlight app on the iPhone installs it and every later one. A TestFlight build lasts 90 days, so release at least that often. Nothing is submitted to the App Store, and internal testers (people on the developer account, up to 100) get each build without Apple's beta review.
 
-- **TestFlight**, with the Apple Developer Program ($99 a year). Each release is uploaded to App Store Connect and the iPhone installs and updates it from the TestFlight app. A build lasts 90 days. This route is not set up yet.
-- **Xcode on a Mac**, free with an Apple ID. On a Mac with Xcode 26: `npm ci`, then `npm run cap:ios`. In Xcode, select the **App** target, then **Signing & Capabilities**, and choose your Apple ID's personal team as **Team**. If Xcode says the identifier is taken, change the bundle identifier for your build only. Connect the iPhone and turn on **Settings › Privacy & Security › Developer Mode**. Choose the iPhone as the run destination and press **Run**, then trust the developer in **Settings › General › VPN & Device Management**. An app signed by a personal team stops opening after 7 days, until it is run from Xcode again.
+**Setting it up**, once, after Apple approves the developer account:
+
+1. **The app's record.** In [App Store Connect](https://appstoreconnect.apple.com), open **Apps**, choose **+ › New App**: platform iOS, name **Kooks** (App Store names are unique; if it is taken, try **Kooks Household**: the home screen still says Kooks), primary language, bundle ID `app.kooks.household`, SKU `kooks`, full access. If the bundle ID isn't in the list, register it with the link under the list (Identifiers, **+**, App IDs, App, explicit Bundle ID `app.kooks.household`, no capabilities) and come back.
+2. **An API key.** In App Store Connect, **Users and Access › Integrations › App Store Connect API**, under **Team Keys** (the first time, request access and accept the terms), generate a key named "Kooks releases" with the **App Manager** role. Download it (Apple offers the `AuthKey_<id>.p8` file only once) and note the **Issuer ID** above the list.
+3. **The keys into GitHub.** Run `scripts/ios-release-key.sh` on your computer with the downloaded key and the Issuer ID:
+
+   ```sh
+   sh scripts/ios-release-key.sh ~/Downloads/AuthKey_XXXXXXXXXX.p8 69a6de70-…
+   ```
+
+   Without a copy of the repository, download it on its own first: `curl -fsSLO https://raw.githubusercontent.com/Sweatpantslife/kooks/main/scripts/ios-release-key.sh`. It needs `openssl`, makes the 2048-bit RSA key that Kooks' Apple Distribution certificate is built on, and keeps both keys in `~/kooks-ios-release`, a folder only you can read. With the GitHub CLI signed in, it stores the four secrets itself; otherwise it says what to paste where:
+
+   | Actions secret                  | Value                                |
+   | ------------------------------- | ------------------------------------ |
+   | `APP_STORE_CONNECT_ISSUER_ID`   | the Issuer ID                        |
+   | `APP_STORE_CONNECT_KEY_ID`      | the key's ID, from its file name     |
+   | `APP_STORE_CONNECT_PRIVATE_KEY` | the whole `.p8` file                 |
+   | `KOOKS_IOS_CERTIFICATE_KEY`     | the whole `certificate-key.pem` file |
+
+4. **Testers.** After the first upload, in App Store Connect open the app's **TestFlight** tab, add an internal group (for example "Household") with automatic distribution, and add yourself and anyone else on the account. On the iPhone, install **TestFlight** from the App Store and accept the invitation.
+
+**How a release is signed.** The iPhone half of **Phone release** (`scripts/ios-signing.mjs`) uses the API key to find the bundle ID and the app, the Apple Distribution certificate made from `KOOKS_IOS_CERTIFICATE_KEY` and an App Store provisioning profile named after it. The first release creates the certificate (from a signing request; the key itself never goes to Apple) and the profile, and later releases reuse them until the certificate expires after a year, when the next release makes new ones. The workflow imports them into a temporary keychain, switches the App target to manual signing for that run, archives and exports the app, and uploads it with `altool`. `Info.plist` declares `ITSAppUsesNonExemptEncryption` false (Kooks uses only the HTTPS built into iOS), so builds don't wait on the encryption question, and the app icon has no alpha channel, which App Store Connect requires.
+
+If a release stops at the certificate because the team has as many Apple Distribution certificates as Apple allows, revoke an unused one in **Certificates, Identifiers & Profiles** and run it again. If the API key leaks, revoke it in App Store Connect and run `scripts/ios-release-key.sh` with a new one; it keeps the certificate key. Losing the certificate key breaks nothing on the phones: the next release makes a new certificate, and the old one can be revoked.
+
+**Without the developer account**, a Mac with Xcode 26 can put a build on an iPhone for free, with an Apple ID: `npm ci`, then `npm run cap:ios`. In Xcode, select the **App** target, then **Signing & Capabilities**, and choose your Apple ID's personal team as **Team**. If Xcode says the identifier is taken, change the bundle identifier for your build only. Connect the iPhone and turn on **Settings › Privacy & Security › Developer Mode**. Choose the iPhone as the run destination and press **Run**, then trust the developer in **Settings › General › VPN & Device Management**. An app signed by a personal team stops opening after 7 days, until it is run from Xcode again.
 
 ## Signing in
 
@@ -173,7 +201,7 @@ The phone's screens are checked in Chromium, not in a native WebView. The [nativ
 
 About 20 minutes per phone, on the release about to be used. Use the household's real kitchen, but only test records you then delete, such as a recipe called "Test toast".
 
-1. **Install and first launch.** Install the release ([Android](#install-on-android)); the icon and name read Kooks. A cold launch shows the splash, then the kitchen screen, in the phone's light or dark mode.
+1. **Install and first launch.** Install the release ([Android](#install-on-android), or on an iPhone from TestFlight); the icon and name read Kooks. A cold launch shows the splash, then the kitchen screen, in the phone's light or dark mode.
 2. **Sign in.** Type the kitchen's address without `https://`, then your email. Open the emailed link on another device, then on the phone itself the next time: either one asks before it signs the app in, and the app signs in within a few seconds. Week opens with the household's food.
 3. **Safe areas and the keyboard.** Nothing hides under the notch, the status bar or the gesture bar, in portrait and landscape. Add a grocery and write a recipe: the field being typed in stays above the keyboard, and the tab bar doesn't ride up over the form.
 4. **Moving around.** Open a recipe from Recipes, then a meal from it. Android's back gesture or button goes back page by page and leaves the app from Week. On an iPhone, a swipe from the left edge goes back page by page and stops at the first page; an unsaved recipe edit asks before it goes.

@@ -6,8 +6,10 @@ import { fileURLToPath } from "node:url";
 const root = fileURLToPath(new URL("../", import.meta.url));
 const svg = await readFile(resolve(root, "resources/logo.svg"), "utf8");
 const logo = Buffer.from(svg);
+// App Store Connect refuses an app icon with an alpha channel.
 await sharp(logo)
   .resize(1024, 1024)
+  .flatten({ background: "#385740" })
   .png()
   .toFile(
     resolve(

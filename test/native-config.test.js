@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import sharp from "sharp";
 import {
   buildNumber,
   nativeFiles,
@@ -146,5 +147,28 @@ test("the iPhone app goes back with a swipe from the edge", () => {
   assert.match(
     scene,
     /class KooksViewController: CAPBridgeViewController \{[\s\S]*?webView\?\.allowsBackForwardNavigationGestures = true/,
+  );
+});
+
+// App Store Connect refuses an upload whose app icon has an alpha channel,
+// and asks about encryption for every build that doesn't answer in
+// Info.plist. Kooks only uses the HTTPS built into iOS, which is exempt.
+test("the iPhone app passes App Store Connect's upload checks", async () => {
+  const icon = await sharp(
+    new URL(
+      "../ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png",
+      import.meta.url,
+    ).pathname,
+  ).metadata();
+  assert.equal(icon.width, 1024);
+  assert.equal(icon.height, 1024);
+  assert.equal(icon.hasAlpha, false);
+  assert.match(
+    read("ios/App/App/Info.plist"),
+    /<key>ITSAppUsesNonExemptEncryption<\/key>\s*<false\/>/,
+  );
+  assert.match(
+    read("ios/App/App/PrivacyInfo.xcprivacy"),
+    /<key>NSPrivacyAccessedAPITypes<\/key>/,
   );
 });
