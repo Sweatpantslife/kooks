@@ -28,7 +28,8 @@ const readLimit = 120000;
 // Tokens a kitchen spends in a day unless the host sets another number.
 // Cache reads count a tenth, since they cost about that.
 export const defaultDailyTokens = 2000000;
-const spent = (usage) =>
+// What a call counts against the kitchen's day.
+export const allowanceTokens = (usage) =>
   (usage?.input_tokens ?? 0) +
   (usage?.cache_creation_input_tokens ?? 0) +
   (usage?.output_tokens ?? 0) +
@@ -469,7 +470,7 @@ export function createAssistant({
           );
         throw explained(error);
       }
-      usage.add(spent(response.usage));
+      usage.add(allowanceTokens(response.usage));
       if (response.stop_reason === "refusal")
         return {
           reply: "I can’t help with that one. Try asking another way.",
