@@ -60,6 +60,9 @@ Nothing goes to a model provider unless the host sets `KOOKS_ANTHROPIC_API_KEY`.
 | [Changelog](CHANGELOG.md)                                      | What changed and how each change was verified                                      |
 | [Contributing](CONTRIBUTING.md)                                | Setup, checks, conventions and dependencies for changes                            |
 | [Security policy](SECURITY.md)                                 | How to report a vulnerability privately, and what is in scope                      |
+| [Hosting](docs/hosting.md)                                     | Running the household server on Coolify: settings, sign-in, backups, the assistant |
+| [Recovering the kitchen](docs/recovery.md)                     | A bad deploy, a damaged database, a lost volume, an owner who can't sign in        |
+| [The pilot release](docs/pilot.md)                             | What pilot ready means, known limitations, updates and support                     |
 | [Information architecture and UX](docs/ia-ux.md)               | Navigation, routes, pages, flows, components, copy and accessibility               |
 | [Current decisions](docs/decisions.md)                         | Selected architecture and unresolved product decisions                             |
 | [Household features](docs/household-features.md)               | All eight additions, local sharing, OCR, and backups                               |
