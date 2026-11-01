@@ -96,6 +96,7 @@ test("backups are on by default beside the database, off on request, and their s
     keepDaily: 7,
     keepWeekly: 4,
     ping: "",
+    offsite: null,
   });
   for (const off of ["off", "OFF", "false", "0", "no"])
     assert.equal(
@@ -561,6 +562,7 @@ test("the server tells whoever runs it how its backups are doing, and a monitor 
   assert.equal(status.dir, settings.dir);
   assert.equal(status.late, false);
   assert.equal(status.failure, null);
+  assert.equal(status.offsite, null);
   assert.deepEqual(
     status.copies.map((c) => c.name),
     [copy.name],

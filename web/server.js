@@ -27,6 +27,7 @@ import {
 import { createMailer, isEmail } from "./mail.js";
 import { askInput, createAssistant } from "./assistant.js";
 import { applyRestore, backupSettings, createBackups } from "./backups.js";
+import { offsiteLabel } from "./offsite.js";
 
 // The app, built by `npm run build:client`, is the files in client/dist.
 const builtClient = fileURLToPath(new URL("../client/dist/", import.meta.url));
@@ -787,6 +788,12 @@ export function createWebServer({
           late: health.late,
           last_copy_at: health.last_copy_at,
           failure: health.failure,
+          offsite: health.offsite && {
+            to: health.offsite.to,
+            late: health.offsite.late,
+            last_sent_at: health.offsite.last_sent_at,
+            failure: health.offsite.failure,
+          },
           copies: health.copies.map((c) => ({
             name: c.name,
             taken_at: c.taken_at,
@@ -1190,7 +1197,7 @@ if (
         );
       console.log(
         backups
-          ? `Automatic backups are on: a copy every ${settings.every / 3600000} hours in ${settings.dir}, keeping one for each of the last ${settings.keepDaily} days and ${settings.keepWeekly} weeks${settings.ping ? ", with a monitor pinged after each" : ""}.`
+          ? `Automatic backups are on: a copy every ${settings.every / 3600000} hours in ${settings.dir}, keeping one for each of the last ${settings.keepDaily} days and ${settings.keepWeekly} weeks${settings.offsite ? `, each also sent to ${offsiteLabel(settings.offsite)}` : ""}${settings.ping ? ", with a monitor pinged after each" : ""}.`
           : "Automatic backups are off (KOOKS_BACKUPS=off).",
       );
       backups?.start();

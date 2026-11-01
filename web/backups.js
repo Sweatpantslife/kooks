@@ -23,6 +23,12 @@ import { Worker } from "node:worker_threads";
 import { createGunzip, createGzip } from "node:zlib";
 import { SCHEMA_VERSION } from "../mcp/store.js";
 import { version } from "../mcp/version.js";
+import {
+  OffsiteError,
+  offsiteLabel,
+  offsiteSettings,
+  pushCopy,
+} from "./offsite.js";
 
 // Automatic backups: a copy of every database on the server, taken on a
 // schedule while it runs. A copy is a folder named by when it was taken,
@@ -47,6 +53,9 @@ const MAIN = "kooks.sqlite";
 const HOUSEHOLD_FILE = /^[a-f0-9]{16}\.sqlite$/;
 const COPY_NAME = /^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z(-\d+)?$/;
 const FAILURE = "last-failure.json";
+// What reached the off-site bucket last, and the last attempt that did not.
+const SENT = "offsite.json";
+const SEND_FAILURE = "offsite-failure.json";
 
 export class BackupError extends Error {}
 
@@ -138,6 +147,7 @@ export function backupSettings(env, dbPath) {
     keepDaily: whole("KOOKS_BACKUP_KEEP_DAILY", 7, 1, 366),
     keepWeekly: whole("KOOKS_BACKUP_KEEP_WEEKLY", 4, 0, 520),
     ping,
+    offsite: offsiteSettings(env),
   };
 }
 
@@ -602,16 +612,54 @@ export function backupHealth(settings, { now = Date.now(), since = now } = {}) {
   const last = copies[0] ?? null;
   const failure = lastFailure(settings.dir);
   const failed = failure && (!last || failure.at > last.taken_at);
+  const allowed = settings.every + Math.max(settings.every / 2, 2 * HOUR);
   const reference = last ? Date.parse(last.taken_at) : since;
-  const late =
-    now - reference > settings.every + Math.max(settings.every / 2, 2 * HOUR);
+  const late = now - reference > allowed;
+  let offsite = null;
+  if (settings.offsite) {
+    const sent = readJson(join(settings.dir, SENT));
+    const unsent = readJson(join(settings.dir, SEND_FAILURE));
+    offsite = {
+      to: offsiteLabel(settings.offsite),
+      last_sent: sent?.copy ?? null,
+      last_sent_at: sent?.at ?? null,
+      failure: unsent?.at && (!sent?.at || unsent.at > sent.at) ? unsent : null,
+      // Counted from the server's start until a copy has gone.
+      late: now - (sent?.at ? Date.parse(sent.at) : since) > allowed,
+    };
+  }
   return {
-    ok: !late,
+    ok: !late && !offsite?.late,
     late,
     last_copy_at: last?.taken_at ?? null,
     failure: failed ? failure : null,
     copies,
+    offsite,
   };
+}
+
+// Sends a copy to the off-site bucket and notes how it went, for the server
+// and the backup script alike.
+export async function sendCopy(settings, copy, { now = Date.now } = {}) {
+  try {
+    const bytes = await pushCopy(settings.offsite, copy, { now });
+    writeDurably(
+      join(settings.dir, SENT),
+      `${JSON.stringify({ copy: copy.name, at: iso(now()) }, null, 2)}\n`,
+    );
+    rmSync(join(settings.dir, SEND_FAILURE), { force: true });
+    return bytes;
+  } catch (error) {
+    try {
+      writeDurably(
+        join(settings.dir, SEND_FAILURE),
+        `${JSON.stringify({ at: iso(now()), copy: copy.name, error: error.message }, null, 2)}\n`,
+      );
+    } catch {
+      // A disk that cannot take the note is reported by the log line.
+    }
+    throw error;
+  }
 }
 
 // Pings a monitor such as healthchecks.io after each attempt: its address
@@ -682,6 +730,48 @@ export function createBackups(
     stopped = false;
   const timers = [];
   const health = () => backupHealth(settings, { now: now(), since: startedAt });
+  const failed = () => `${settings.ping.replace(/\/+$/, "")}/fail`;
+  // Sends a copy off-site when there is somewhere to send it: true when it
+  // got there, or there is nowhere.
+  async function send(copy) {
+    if (!settings.offsite) return true;
+    const at = now();
+    try {
+      await sendCopy(settings, copy, { now });
+      log.log(
+        `Kooks sent copy ${copy.name} to ${offsiteLabel(settings.offsite)} (${((now() - at) / 1000).toFixed(1)} s).`,
+      );
+      return true;
+    } catch (error) {
+      if (stopped) throw error;
+      log.error(
+        `Kooks could not send copy ${copy.name} off-site: ${error.message}`,
+      );
+      if (!(error instanceof OffsiteError)) log.error(error);
+      return false;
+    }
+  }
+  // The newest copy has not reached the bucket, and an hour has passed
+  // since the last attempt that failed.
+  function sendDue() {
+    if (!settings.offsite || running || stopped) return false;
+    const { copies, offsite } = health();
+    if (!copies.length || offsite.last_sent === copies[0].name) return false;
+    return !(offsite.failure && now() - Date.parse(offsite.failure.at) < HOUR);
+  }
+  function resend() {
+    if (running) return running;
+    running = (async () => {
+      try {
+        const sent = await send(health().copies[0]);
+        if (settings.ping) await ping(sent ? settings.ping : failed());
+        return sent;
+      } finally {
+        running = null;
+      }
+    })();
+    return running;
+  }
   function due() {
     if (running || stopped) return false;
     const { last_copy_at: last, failure } = health();
@@ -705,7 +795,8 @@ export function createBackups(
         log.log(
           `Kooks took its automatic backup: ${copy.files.length} database${copy.files.length === 1 ? "" : "s"}, ${megabytes(bytes)}, in ${join(settings.dir, copy.name)} (${((now() - at) / 1000).toFixed(1)} s)${gone.length ? `; ${gone.length} older cop${gone.length === 1 ? "y" : "ies"} let go` : ""}.`,
         );
-        if (settings.ping) await ping(settings.ping);
+        const sent = await send(findCopy(settings.dir, copy.name));
+        if (settings.ping) await ping(sent ? settings.ping : failed());
         return copy;
       } catch (error) {
         if (stopped) throw error;
@@ -714,8 +805,7 @@ export function createBackups(
           `Kooks could not take its automatic backup: ${error.message}`,
         );
         if (!(error instanceof BackupError)) log.error(error);
-        if (settings.ping)
-          await ping(`${settings.ping.replace(/\/+$/, "")}/fail`);
+        if (settings.ping) await ping(failed());
         throw error;
       } finally {
         running = null;
@@ -725,12 +815,15 @@ export function createBackups(
   }
   const look = () => {
     if (due()) run().catch(() => {});
+    else if (sendDue()) resend().catch(() => {});
   };
   return {
     settings,
     health,
     due,
     run,
+    sendDue,
+    resend,
     start() {
       timers.push(setTimeout(look, firstLook), setInterval(look, 15 * MINUTE));
       for (const timer of timers) timer.unref();

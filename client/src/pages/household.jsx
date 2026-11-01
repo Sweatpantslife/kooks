@@ -680,7 +680,14 @@ function useBackups() {
 }
 // Whether whoever runs the server should look at its backups.
 const backupsNeedALook = (status) =>
-  Boolean(status?.operator && status.on && (status.late || status.failure));
+  Boolean(
+    status?.operator &&
+    status.on &&
+    (status.late ||
+      status.failure ||
+      status.offsite?.late ||
+      status.offsite?.failure),
+  );
 
 function AutomaticCopies({ status }) {
   if (!status || (!status.on && !status.operator)) return null;
@@ -734,12 +741,43 @@ function AutomaticCopies({ status }) {
           ? `Last copy ${momentLabel(last.taken_at)}, ${sizeLabel(last.bytes)}. ${plural(status.copies.length, "copy", "copies")} kept in ${status.dir}.`
           : "The first copy is taken a minute after Kooks starts."}
       </p>
-      <p class="muted small">
-        These copies are on the same disk as the kitchen. To be safe if the
-        server itself is lost, download a backup above now and then and keep it
-        somewhere else.
-      </p>
+      {status.offsite ? (
+        <OffsiteCopies offsite={status.offsite} />
+      ) : (
+        <p class="muted small">
+          These copies are on the same disk as the kitchen. To be safe if the
+          server itself is lost, download a backup above now and then and keep
+          it somewhere else, or have Kooks send each copy off-site.
+        </p>
+      )}
     </section>
+  );
+}
+
+function OffsiteCopies({ offsite }) {
+  return (
+    <>
+      {offsite.failure && (
+        <p class="form-error" role="alert">
+          The last copy didn’t reach {offsite.to} (
+          {momentLabel(offsite.failure.at)}):{" "}
+          {offsite.failure.error.replace(/([^.!?])$/, "$1.")} Kooks tries again
+          every hour.
+        </p>
+      )}
+      {offsite.late && !offsite.failure && (
+        <p class="form-error" role="alert">
+          {offsite.last_sent_at
+            ? `No copy has reached ${offsite.to} since ${momentLabel(offsite.last_sent_at)}. Check the server’s log.`
+            : `No copy has reached ${offsite.to} yet. Check the server’s log.`}
+        </p>
+      )}
+      <p class="muted">
+        {offsite.last_sent_at
+          ? `Each copy also goes to ${offsite.to}; the last went ${momentLabel(offsite.last_sent_at)}.`
+          : `Each copy also goes to ${offsite.to}; none has gone yet.`}
+      </p>
+    </>
   );
 }
 

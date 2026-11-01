@@ -79,11 +79,30 @@ Every quarter of an hour the server looks at its newest copy and takes a new one
 
 Watching them:
 
-- **Household › Backup** shows the server's owner (the address in `KOOKS_OWNER_EMAIL`, or anyone on a kitchen without sign-in) when the last copy was taken, its size and how many are kept, and says so plainly when the last attempt failed or there has been no copy for a day and a half. The Household page then reads "Automatic copies need a look". Other members only learn that copies exist.
-- **`GET /healthz/backups`** answers 200 with the time of the last copy, 503 once there has been none for an interval and a half (counting from the start when there is none yet), and 404 when backups are off. Point an uptime monitor at `https://<your origin>/healthz/backups`.
+- **Household › Backup** shows the server's owner (the address in `KOOKS_OWNER_EMAIL`, or anyone on a kitchen without sign-in) when the last copy was taken, its size and how many are kept, and says so plainly when the last attempt failed or there has been no copy for a day and a half, and the same for off-site copies. The Household page then reads "Automatic copies need a look". Other members only learn that copies exist.
+- **`GET /healthz/backups`** answers 200 with the time of the last copy, 503 once there has been none for an interval and a half (counting from the start when there is none yet) or, with [off-site copies](#off-site-copies), once none has reached the bucket for that long, and 404 when backups are off. Point an uptime monitor at `https://<your origin>/healthz/backups`.
 - The application log says when each copy was taken and how large it was, or why it failed.
 
-The copies sit on the server, so they help after a bad deploy, a damaged database or a change someone regrets, but not when the server or its volume is lost. Keep a copy elsewhere too: download a portable backup from Household › Backup now and then.
+The copies sit on the server, so they help after a bad deploy, a damaged database or a change someone regrets, but not when the server or its volume is lost. For that, send them off-site (below), or download a portable backup from Household › Backup now and then and keep it elsewhere.
+
+### Off-site copies
+
+Kooks can send each copy, as soon as it is taken, to a bucket on storage that speaks the S3 protocol: Amazon S3, Cloudflare R2, Backblaze B2, a MinIO server and others. Set all three of these in the deployment's secrets; the server refuses to start with only some of them:
+
+- `KOOKS_BACKUP_S3_URL`: the bucket's address, such as `https://my-bucket.s3.eu-central-1.amazonaws.com`, `https://<account id>.r2.cloudflarestorage.com/my-bucket` or `https://s3.us-west-004.backblazeb2.com/my-bucket`. It must be HTTPS.
+- `KOOKS_BACKUP_S3_ACCESS_KEY_ID` and `KOOKS_BACKUP_S3_SECRET_ACCESS_KEY`: a key for that bucket only.
+- `KOOKS_BACKUP_S3_REGION` (optional): read from Amazon's and Backblaze's addresses, otherwise `us-east-1`, which R2 and MinIO accept. Set it for anything else.
+- `KOOKS_BACKUP_S3_PREFIX` (optional): the folder in the bucket, `kooks/` by default.
+
+Each copy goes up as its compressed files and then its manifest, so a copy in the bucket that has a manifest is whole, and each file carries its SHA-256, which the storage checks on arrival. When the bucket can't be reached, the copy stays on the server, the failure shows on Household › Backup and in the log, the monitor is pinged with `/fail`, and Kooks sends the newest copy again an hour later. `/healthz/backups` answers 503 once no copy has reached the bucket for an interval and a half.
+
+The server only ever writes to the bucket: it never lists, reads or deletes anything there. So:
+
+- Give it a key that can only write, if the provider offers one (on S3, `s3:PutObject` on `arn:aws:s3:::my-bucket/kooks/*`). Then a server that is broken into can't read or remove the copies already there.
+- Let the bucket decide how long copies stay, with a lifecycle rule that deletes objects under `kooks/` after, say, 35 days. Kooks never prunes the bucket. That is also how long you have to bring a copy back after losing the server, since the new, empty kitchen sends copies of its own.
+- Keep the bucket private. The copies are the whole server: every household's records, photos and books, and the accounts with their addresses, passkeys' public keys and the hashes of session tokens. Kooks doesn't encrypt them itself; the providers above encrypt what they store.
+
+To bring a copy back after losing the volume, the backup script lists and fetches copies with a key that can read and list (`remote` and `fetch`, below); see [Recovering the kitchen](recovery.md#a-lost-volume).
 
 ### The backup script
 
@@ -96,7 +115,12 @@ node scripts/backup.mjs check [copy]      # expand a copy and check it (the newe
 node scripts/backup.mjs stage <copy>      # put a whole copy back at the next start
 node scripts/backup.mjs stage <copy> --household <id>   # or only one household's cookbook
 node scripts/backup.mjs unstage           # forget a staged copy
+node scripts/backup.mjs send [copy]       # send a copy off-site (the newest without a name)
+node scripts/backup.mjs remote            # the copies in the bucket, newest first
+node scripts/backup.mjs fetch <copy>      # bring a copy from the bucket here, checked
 ```
+
+A copy taken with `snapshot` goes off-site too when off-site copies are set up.
 
 Restoring is two steps so that it works while the server runs. `stage` checks the copy and expands it into `/data/restore/`; nothing live changes. Restart the application, and before it opens any database the server moves the files the copy replaces into `/data/replaced-<time>/`, with their write-ahead logs, and puts the copy's files in their place. The log says what it restored. A whole restore brings back the accounts, members, passkeys and sessions as they were, and also moves aside any household started after the copy, since the accounts it brings back do not know it. Changes made after the copy are not in it; the replaced files keep them. Delete the `replaced-` folder once the kitchen looks right. A household's id is the name of its file in `/data/households/`; the first household lives in `kooks.sqlite` with the accounts, so it comes back only with a whole restore. A restore that stops part way, such as at a power cut, finishes at the next start.
 
