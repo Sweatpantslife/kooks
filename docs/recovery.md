@@ -109,7 +109,12 @@ What's lost: changes made after the copy was taken. A whole restore also brings 
       ```sh
       node scripts/accounts.mjs owner new@example.com
       ```
-   3. Sign in with the new address (with step 2's link if its email doesn't arrive yet), add a passkey, and remove the old address under **Household › Members**.
+   3. Sign in with the new address (with step 2's link if its email doesn't arrive yet) and add a passkey.
+   4. Delete the old address's account:
+      ```sh
+      node scripts/accounts.mjs remove old@example.com
+      ```
+      Taking it out under **Household › Members** isn't enough when someone else may have the old mailbox now, a lapsed domain say: the address keeps an account, so it can still sign in and start a household of its own. `remove` deletes the account with its passkeys, signed-in devices, waiting links and invitations, and takes it out of every household. It refuses the `KOOKS_OWNER_EMAIL` address (the server would make it a new account at its next start, hence step 1) and a household's last owner. It also stops at a household the old address is alone in, which may be one someone else started with it: add `--leave-empty` to leave that household with nobody in it, or first make the new address its owner with `owner new@example.com --household <id>`.
 
 **Check** `node scripts/accounts.mjs list` shows the new address as owner and marked `KOOKS_OWNER_EMAIL`, and **Household › Backup** shows the automatic copies' details, which only that address sees.
 
