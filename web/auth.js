@@ -961,6 +961,54 @@ export function createAuth({
           404,
         );
     },
+    // For whoever runs the server, from its terminal (scripts/accounts.mjs).
+    // No route reaches these.
+    roster: () => ({
+      households: q(
+        "SELECT id, name FROM auth_households ORDER BY created_at, rowid",
+      )
+        .all()
+        .map((h) => ({
+          id: h.id,
+          name: h.name,
+          members: q(
+            `SELECT m.email, m.role, m.joined_at, a.signed_in_at,
+              (SELECT count(*) FROM auth_passkeys p WHERE p.email = m.email) AS passkeys
+             FROM auth_members m LEFT JOIN auth_accounts a ON a.email = m.email
+             WHERE m.household = ? ORDER BY m.joined_at, m.rowid`,
+          ).all(h.id),
+        })),
+      unhoused: q(
+        `SELECT email FROM auth_accounts a WHERE NOT EXISTS
+          (SELECT 1 FROM auth_members m WHERE m.email = a.email)
+         ORDER BY created_at, email`,
+      ).all(),
+    }),
+    // Makes an address an owner of a household, with an account if it has
+    // none, for an owner who lost theirs. Nobody is signed in by it.
+    grantOwner(email, household = HOME) {
+      const address = normalizeEmail(email);
+      if (!isEmail(address))
+        throw new AuthError("INVALID_INPUT", "Enter a valid email address.");
+      return transaction(() => {
+        const row = householdRow(household);
+        if (!row)
+          throw new AuthError(
+            "NOT_FOUND",
+            `There is no household ${household}.`,
+            404,
+          );
+        const created = !accountOf(address);
+        ensureAccount(address);
+        const was = membership(address, household)?.role ?? null;
+        if (was)
+          q(
+            "UPDATE auth_members SET role = 'owner' WHERE email = ? AND household = ?",
+          ).run(address, household);
+        else join(address, household, "owner");
+        return { email: address, household, name: row.name, was, created };
+      });
+    },
     close: () => db.close(),
   };
 }
