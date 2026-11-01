@@ -124,7 +124,13 @@ test("a dish is added to today, moved to tomorrow, and taken off with Undo", asy
     .getByRole("listitem")
     .filter({ hasText: `Soup ${tag}` });
   await expect(moved).toBeVisible();
-  await expect(dayCard(page, today)).not.toContainText(`Soup ${tag}`);
+  // On a Sunday tomorrow is in next week, and the page follows the dish.
+  if (today === monday(6)) await expect(title(page)).toHaveText("Next week");
+  await expect(
+    dayCard(page, today)
+      .getByRole("listitem")
+      .filter({ hasText: `Soup ${tag}` }),
+  ).toHaveCount(0);
 
   await moved
     .getByRole("button", {

@@ -4,6 +4,10 @@ What changed in Kooks and how each change was verified, newest first. Kooks has 
 
 ## Unreleased
 
+### A week test that failed on Sundays
+
+`test/web-e2e/week.spec.js` "a dish is added to today, moved to tomorrow, and taken off with Undo" looked for the dish to be gone from today's card after the move, but on a Sunday tomorrow is in next week and the page follows the dish there, so today's card is not on the page and the test failed every Sunday, in CI too. It now checks, on a Sunday, that the page went to next week, and on any day that no item for the dish is left on today's card. The app is unchanged. The four week tests pass on Sunday, November 1 and, with `TZ=America/Los_Angeles`, on the Saturday before; the test failed on unchanged `main` on the Sunday. `npm run format:check` and `npm run lint` pass.
+
 ### Automatic backups of the whole server
 
 The server now copies every household's cookbook, and the accounts with their members, passkeys and sessions, once a day while it runs (`web/backups.js`), unless `KOOKS_BACKUPS=off`. Each copy is a folder in `backups/` beside the database (`/data/backups` in the image) holding each database as SQLite's `VACUUM INTO` writes it, one consistent moment taken in a worker thread while people keep cooking, checked with SQLite's integrity check, compressed, and listed with its checksum and record count in a manifest. Only a complete, checked copy lets older ones go: Kooks keeps the newest copy of each of the last 7 days and 4 weeks that have one, so a damaged database or a long outage never costs the copies already kept. A copy is skipped, and reported, when it would leave less than 1 GB free on the disk. `KOOKS_BACKUP_DIR`, `KOOKS_BACKUP_EVERY_HOURS`, `KOOKS_BACKUP_KEEP_DAILY` and `KOOKS_BACKUP_KEEP_WEEKLY` change the folder, interval and retention.
