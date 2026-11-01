@@ -1,24 +1,35 @@
 name: Phone release
 
-# Builds the Android app for release and publishes it on the repository's
-# Releases page as a pre-release named after package.json's version, with the
-# APK to install on a phone. Run it from the Actions tab, on main; the release
-# key comes from the KOOKS_ANDROID_KEYSTORE and KOOKS_ANDROID_KEYSTORE_PASSWORD
-# secrets (scripts/android-release-key.sh makes them). docs/native-app.md
-# describes the whole release.
+# Builds the phone apps for release. Android: the APK goes on the
+# repository's Releases page as a pre-release named after package.json's
+# version, signed with the key in the KOOKS_ANDROID_KEYSTORE and
+# KOOKS_ANDROID_KEYSTORE_PASSWORD secrets (scripts/android-release-key.sh makes
+# them). iPhone: the app goes to TestFlight, signed through the App Store
+# Connect API key and certificate key in the APP_STORE_CONNECT_* and
+# KOOKS_IOS_CERTIFICATE_KEY secrets (scripts/ios-release-key.sh). Run it from
+# the Actions tab, on main; docs/native-app.md describes the whole release.
 #
-# A pull request that changes the release build runs it too, signed with a
-# throwaway key and published nowhere, so the release key never reaches a
-# pull request's run.
+# A pull request that changes a release build runs it too, without the keys:
+# Android signs with a throwaway key and iOS builds an unsigned archive, and
+# nothing is published.
 on:
   workflow_dispatch:
+    inputs:
+      phones:
+        description: Which phones to release for
+        type: choice
+        options: [both, android, iphone]
+        default: both
   pull_request:
     paths:
       - "android/app/build.gradle"
       - "android/build.gradle"
       - "android/variables.gradle"
       - "android/gradle/**"
+      - "ios/App/App.xcodeproj/**"
+      - "ios/App/App/Info.plist"
       - "scripts/native-version.mjs"
+      - "scripts/ios-signing.mjs"
       - ".github/workflows/phone-release.yml"
 
 permissions:
@@ -31,6 +42,7 @@ concurrency:
 jobs:
   android:
     name: Android release APK
+    if: github.event_name != 'workflow_dispatch' || inputs.phones != 'iphone'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
@@ -179,3 +191,167 @@ jobs:
             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
             --title "Kooks ${VERSION}" --notes-file dist/release-notes.md
           echo "Published ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/v${VERSION}" >> "$GITHUB_STEP_SUMMARY"
+
+  ios:
+    name: iPhone TestFlight upload
+    if: github.event_name != 'workflow_dispatch' || inputs.phones != 'android'
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - name: Release only from main
+        if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Run the Phone release workflow on main, not on ${GITHUB_REF_NAME}."
+          exit 1
+      - name: Is TestFlight set up?
+        id: setup
+        env:
+          ISSUER_ID: ${{ github.event_name == 'workflow_dispatch' && secrets.APP_STORE_CONNECT_ISSUER_ID || '' }}
+          KEY_ID: ${{ github.event_name == 'workflow_dispatch' && secrets.APP_STORE_CONNECT_KEY_ID || '' }}
+          API_KEY: ${{ github.event_name == 'workflow_dispatch' && secrets.APP_STORE_CONNECT_PRIVATE_KEY || '' }}
+          CERTIFICATE_KEY: ${{ github.event_name == 'workflow_dispatch' && secrets.KOOKS_IOS_CERTIFICATE_KEY || '' }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" != workflow_dispatch ]; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+            echo "sign=false" >> "$GITHUB_OUTPUT"
+          elif [ -n "$ISSUER_ID" ] && [ -n "$KEY_ID" ] && [ -n "$API_KEY" ] && [ -n "$CERTIFICATE_KEY" ]; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+            echo "sign=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::TestFlight isn't set up, so this release has no iPhone build. scripts/ios-release-key.sh sets it up (docs/native-app.md)."
+            echo "build=false" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.setup.outputs.build == 'true'
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        if: steps.setup.outputs.build == 'true'
+        with:
+          node-version: 22
+          cache: npm
+      - name: Version
+        id: version
+        if: steps.setup.outputs.build == 'true'
+        run: |
+          version=$(node -p 'require("./package.json").version')
+          node scripts/native-version.mjs
+          if ! git diff --exit-code -- android ios; then
+            echo "::error::The native projects don't carry version ${version}. Run npm run native:version and commit the result."
+            exit 1
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "code=$(node --input-type=module -e 'import { buildNumber } from "./scripts/native-version.mjs"; console.log(buildNumber(process.argv[1]))' "$version")" >> "$GITHUB_OUTPUT"
+      - if: steps.setup.outputs.build == 'true'
+        run: npm ci
+      - if: steps.setup.outputs.build == 'true'
+        run: npm run cap:sync
+      - run: xcodebuild -version
+        if: steps.setup.outputs.build == 'true'
+      - name: Get the certificate and profile
+        id: signing
+        if: steps.setup.outputs.sign == 'true'
+        env:
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+          KOOKS_IOS_CERTIFICATE_KEY: ${{ secrets.KOOKS_IOS_CERTIFICATE_KEY }}
+        run: |
+          umask 077
+          out="${RUNNER_TEMP}/ios-signing"
+          # Finds or makes the certificate and profile, and switches the App
+          # target to manual signing with them (not committed).
+          node scripts/ios-signing.mjs "$out"
+          keychain="${RUNNER_TEMP}/kooks-signing.keychain-db"
+          password=$(openssl rand -hex 16)
+          echo "::add-mask::${password}"
+          openssl pkcs12 -export -name "Kooks distribution" \
+            -inkey "${out}/certificate-key.pem" -in "${out}/certificate.pem" \
+            -keypbe PBE-SHA1-3DES -certpbe PBE-SHA1-3DES -macalg sha1 \
+            -passout "pass:${password}" -out "${out}/certificate.p12"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          # The intermediate that issues Apple Distribution certificates.
+          curl -fsSL -o "${out}/AppleWWDRCAG3.cer" https://www.apple.com/certificateauthority/AppleWWDRCAG3.cer
+          security import "${out}/AppleWWDRCAG3.cer" -k "$keychain" -A
+          security import "${out}/certificate.p12" -k "$keychain" -P "$password" -A -t cert -f pkcs12
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$password" "$keychain" > /dev/null
+          security list-keychains -d user -s "$keychain"
+          security find-identity -v -p codesigning "$keychain"
+          uuid=$(node --input-type=module -e 'import { readFileSync } from "node:fs"; import { profileDetails } from "./scripts/ios-signing.mjs"; console.log(profileDetails(readFileSync(process.argv[1])).uuid)' "${out}/profile.mobileprovision")
+          for folder in "${HOME}/Library/MobileDevice/Provisioning Profiles" "${HOME}/Library/Developer/Xcode/UserData/Provisioning Profiles"; do
+            mkdir -p "$folder"
+            cp "${out}/profile.mobileprovision" "${folder}/${uuid}.mobileprovision"
+          done
+          echo "folder=${out}" >> "$GITHUB_OUTPUT"
+          echo "keychain=${keychain}" >> "$GITHUB_OUTPUT"
+      - name: Archive
+        if: steps.setup.outputs.build == 'true'
+        env:
+          SIGN: ${{ steps.setup.outputs.sign }}
+          VERSION: ${{ steps.version.outputs.version }}
+          CODE: ${{ steps.version.outputs.code }}
+        run: |
+          archive="${RUNNER_TEMP}/Kooks.xcarchive"
+          if [ "$SIGN" = true ]; then
+            signing=()
+          else
+            # A pull request proves the device build compiles, unsigned.
+            signing=(CODE_SIGNING_ALLOWED=NO)
+          fi
+          xcodebuild -project ios/App/App.xcodeproj -scheme App \
+            -configuration Release -destination generic/platform=iOS \
+            -archivePath "$archive" "${signing[@]}" archive
+          plist="${archive}/Products/Applications/App.app/Info.plist"
+          built="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$plist") $(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$plist")"
+          echo "Archived Kooks ${built}"
+          if [ "$built" != "${VERSION} ${CODE}" ]; then
+            echo "::error::The app says version ${built}, not ${VERSION} ${CODE}."
+            exit 1
+          fi
+      - name: Export the signed app
+        id: export
+        if: steps.setup.outputs.sign == 'true'
+        env:
+          FOLDER: ${{ steps.signing.outputs.folder }}
+        run: |
+          xcodebuild -exportArchive -archivePath "${RUNNER_TEMP}/Kooks.xcarchive" \
+            -exportOptionsPlist "${FOLDER}/ExportOptions.plist" \
+            -exportPath "${RUNNER_TEMP}/export"
+          set -- "${RUNNER_TEMP}"/export/*.ipa
+          ipa=$1
+          unzip -q "$ipa" -d "${RUNNER_TEMP}/ipa"
+          if ! codesign -dvv "${RUNNER_TEMP}"/ipa/Payload/*.app 2>&1 | grep '^Authority=Apple Distribution: '; then
+            echo "::error::The app isn't signed with the Apple Distribution certificate."
+            exit 1
+          fi
+          echo "ipa=${ipa}" >> "$GITHUB_OUTPUT"
+      - name: Upload to TestFlight
+        if: steps.setup.outputs.sign == 'true'
+        env:
+          FOLDER: ${{ steps.signing.outputs.folder }}
+          IPA: ${{ steps.export.outputs.ipa }}
+          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          VERSION: ${{ steps.version.outputs.version }}
+          CODE: ${{ steps.version.outputs.code }}
+        run: |
+          # altool finds the API key as ./private_keys/AuthKey_<id>.p8.
+          cd "$FOLDER"
+          xcrun altool --upload-app --type ios --file "$IPA" \
+            --apiKey "$KEY_ID" --apiIssuer "$ISSUER_ID"
+          {
+            echo "Kooks ${VERSION} (build ${CODE}) is uploaded to TestFlight."
+            echo "Apple processes it for a few minutes; then TestFlight on the iPhone offers it to everyone in the internal testing group."
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Remove the keys
+        if: always() && steps.setup.outputs.sign == 'true'
+        env:
+          FOLDER: ${{ steps.signing.outputs.folder }}
+          KEYCHAIN: ${{ steps.signing.outputs.keychain }}
+        run: |
+          if [ -n "$KEYCHAIN" ]; then security delete-keychain "$KEYCHAIN" || true; fi
+          rm -rf "${RUNNER_TEMP}/ios-signing" "${RUNNER_TEMP}/ipa"
+          rm -f "${HOME}/Library/MobileDevice/Provisioning Profiles/"*.mobileprovision \
+            "${HOME}/Library/Developer/Xcode/UserData/Provisioning Profiles/"*.mobileprovision
