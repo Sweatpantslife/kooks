@@ -1042,7 +1042,7 @@ export function createAuth({
           if (others.n && h.role === "owner" && !others.owners)
             throw new AuthError(
               "LAST_OWNER",
-              `${address} is the only owner of ${h.name} (${h.id}). Make another member an owner first.`,
+              `${address} is the only owner of ${h.name} (${h.id}). Make another member an owner first, or, if the others came with ${address}, remove them first.`,
               409,
             );
           return { id: h.id, name: h.name, empty: !others.n };

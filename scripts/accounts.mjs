@@ -114,6 +114,10 @@ try {
     );
     console.log(link);
   } else if (mode === "remove") {
+    if (!owner)
+      console.error(
+        "KOOKS_OWNER_EMAIL isn't set here, so this can't tell which address is the server's owner. Pass it as the server has it, for example with `docker run -e KOOKS_OWNER_EMAIL=…`.",
+      );
     if (owner && normalizeEmail(address) === owner)
       throw new KooksError(
         "INVALID_INPUT",
@@ -126,7 +130,7 @@ try {
       if (error.code === "LAST_MEMBER")
         error.message += ` Make another address an owner of it first (\`node scripts/accounts.mjs owner <address> --household <id>\`), or add --leave-empty to leave it with nobody in it.`;
       if (error.code === "LAST_OWNER")
-        error.message += ` \`node scripts/accounts.mjs owner <address> --household <id>\` makes one.`;
+        error.message += ` \`node scripts/accounts.mjs owner <address> --household <id>\` makes an owner.`;
       throw error;
     }
     const count = (n, what) => `${n} ${what}${n === 1 ? "" : "s"}`;

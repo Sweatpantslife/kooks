@@ -205,6 +205,17 @@ test("the accounts script deletes an old address's account and everything that s
   const kept = run("remove", "ada@example.com");
   assert.equal(kept.status, 1);
   assert.match(kept.stderr, /is KOOKS_OWNER_EMAIL/);
+  // Without it, as in a one-off container, the script says it can't tell.
+  const blind = spawnSync(
+    process.execPath,
+    [script, "remove", "dee@example.com"],
+    {
+      encoding: "utf8",
+      env: { PATH: process.env.PATH, KOOKS_DB_PATH: path },
+    },
+  );
+  assert.match(blind.stderr, /^KOOKS_OWNER_EMAIL isn't set here/);
+  assert.match(blind.stderr, /dee@example\.com has no account\./);
 });
 
 test("deleting an account keeps a household's last owner, and its last member unless told", (t) => {

@@ -114,7 +114,7 @@ What's lost: changes made after the copy was taken. A whole restore also brings 
       ```sh
       node scripts/accounts.mjs remove old@example.com
       ```
-      Taking it out under **Household › Members** isn't enough when someone else may have the old mailbox now, a lapsed domain say: the address keeps an account, so it can still sign in and start a household of its own. `remove` deletes the account with its passkeys, signed-in devices, waiting links and invitations, and takes it out of every household. It refuses the `KOOKS_OWNER_EMAIL` address (the server would make it a new account at its next start, hence step 1) and a household's last owner. It also stops at a household the old address is alone in, which may be one someone else started with it: add `--leave-empty` to leave that household with nobody in it, or first make the new address its owner with `owner new@example.com --household <id>`.
+      Taking it out under **Household › Members** isn't enough when someone else may have the old mailbox now, a lapsed domain say: the address keeps an account, so it can still sign in and start a household of its own. `remove` deletes the account with its passkeys, signed-in devices, waiting links and invitations, and takes it out of every household. It refuses the `KOOKS_OWNER_EMAIL` address (the server would make it a new account at its next start, hence step 1) and a household's last owner. It also stops at a household the old address is alone in, which may be one someone else started with it: add `--leave-empty` to leave that household with nobody in it, or first make the new address its owner with `owner new@example.com --household <id>`. If such a household has other members whom the old address brought in, `remove` asks for another owner there; remove those addresses first, then the old one with `--leave-empty`, rather than making one of them an owner. With `KOOKS_OPEN_SIGNUP` on, a deleted address can make a new account with an emailed link, so turn open sign-up off first if someone else may hold the mailbox.
 
 **Check** `node scripts/accounts.mjs list` shows the new address as owner and marked `KOOKS_OWNER_EMAIL`, and **Household › Backup** shows the automatic copies' details, which only that address sees.
 
@@ -137,6 +137,8 @@ docker run --rm -v <volume>:/data <image> node scripts/backup.mjs stage 2026-11-
 ```
 
 and restart the application in Coolify. The staged copy goes in place before Kooks opens anything, so the damaged or too-new database never gets in the way. After a rollback, use the image you rolled back to.
+
+A container run like this has none of the application's environment variables. For `accounts.mjs`, pass the owner's address so that `remove` keeps it, and the public address for `link`: `docker run --rm -e KOOKS_OWNER_EMAIL=ada@example.com -e KOOKS_PUBLIC_ORIGIN=https://kooks.example.com -v <volume>:/data <image> node scripts/accounts.mjs …`.
 
 ## A copy you take replaces the day's
 
