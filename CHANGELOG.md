@@ -4,6 +4,12 @@ What changed in Kooks and how each change was verified, newest first. Kooks has 
 
 ## Unreleased
 
+### The iPhone goes back with a swipe from the edge
+
+An iPhone has no back button, and most of the app’s pages have no Back of their own, so on an iPhone the tabs were the only way back from a recipe or a meal. The app's web view now takes Safari's swipe from the left edge (`allowsBackForwardNavigationGestures`, on a `KooksViewController` in `ios/App/App/SceneDelegate.swift`). It goes back through the same history as Android's back button, so an editor with unsaved changes asks first, and it stops at the first page the app opened. `docs/native-app.md` and its device check say so.
+
+`npm run format:check`, `npm run lint` and `npm test` (175 tests: 174 passed, the OCR case skipped; 1 new, which checks the scene delegate) pass, and the Native builds workflow compiles the iOS app. Not exercised: the gesture on an iPhone or in a simulator.
+
 ### Signed Android releases, version numbers from package.json, and phones that follow dark mode
 
 A new **Phone release** workflow (`.github/workflows/phone-release.yml`) turns `main` into an Android release when run from the Actions tab. It builds the app, signs the APK with the household's release key from two Actions secrets, checks the signature with `apksigner`, checks the package name, version and build number with `aapt2` and that the APK is not debuggable, and publishes a GitHub pre-release `v<version>` with `kooks-<version>.apk`, its SHA-256 and the signing certificate's fingerprint. It runs only on `main` and refuses a version already released. Pull requests that touch the Android build run the same build with a throwaway key and publish nothing, so the release key never reaches them. `android/app/build.gradle` signs a release only when it is given the key (`KOOKS_ANDROID_KEYSTORE`, a PKCS #12 file). `scripts/android-release-key.sh` makes that key once on the owner's computer with `openssl`: a 4096-bit RSA key valid for 30 years, in a folder only they can read, with its password, its certificate and a README. It stores the two secrets through the GitHub CLI or says what to paste, and it refuses to replace a key that already exists.

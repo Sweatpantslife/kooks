@@ -136,3 +136,15 @@ test("neither phone project pins the light look", () => {
     /<color name="kooks_paper">#151412<\/color>/,
   );
 });
+
+// An iPhone has no back button. The app's web view takes Safari's swipe from
+// the left edge, which goes back through the same history as Android's back
+// button.
+test("the iPhone app goes back with a swipe from the edge", () => {
+  const scene = read("ios/App/App/SceneDelegate.swift");
+  assert.match(scene, /rootViewController = KooksViewController\(\)/);
+  assert.match(
+    scene,
+    /class KooksViewController: CAPBridgeViewController \{[\s\S]*?webView\?\.allowsBackForwardNavigationGestures = true/,
+  );
+});
