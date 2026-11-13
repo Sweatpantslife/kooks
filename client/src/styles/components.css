@@ -2235,3 +2235,51 @@ a.plan-title:hover {
   min-width: 0;
   overflow-wrap: anywhere;
 }
+
+/* The Slikk.Dev attribution badge (ui/slikk-credit.jsx), from the canonical
+   kit. The wordmark, the dot's colour and the focus ring are the kit's and
+   stay as they are; the ink and the font are this app's. */
+.dsk-credit {
+  all: revert;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  font-family: var(--font-text);
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--muted);
+  text-decoration: none;
+  padding: 6px 2px;
+  border: 0;
+  background: none;
+  transition: color 0.18s ease;
+}
+.dsk-credit:hover,
+.dsk-credit:focus-visible {
+  color: var(--ink);
+}
+.dsk-credit:focus-visible {
+  outline: 2px solid #ff2d6b;
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+/* A card stacks its children as stretched flex items; the badge keeps its
+   own width, so only the badge is the link. */
+.card > .dsk-credit {
+  align-self: flex-start;
+}
+.dsk-credit__text {
+  opacity: 0.9;
+}
+.dsk-credit__mark {
+  height: 15px;
+  width: auto;
+  display: block;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dsk-credit {
+    transition: none;
+  }
+}

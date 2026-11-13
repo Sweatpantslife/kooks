@@ -49,6 +49,7 @@ import {
 import { Empty, PageHeader } from "../ui/page.jsx";
 import { Icon } from "../ui/icon.jsx";
 import { FileLink } from "../ui/asset.jsx";
+import { SlikkCredit } from "../ui/slikk-credit.jsx";
 import { StartHousehold, WaitingInvites } from "./welcome.jsx";
 
 export const toHousehold = (
@@ -830,6 +831,7 @@ function Kitchen() {
           Source code (AGPL-3.0)
         </a>
       </p>
+      <SlikkCredit />
     </section>
   );
 }
